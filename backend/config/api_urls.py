@@ -1,6 +1,6 @@
-from django.urls import path
+from django.urls import path, include
 
 urlpatterns = [
-    # Añadir endpoints de la API aqui
+    path('', include('ponderaciones.urls')),
 ]
 

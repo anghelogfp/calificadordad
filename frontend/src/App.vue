@@ -1,10 +1,15 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch, onMounted } from 'vue'
 import { useStorage } from '@vueuse/core'
 import ExcelJS from 'exceljs'
 import { saveAs } from 'file-saver'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+
+// Configuración de la API
+const API_BASE_URL = 'http://localhost:8000/api'
+const ponderationApiLoading = ref(false)
+const ponderationApiError = ref('')
 
 const TAB_KEYS = Object.freeze({
   ARCHIVES: 'archives',
@@ -219,22 +224,77 @@ if (!Object.values(ANSWER_KEY_SUBTABS).includes(answerKeySubTab.value)) {
 }
 
 const ponderationRows = useStorage(PONDERATION_STORAGE_KEY, [])
-ponderationRows.value = Array.isArray(ponderationRows.value) && ponderationRows.value.length
-  ? ponderationRows.value.map((row) => createPonderationRow(row))
-  : DEFAULT_PONDERATIONS.map((row) => createPonderationRow(row))
-reindexPonderationOrders()
-ensureDefaultPonderations()
+// Cargar ponderaciones desde la API al iniciar
+onMounted(async () => {
+  const apiData = await fetchPonderacionesFromAPI()
+  if (apiData && apiData.length > 0) {
+    // Si hay datos en la API, usarlos y eliminar duplicados por ID
+    const uniqueRows = new Map()
+    apiData.forEach((row) => {
+      const createdRow = createPonderationRow(row)
+      const id = createdRow.id
+      if (!uniqueRows.has(id)) {
+        uniqueRows.set(id, createdRow)
+      }
+    })
+    ponderationRows.value = Array.from(uniqueRows.values())
+  } else if (ponderationRows.value.length === 0) {
+    // Si no hay datos en API ni en localStorage, usar defaults
+    ponderationRows.value = DEFAULT_PONDERATIONS.map((row) => createPonderationRow(row))
+    // Guardar defaults en la API
+    try {
+      await fetch(`${API_BASE_URL}/ponderaciones/bulk_create/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(
+          ponderationRows.value.map((row) => ({
+            area: row.area,
+            subject: row.subject,
+            question_count: row.questionCount,
+            ponderation: row.ponderation,
+            order: row.order,
+          }))
+        ),
+      })
+    } catch (error) {
+      console.error('Error al guardar defaults en API:', error)
+    }
+  } else {
+    // Usar datos de localStorage como fallback y eliminar duplicados
+    const uniqueRows = new Map()
+    ponderationRows.value.forEach((row) => {
+      const createdRow = createPonderationRow(row)
+      const id = createdRow.id
+      if (!uniqueRows.has(id)) {
+        uniqueRows.set(id, createdRow)
+      }
+    })
+    ponderationRows.value = Array.from(uniqueRows.values())
+  }
+  // Solo inicializar orders si no existen, sin reordenar
+  ponderationRows.value.forEach((row) => {
+    if (!row.order || row.order === 0) {
+      const areaRows = ponderationRows.value.filter((r) => r.area === row.area && r.order > 0)
+      const maxOrder = areaRows.length > 0 ? Math.max(...areaRows.map((r) => r.order)) : 0
+      row.order = maxOrder + 1
+    }
+  })
+  ensureDefaultPonderations()
+})
 const ponderationEditing = ref(new Set())
 const ponderationModalArea = ref(ANSWER_KEY_AREAS[0])
 const newPonderation = reactive({ subject: '', questionCount: 1, ponderation: 1 })
 const ponderationError = ref('')
 
 const showCalificationModal = ref(false)
+const calificationModalTab = ref('calificar') // 'ponderaciones' o 'calificar'
 const calificationArea = ref(ANSWER_KEY_AREAS[0])
 const calificationPonderationArea = ref(ANSWER_KEY_AREAS[0])
 const calificationCorrectValue = ref(10)
 const calificationIncorrectValue = ref(0)
-const calificationBlankValue = ref(0)
+const calificationBlankValue = ref(2)
 const calificationError = ref('')
 const scoreStorage = useStorage(SCORE_RESULTS_STORAGE_KEY, { summary: null, rows: [] })
 const calificationResults = ref(Array.isArray(scoreStorage.value?.rows) ? scoreStorage.value.rows : [])
@@ -381,9 +441,7 @@ const ponderationEntriesByArea = computed(() => {
       }
       return a.order - b.order
     })
-    list.forEach((row, index) => {
-      row.order = index + 1
-    })
+    // NO reasignar order automáticamente - mantener el order manual
   })
 
   return map
@@ -419,6 +477,8 @@ const ponderationCurrentTotals = computed(() => {
     weight: entry?.weight ?? 0,
   }
 })
+
+// Slider eliminado - ahora mostramos todos los cursos en una lista
 
 const selectedPonderationTotals = computed(() => {
   const area = normalizeArea(calificationPonderationArea.value)
@@ -1094,6 +1154,123 @@ function createAnswerKeyRow(data = {}) {
   return row
 }
 
+// Funciones de API para ponderaciones
+async function fetchPonderacionesFromAPI() {
+  try {
+    ponderationApiLoading.value = true
+    ponderationApiError.value = ''
+    const response = await fetch(`${API_BASE_URL}/ponderaciones/`)
+    if (!response.ok) {
+      throw new Error(`Error al cargar ponderaciones: ${response.statusText}`)
+    }
+    const data = await response.json()
+    return data.map((item) => ({
+      id: buildPonderationKey(item.area, item.subject),
+      area: item.area,
+      subject: item.subject,
+      questionCount: item.question_count,
+      ponderation: Number(item.ponderation),
+      order: item.order,
+    }))
+  } catch (error) {
+    console.error('Error al cargar ponderaciones desde API:', error)
+    ponderationApiError.value = error.message
+    return null
+  } finally {
+    ponderationApiLoading.value = false
+  }
+}
+
+async function savePonderationToAPI(row) {
+  try {
+    const area = normalizeArea(row.area)
+    const subject = String(row.subject ?? '').trim()
+    const payload = {
+      area,
+      subject,
+      question_count: Math.max(0, Math.round(Number(row.questionCount ?? 0))),
+      ponderation: Number(row.ponderation ?? 0) || 0,
+      order: Math.max(1, Math.round(Number(row.order ?? 1))),
+    }
+
+    // Verificar si existe
+    const checkResponse = await fetch(
+      `${API_BASE_URL}/ponderaciones/?area=${encodeURIComponent(area)}`
+    )
+    if (checkResponse.ok) {
+      const existing = await checkResponse.json()
+      const found = existing.find(
+        (item) => normalize(item.subject) === normalize(subject)
+      )
+
+      let response
+      if (found) {
+        // Actualizar
+        response = await fetch(`${API_BASE_URL}/ponderaciones/${found.id}/`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        })
+      } else {
+        // Crear
+        response = await fetch(`${API_BASE_URL}/ponderaciones/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        })
+      }
+
+      if (!response.ok) {
+        throw new Error(`Error al guardar ponderación: ${response.statusText}`)
+      }
+      return await response.json()
+    }
+  } catch (error) {
+    console.error('Error al guardar ponderación en API:', error)
+    ponderationApiError.value = error.message
+    throw error
+  }
+}
+
+async function deletePonderationFromAPI(row) {
+  try {
+    const area = normalizeArea(row.area)
+    const subject = String(row.subject ?? '').trim()
+
+    // Buscar el ID en la API
+    const response = await fetch(
+      `${API_BASE_URL}/ponderaciones/?area=${encodeURIComponent(area)}`
+    )
+    if (!response.ok) {
+      throw new Error(`Error al buscar ponderación: ${response.statusText}`)
+    }
+    const data = await response.json()
+    const found = data.find((item) => normalize(item.subject) === normalize(subject))
+
+    if (found) {
+      const deleteResponse = await fetch(
+        `${API_BASE_URL}/ponderaciones/${found.id}/`,
+        {
+          method: 'DELETE',
+        }
+      )
+      if (!deleteResponse.ok) {
+        throw new Error(`Error al eliminar ponderación: ${deleteResponse.statusText}`)
+      }
+      return true
+    }
+    return false
+  } catch (error) {
+    console.error('Error al eliminar ponderación de API:', error)
+    ponderationApiError.value = error.message
+    throw error
+  }
+}
+
 function buildPonderationKey(area, subject) {
   return `${normalizeArea(area)}|${normalize(subject)}`
 }
@@ -1117,23 +1294,18 @@ function createPonderationRow(data = {}) {
 }
 
 function reindexPonderationOrders() {
-  const sorted = [...ponderationRows.value].sort((a, b) => {
-    if (a.area === b.area) {
-      return a.order - b.order
+  // Esta función ya no reordena automáticamente
+  // Solo se usa para inicializar orders si no existen
+  ponderationRows.value.forEach((row) => {
+    if (!row.order || row.order === 0) {
+      const areaRows = ponderationRows.value.filter((r) => r.area === row.area)
+      const maxOrder = Math.max(...areaRows.map((r) => r.order || 0), 0)
+      row.order = maxOrder + 1
     }
-    return a.area.localeCompare(b.area)
   })
-
-  const counters = new Map()
-  sorted.forEach((row) => {
-    const current = counters.get(row.area) ?? 0
-    const next = current + 1
-    counters.set(row.area, next)
-    row.order = next
-  })
-
-  ponderationRows.value = sorted.map((row) => createPonderationRow(row))
 }
+
+// Función de mover eliminada - el orden se mantiene manualmente según el order asignado
 
 function ensureDefaultPonderations() {
   let changed = false
@@ -1155,7 +1327,14 @@ function ensureDefaultPonderations() {
   })
 
   if (changed) {
-    reindexPonderationOrders()
+    // Solo asignar order inicial si no existe, sin reordenar los existentes
+    ponderationRows.value.forEach((row) => {
+      if (!row.order || row.order === 0) {
+        const areaRows = ponderationRows.value.filter((r) => r.area === row.area && r.order > 0)
+        const maxOrder = areaRows.length > 0 ? Math.max(...areaRows.map((r) => r.order)) : 0
+        row.order = maxOrder + 1
+      }
+    })
   }
 }
 
@@ -1169,25 +1348,42 @@ function isPonderationEditing(id) {
   return ponderationEditing.value.has(id)
 }
 
-function togglePonderationEditRow(row) {
+async function togglePonderationEditRow(row) {
   const next = new Set(ponderationEditing.value)
   if (next.has(row.id)) {
     next.delete(row.id)
-    upsertPonderationOverride(row)
+    await upsertPonderationOverride(row)
   } else {
     next.add(row.id)
   }
   ponderationEditing.value = next
 }
 
-function removePonderationRow(row) {
-  const key = buildPonderationKey(row.area, row.subject)
-  const filtered = ponderationRows.value.filter((item) => buildPonderationKey(item.area, item.subject) !== key)
-  ponderationRows.value = filtered
-  reindexPonderationOrders()
+async function removePonderationRow(row) {
+  // Usar el ID directamente para evitar duplicados
+  const rowId = row.id || buildPonderationKey(row.area, row.subject)
+  
+  try {
+    await deletePonderationFromAPI(row)
+  } catch (error) {
+    console.error('Error al eliminar de API, continuando con eliminación local:', error)
+  }
+  
+  // Filtrar usando el ID para evitar problemas con duplicados
+  // Usar splice para actualizar reactivamente
+  const index = ponderationRows.value.findIndex((item) => {
+    const itemId = item.id || buildPonderationKey(item.area, item.subject)
+    return itemId === rowId
+  })
+  
+  if (index !== -1) {
+    ponderationRows.value.splice(index, 1)
+  }
+  
+  // NO reindexar - mantener el orden de los demás
 }
 
-function addPonderationRow() {
+async function addPonderationRow() {
   ponderationError.value = ''
   const subject = String(newPonderation.subject ?? '').trim()
   const questionCount = Math.max(0, Math.round(Number(newPonderation.questionCount ?? 0)))
@@ -1209,20 +1405,22 @@ function addPonderationRow() {
   }
 
   const area = ponderationModalArea.value
-  const planBefore = ponderationPlanByArea.value.get(normalizeArea(area)) || []
+  // Asignar el siguiente order disponible en el área
+  const areaRows = ponderationRows.value.filter((r) => normalizeArea(r.area) === normalizeArea(area))
+  const maxOrder = areaRows.length > 0 ? Math.max(...areaRows.map((r) => r.order || 0)) : 0
   const row = createPonderationRow({
     area,
     subject,
     questionCount,
     ponderation,
-    order: planBefore.length + 1,
+    order: maxOrder + 1,
   })
 
-  upsertPonderationOverride(row)
+  await upsertPonderationOverride(row)
   resetNewPonderation()
 }
 
-function upsertPonderationOverride(row) {
+async function upsertPonderationOverride(row) {
   const area = normalizeArea(row.area)
   const subject = String(row.subject ?? '').trim()
   const key = buildPonderationKey(area, subject)
@@ -1239,7 +1437,19 @@ function upsertPonderationOverride(row) {
     Math.round(Number(defaultEntry.questionCount ?? 0)) === questionCount &&
     Number(defaultEntry.ponderation ?? 0) === ponderation
 
-  const nextRows = ponderationRows.value.filter((item) => buildPonderationKey(item.area, item.subject) !== key)
+  // Guardar en la API
+  try {
+    await savePonderationToAPI(row)
+  } catch (error) {
+    console.error('Error al guardar en API, continuando con guardado local:', error)
+  }
+
+  // Usar el ID para filtrar y evitar duplicados
+  const rowId = row.id || key
+  const nextRows = ponderationRows.value.filter((item) => {
+    const itemId = item.id || buildPonderationKey(item.area, item.subject)
+    return itemId !== rowId
+  })
 
   if (!matchesDefault) {
     nextRows.push(
@@ -1255,38 +1465,44 @@ function upsertPonderationOverride(row) {
   }
 
   ponderationRows.value = nextRows
-  reindexPonderationOrders()
+  // NO reindexar - mantener el orden manual
 }
 
-function openCalificationModal() {
-  if (!canCalify.value) {
-    calificationError.value = 'Necesitas cargar respuestas, claves y ponderaciones antes de calificar.'
-    return
+function openCalificationModal(tab = 'calificar') {
+  if (tab === 'calificar') {
+    if (!canCalify.value) {
+      calificationError.value = 'Necesitas cargar respuestas, claves y ponderaciones antes de calificar.'
+      return
+    }
+
+    const areas = calificationAreaOptions.value
+    const readyAreas = areas.filter((areaOption) => {
+      const entry = ponderationTotalsByArea.value.get(areaOption)
+      return entry?.questions === 60
+    })
+
+    if (!readyAreas.length) {
+      calificationError.value = 'Completa las 60 preguntas para el área antes de calificar.'
+      return
+    }
+
+    const preferredArea =
+      calificationArea.value && readyAreas.includes(calificationArea.value)
+        ? calificationArea.value
+        : readyAreas[0]
+    calificationArea.value = preferredArea
+    calificationPonderationArea.value = readyAreas.includes(calificationPonderationArea.value)
+      ? calificationPonderationArea.value
+      : preferredArea
+    calificationCorrectValue.value = 10
+    calificationIncorrectValue.value = 0
+    calificationBlankValue.value = 2
+    calificationError.value = ''
+  } else {
+    calificationError.value = ''
   }
-
-  const areas = calificationAreaOptions.value
-  const readyAreas = areas.filter((areaOption) => {
-    const entry = ponderationTotalsByArea.value.get(areaOption)
-    return entry?.questions === 60
-  })
-
-  if (!readyAreas.length) {
-    calificationError.value = 'Completa las 60 preguntas para el área antes de calificar.'
-    return
-  }
-
-  const preferredArea =
-    calificationArea.value && readyAreas.includes(calificationArea.value)
-      ? calificationArea.value
-      : readyAreas[0]
-  calificationArea.value = preferredArea
-  calificationPonderationArea.value = readyAreas.includes(calificationPonderationArea.value)
-    ? calificationPonderationArea.value
-    : preferredArea
-  calificationCorrectValue.value = 10
-  calificationIncorrectValue.value = 0
-  calificationBlankValue.value = 0
-  calificationError.value = ''
+  
+  calificationModalTab.value = tab
   showCalificationModal.value = true
 }
 
@@ -1300,16 +1516,27 @@ function resetCalificationResults() {
 }
 
 function classifyAnswerChar(answerChar) {
-  const value = (answerChar || '').trim().toUpperCase()
-  if (!value) {
+  // Manejar casos de espacios, vacíos, null, undefined
+  if (!answerChar || answerChar === ' ' || answerChar === '\t' || answerChar === '\n' || answerChar === '\r') {
     return 'blank'
   }
+  
+  const value = String(answerChar).trim().toUpperCase()
+  
+  if (!value || value === '') {
+    return 'blank'
+  }
+  
   if (value === '*') {
     return 'blank'
   }
+  
+  // Solo A-E son opciones válidas
   if (/^[A-E]$/.test(value)) {
     return 'option'
   }
+  
+  // Cualquier otro carácter se trata como blanco
   return 'blank'
 }
 
@@ -1400,30 +1627,51 @@ function runCalification() {
 
     const { row: responseRow, answer: answerRow } = matchForArea
 
-    const answers = (responseRow?.answers || '').toUpperCase().padEnd(plan.length, ' ').slice(0, plan.length)
-    const correctAnswers = (answerRow?.answers || '').toUpperCase().padEnd(plan.length, ' ').slice(0, plan.length)
+    const answersRaw = (responseRow?.answers || '').toUpperCase()
+    const correctAnswersRaw = (answerRow?.answers || '').toUpperCase()
+    
+    // Asegurar que ambas cadenas tengan exactamente 60 caracteres, rellenando con espacios si es necesario
+    const answers = answersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
+    const correctAnswers = correctAnswersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
 
     let total = 0
 
     for (let index = 0; index < plan.length; index += 1) {
       const weight = Number(plan[index]?.weight) || 0
-      const responseChar = answers[index]
-      const correctChar = correctAnswers[index]
-
-      if (/^[A-E]$/.test(correctChar) && responseChar === correctChar) {
-        total += correctValue * weight
+      if (weight <= 0) {
+        // Si el peso es 0 o negativo, no contribuye nada
         continue
       }
+      
+      const responseChar = answers[index] || ' '
+      const correctChar = correctAnswers[index] || ' '
 
-      const responseType = classifyAnswerChar(responseChar)
-      if (responseType === 'blank') {
-        total += blankValue * weight
-      } else if (responseType === 'option') {
-        total += incorrectValue * weight
+      let contribution = 0
+      
+      // Verificar si la respuesta es correcta (ambos deben ser A-E y coincidir)
+      const isCorrectCharValid = /^[A-E]$/.test(correctChar)
+      const isResponseCharValid = /^[A-E]$/.test(responseChar)
+      
+      if (isCorrectCharValid && isResponseCharValid && responseChar === correctChar) {
+        // Respuesta correcta
+        contribution = correctValue * weight
+      } else if (isResponseCharValid) {
+        // Respuesta marcada (A-E) pero incorrecta
+        contribution = incorrectValue * weight
       } else {
-        total += blankValue * weight
+        // Respuesta en blanco: espacio, vacío, '*', o cualquier otro carácter
+        // Si blankValue es 0, esto no afectará el total
+        contribution = blankValue * weight
       }
+      
+      // Redondear cada contribución a 2 decimales para evitar errores de precisión acumulados
+      // Usar Math.round para evitar problemas de precisión de punto flotante
+      const roundedContribution = Math.round(contribution * 100) / 100
+      total += roundedContribution
     }
+
+    // Redondear el total final a 2 decimales usando el método correcto
+    const finalScore = Math.round(total * 100) / 100
 
     processedResults.push({
       id: `${dni}-${area}`,
@@ -1432,7 +1680,7 @@ function runCalification() {
       materno: candidate.materno || '',
       nombres: candidate.nombres || '',
       area,
-      score: Number(total.toFixed(2)),
+      score: finalScore,
     })
   })
 
@@ -2511,9 +2759,9 @@ function exportAnswerKeysObservationsPdf() {
 <template>
   <div class="page">
     <header class="header">
-      <h1>Calificador de admisión</h1>
+      <h1>CALIFICADOR DAD</h1>
       <p>
-        Sigue los pasos en orden: primero carga el padrón desde Excel y luego las hojas de identificación.
+        Sigue los pasos en la pestaña correspondiente:
       </p>
     </header>
 
@@ -3639,7 +3887,10 @@ function exportAnswerKeysObservationsPdf() {
     >
       <section class="toolbar">
         <div class="toolbar__left">
-          <button type="button" class="btn" @click="openCalificationModal" :disabled="!canCalify">
+          <button type="button" class="btn" @click="openCalificationModal('ponderaciones')">
+            Gestionar Ponderaciones
+          </button>
+          <button type="button" class="btn" @click="openCalificationModal('calificar')" :disabled="!canCalify">
             Calificar
           </button>
           <button
@@ -3655,154 +3906,6 @@ function exportAnswerKeysObservationsPdf() {
           <span>Ponderaciones: {{ ponderationCurrentTotals.questions }}/60 · peso {{ ponderationCurrentTotals.weight.toFixed(2) }}</span>
           <span>Resultados: {{ calificationResults.length }}</span>
         </div>
-      </section>
-
-      <section class="ponderations-panel">
-        <header class="sources-header">
-          <div>
-            <h3>Ponderaciones por área</h3>
-            <p>Gestiona las ponderaciones oficiales y ajustes manuales para cada curso.</p>
-          </div>
-          <div class="sources-counts">
-            <span>Área activa: {{ ponderationModalArea }}</span>
-            <span>Preguntas: {{ ponderationCurrentTotals.questions }}/60</span>
-            <span>Peso total: {{ ponderationCurrentTotals.weight.toFixed(2) }}</span>
-          </div>
-        </header>
-
-        <nav class="subtabs subtabs--modal" aria-label="Áreas de ponderación">
-          <button
-            v-for="area in ponderationAreaList"
-            :key="area"
-            type="button"
-            class="subtab"
-            :class="{ 'subtab--active': ponderationModalArea === area }"
-            @click="ponderationModalArea = area"
-          >
-            {{ area }}
-          </button>
-        </nav>
-
-        <div class="ponderations-actions">
-          <form class="modal-form" @submit.prevent="addPonderationRow">
-            <div class="field">
-              <label for="ponderation-subject">Asignatura</label>
-              <input
-                id="ponderation-subject"
-                v-model="newPonderation.subject"
-                type="text"
-                class="input"
-                placeholder="Nombre de la asignatura"
-                required
-              />
-            </div>
-            <div class="field">
-              <label for="ponderation-count">Cantidad de preguntas</label>
-              <input
-                id="ponderation-count"
-                v-model.number="newPonderation.questionCount"
-                type="number"
-                min="1"
-                step="1"
-                class="input"
-                required
-              />
-            </div>
-            <div class="field">
-              <label for="ponderation-weight">Ponderación</label>
-              <input
-                id="ponderation-weight"
-                v-model.number="newPonderation.ponderation"
-                type="number"
-                min="0"
-                step="0.001"
-                class="input"
-                required
-              />
-            </div>
-            <button type="submit" class="btn">Agregar</button>
-          </form>
-          <p class="modal-hint">
-            Preguntas registradas: {{ ponderationCurrentTotals.questions }}/60 · peso acumulado
-            {{ ponderationCurrentTotals.weight.toFixed(2) }}
-          </p>
-          <div v-if="ponderationError" class="alert alert--error">
-            {{ ponderationError }}
-          </div>
-        </div>
-
-        <section class="table-wrapper modal-table-wrapper">
-          <table class="modal-table">
-            <thead>
-              <tr>
-                <th class="col-number">#</th>
-                <th>Asignatura</th>
-                <th>Preguntas</th>
-                <th>Ponderación</th>
-                <th class="actions-header">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in ponderationCurrentAreaRows" :key="row.id">
-                <td class="col-number">{{ row.order }}</td>
-                <td>
-                  <template v-if="isPonderationEditing(row.id)">
-                    <input type="text" class="cell-input" v-model="row.subject" />
-                  </template>
-                  <span v-else>{{ row.subject || '—' }}</span>
-                </td>
-                <td>
-                  <template v-if="isPonderationEditing(row.id)">
-                    <input type="number" class="cell-input" min="0" step="1" v-model.number="row.questionCount" />
-                  </template>
-                  <span v-else>{{ row.questionCount }}</span>
-                </td>
-                <td>
-                  <template v-if="isPonderationEditing(row.id)">
-                    <input type="number" class="cell-input" step="0.001" v-model.number="row.ponderation" />
-                  </template>
-                  <span v-else>{{ row.ponderation.toFixed(3) }}</span>
-                </td>
-                <td class="actions-cell">
-                  <div class="sources-actions">
-                    <button
-                      type="button"
-                      class="icon-button"
-                      @click="togglePonderationEditRow(row)"
-                      :aria-label="isPonderationEditing(row.id) ? 'Guardar fila' : 'Editar fila'"
-                    >
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path
-                          v-if="isPonderationEditing(row.id)"
-                          d="M19 13H5v-2h14v2Z"
-                          fill="currentColor"
-                        />
-                        <path
-                          v-else
-                          d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm17.71-10.04-2.92-2.92a1.004 1.004 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.83-1.83c.39-.39.39-1.03 0-1.42Z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      class="icon-button icon-button--danger"
-                      @click="removePonderationRow(row)"
-                      aria-label="Eliminar fila"
-                    >
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path
-                          d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12ZM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4Z"
-                          fill="currentColor"
-                        />
-                      </svg>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
       </section>
 
       <div v-if="calificationSummary" class="summary">
@@ -3856,12 +3959,192 @@ function exportAnswerKeysObservationsPdf() {
   <div v-if="showCalificationModal" class="modal" aria-modal="true">
     <div class="modal__content">
       <header class="modal__header">
-        <h2>Calificar</h2>
+        <h2>Calificación</h2>
         <button type="button" class="icon-button icon-button--ghost" @click="closeCalificationModal" aria-label="Cerrar">
           ✕
         </button>
       </header>
-      <form class="modal__body modal-form" @submit.prevent="runCalification">
+      
+      <!-- Pestañas del modal -->
+      <nav class="subtabs subtabs--modal" aria-label="Pestañas de calificación">
+        <button
+          type="button"
+          class="subtab"
+          :class="{ 'subtab--active': calificationModalTab === 'ponderaciones' }"
+          @click="calificationModalTab = 'ponderaciones'"
+        >
+          Ponderaciones
+        </button>
+        <button
+          type="button"
+          class="subtab"
+          :class="{ 'subtab--active': calificationModalTab === 'calificar' }"
+          @click="calificationModalTab = 'calificar'"
+        >
+          Calificar
+        </button>
+      </nav>
+
+      <!-- Contenido de la pestaña Ponderaciones -->
+      <div v-if="calificationModalTab === 'ponderaciones'" class="modal__body">
+        <section class="ponderations-panel">
+          <header class="sources-header">
+            <div>
+              <h3>Ponderaciones por área</h3>
+              <p>Gestiona las ponderaciones oficiales y ajustes manuales para cada curso.</p>
+            </div>
+            <div class="sources-counts">
+              <span>Área activa: {{ ponderationModalArea }}</span>
+              <span>Preguntas: {{ ponderationCurrentTotals.questions }}/60</span>
+              <span>Peso total: {{ ponderationCurrentTotals.weight.toFixed(2) }}</span>
+            </div>
+          </header>
+
+          <nav class="subtabs subtabs--modal" aria-label="Áreas de ponderación">
+            <button
+              v-for="area in ponderationAreaList"
+              :key="area"
+              type="button"
+              class="subtab"
+              :class="{ 'subtab--active': ponderationModalArea === area }"
+              @click="ponderationModalArea = area"
+            >
+              {{ area }}
+            </button>
+          </nav>
+
+          <div class="ponderations-actions">
+            <form class="modal-form" @submit.prevent="addPonderationRow">
+              <div class="field">
+                <label for="ponderation-subject">Asignatura</label>
+                <input
+                  id="ponderation-subject"
+                  v-model="newPonderation.subject"
+                  type="text"
+                  class="input"
+                  placeholder="Nombre de la asignatura"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label for="ponderation-count">Cantidad de preguntas</label>
+                <input
+                  id="ponderation-count"
+                  v-model.number="newPonderation.questionCount"
+                  type="number"
+                  min="1"
+                  step="1"
+                  class="input"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label for="ponderation-weight">Ponderación</label>
+                <input
+                  id="ponderation-weight"
+                  v-model.number="newPonderation.ponderation"
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  class="input"
+                  required
+                />
+              </div>
+              <button type="submit" class="btn">Agregar</button>
+            </form>
+            <p class="modal-hint">
+              Preguntas registradas: {{ ponderationCurrentTotals.questions }}/60 · peso acumulado
+              {{ ponderationCurrentTotals.weight.toFixed(2) }}
+            </p>
+            <div v-if="ponderationError" class="alert alert--error">
+              {{ ponderationError }}
+            </div>
+          </div>
+
+          <section class="table-wrapper modal-table-wrapper ponderation-table-container">
+            <div class="table-header-info">
+              <span>Total de cursos: {{ ponderationCurrentAreaRows.length }}</span>
+            </div>
+            <div class="table-scroll-wrapper">
+              <table class="modal-table">
+                <thead>
+                  <tr>
+                    <th class="col-number">#</th>
+                    <th>Asignatura</th>
+                    <th>Preguntas</th>
+                    <th>Ponderación</th>
+                    <th class="actions-header">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in ponderationCurrentAreaRows" :key="row.id">
+                  <td class="col-number">{{ row.order }}</td>
+                  <td>
+                    <template v-if="isPonderationEditing(row.id)">
+                      <input type="text" class="cell-input" v-model="row.subject" />
+                    </template>
+                    <span v-else>{{ row.subject || '—' }}</span>
+                  </td>
+                  <td>
+                    <template v-if="isPonderationEditing(row.id)">
+                      <input type="number" class="cell-input" min="0" step="1" v-model.number="row.questionCount" />
+                    </template>
+                    <span v-else>{{ row.questionCount }}</span>
+                  </td>
+                  <td>
+                    <template v-if="isPonderationEditing(row.id)">
+                      <input type="number" class="cell-input" step="0.001" v-model.number="row.ponderation" />
+                    </template>
+                    <span v-else>{{ row.ponderation.toFixed(3) }}</span>
+                  </td>
+                  <td class="actions-cell">
+                    <div class="sources-actions">
+                      <button
+                        type="button"
+                        class="icon-button"
+                        @click="togglePonderationEditRow(row)"
+                        :aria-label="isPonderationEditing(row.id) ? 'Guardar fila' : 'Editar fila'"
+                        title="Editar"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            v-if="isPonderationEditing(row.id)"
+                            d="M19 13H5v-2h14v2Z"
+                            fill="currentColor"
+                          />
+                          <path
+                            v-else
+                            d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm17.71-10.04-2.92-2.92a1.004 1.004 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.83-1.83c.39-.39.39-1.03 0-1.42Z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        class="icon-button icon-button--danger"
+                        @click="removePonderationRow(row)"
+                        aria-label="Eliminar fila"
+                        title="Eliminar"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12ZM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4Z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+      </div>
+
+      <!-- Contenido de la pestaña Calificar -->
+      <form v-if="calificationModalTab === 'calificar'" class="modal__body modal-form" @submit.prevent="runCalification">
         <div class="field">
           <label for="calification-area">Área</label>
           <select id="calification-area" v-model="calificationArea" class="input" required>
@@ -4229,8 +4512,64 @@ function exportAnswerKeysObservationsPdf() {
 }
 
 .modal-table-wrapper {
-  max-height: 280px;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.ponderation-table-container {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ponderation-table-container .table-header-info {
+  flex-shrink: 0;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.ponderation-table-container .table-scroll-wrapper {
+  max-height: 500px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.ponderation-table-container .table-scroll-wrapper table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table-header-info {
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.ponderations-add-form {
+  margin-bottom: 1rem;
+}
+
+.ponderations-add-form .form-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.ponderations-add-form .field--button {
+  display: flex;
+  align-items: flex-end;
+}
+
+.ponderations-stats {
+  margin-top: 0.75rem;
 }
 
 .modal-table {
