@@ -1,4 +1,4 @@
-<script setup>
+  <script setup>
 import { computed, reactive, ref, watch, onMounted } from 'vue'
 import { useStorage } from '@vueuse/core'
 import ExcelJS from 'exceljs'
@@ -299,6 +299,22 @@ const calificationError = ref('')
 const scoreStorage = useStorage(SCORE_RESULTS_STORAGE_KEY, { summary: null, rows: [] })
 const calificationResults = ref(Array.isArray(scoreStorage.value?.rows) ? scoreStorage.value.rows : [])
 const calificationSummary = ref(scoreStorage.value?.summary || null)
+const calificationSearch = ref('')
+
+const calificationFilteredResults = computed(() => {
+  if (!calificationSearch.value.trim()) {
+    return calificationResults.value
+  }
+  const needle = normalize(calificationSearch.value)
+  return calificationResults.value.filter((row) => {
+    return (
+      normalize(row.dni).includes(needle) ||
+      normalize(row.paterno).includes(needle) ||
+      normalize(row.materno).includes(needle) ||
+      normalize(row.nombres).includes(needle)
+    )
+  })
+})
 
 watch(
   [calificationResults, calificationSummary],
@@ -313,6 +329,46 @@ watch(
 
 
 const archiveHasData = computed(() => archiveRows.value.length > 0)
+
+// Funciones helper para el stepper de navegación
+function getStepStatus(tabKey) {
+  switch (tabKey) {
+    case TAB_KEYS.ARCHIVES:
+      return archiveRows.value.length > 0 ? 'completed' : 'pending'
+    case TAB_KEYS.IDENTIFIERS:
+      return identifierRows.value.length > 0 ? 'completed' : 'pending'
+    case TAB_KEYS.RESPONSES:
+      return responsesRows.value.length > 0 ? 'completed' : 'pending'
+    case TAB_KEYS.ANSWER_KEYS:
+      return answerKeyRows.value.length > 0 ? 'completed' : 'pending'
+    case TAB_KEYS.SCORES:
+      return calificationResults.value.length > 0 ? 'completed' : 'pending'
+    default:
+      return 'pending'
+  }
+}
+
+function getStepLabel(tabKey) {
+  const labels = {
+    [TAB_KEYS.ARCHIVES]: 'Padrón',
+    [TAB_KEYS.IDENTIFIERS]: 'Identificadores',
+    [TAB_KEYS.RESPONSES]: 'Respuestas',
+    [TAB_KEYS.ANSWER_KEYS]: 'Claves',
+    [TAB_KEYS.SCORES]: 'Calificación',
+  }
+  return labels[tabKey] || ''
+}
+
+function getStepDescription(tabKey) {
+  const descriptions = {
+    [TAB_KEYS.ARCHIVES]: 'Cargar Excel',
+    [TAB_KEYS.IDENTIFIERS]: 'Archivos .dat',
+    [TAB_KEYS.RESPONSES]: 'Archivos .dat',
+    [TAB_KEYS.ANSWER_KEYS]: 'Respuestas correctas',
+    [TAB_KEYS.SCORES]: 'Generar resultados',
+  }
+  return descriptions[tabKey] || ''
+}
 const archiveTotalRows = computed(() => archiveRows.value.length)
 const archiveTotalSelected = computed(() => archiveSelection.value.size)
 const archiveFilteredRows = computed(() => filterArchiveRows())
@@ -1685,6 +1741,10 @@ function runCalification() {
   })
 
   processedResults.sort((a, b) => b.score - a.score)
+  
+  // Calcular respuestas sin DNI (no vinculadas)
+  const unlinkedResponses = responsesRows.value.filter(r => !r.dni || r.dni.trim() === '').length
+
   calificationResults.value = processedResults
   calificationSummary.value = {
     area,
@@ -1692,6 +1752,7 @@ function runCalification() {
     totalCandidates: candidates.length,
     missingResponses,
     missingKeys,
+    unlinkedResponses,
     totalWeight: Number(totalWeight.toFixed(3)),
   }
 
@@ -2468,9 +2529,10 @@ function parseIdentifierLine(line, lineNumber) {
   cursor += examMatch[0].length
 
   remainder = remainder.slice(cursor)
-  const folioMatch = remainder.match(/^\s*#(\d{4})/)
+  /* Regex modificado: # opcional y longitud variable */
+  const folioMatch = remainder.match(/^\s*#?(\d+)/)
   if (!folioMatch) {
-    return { error: `L${lineNumber}: folio (#0000) no reconocido` }
+    return { error: `L${lineNumber}: folio (#0000) no reconocido (encontrado: "${remainder.slice(0, 10)}...")` }
   }
   const folio = folioMatch[1]
   cursor = folioMatch[0].length
@@ -2539,9 +2601,10 @@ function parseResponseLine(line, lineNumber) {
   cursor += examMatch[0].length
 
   remainder = remainder.slice(cursor)
-  const folioMatch = remainder.match(/^\s*#(\d{4})/)
+  /* Regex modificado: # opcional y longitud variable */
+  const folioMatch = remainder.match(/^\s*#?(\d+)/)
   if (!folioMatch) {
-    return { error: `L${lineNumber}: folio (#0000) no reconocido` }
+    return { error: `L${lineNumber}: folio (#0000) no reconocido (encontrado: "${remainder.slice(0, 10)}...")` }
   }
   const folio = folioMatch[1]
   cursor = folioMatch[0].length
@@ -2757,34 +2820,106 @@ function exportAnswerKeysObservationsPdf() {
 }
 </script>
 <template>
-  <div class="page">
-    <header class="header">
-      <h1>CALIFICADOR DAD</h1>
-      <p>
-        Sigue los pasos en la pestaña correspondiente:
-      </p>
+  <div class="app-layout">
+    <!-- Header institucional -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="48" height="48" rx="12" fill="url(#logoGradient)"/>
+            <path d="M24 8L38 16V32L24 40L10 32V16L24 8Z" stroke="#D4AF37" stroke-width="2" fill="none"/>
+            <path d="M24 14L32 18.5V27.5L24 32L16 27.5V18.5L24 14Z" fill="#D4AF37" fill-opacity="0.3"/>
+            <circle cx="24" cy="23" r="5" fill="#D4AF37"/>
+            <defs>
+              <linearGradient id="logoGradient" x1="0" y1="0" x2="48" y2="48">
+                <stop offset="0%" stop-color="#003366"/>
+                <stop offset="100%" stop-color="#001d3d"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>Sistema de Calificación</h1>
+          <span class="brand-subtitle">Universidad Nacional del Altiplano - Puno</span>
+        </div>
+      </div>
+      <div class="header-meta">
+        <div class="header-badge">
+          <span class="badge-icon">
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+            </svg>
+          </span>
+          Examen de Admisión
+        </div>
+      </div>
     </header>
 
-    <nav class="tabs" aria-label="Pasos de importación">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
-        type="button"
-        class="tab"
-        :class="{ 'tab--active': activeTab === tab.key }"
-        @click="activeTab = tab.key"
-      >
-        {{ tab.label }}
-      </button>
+    <!-- Navegación con stepper -->
+    <nav class="step-nav" aria-label="Pasos del proceso">
+      <div class="step-nav-track">
+        <button
+          v-for="(tab, index) in tabs"
+          :key="tab.key"
+          type="button"
+          class="step-item"
+          :class="{
+            'step-item--active': activeTab === tab.key,
+            'step-item--completed': getStepStatus(tab.key) === 'completed',
+            'step-item--current': activeTab === tab.key
+          }"
+          @click="activeTab = tab.key"
+        >
+          <span class="step-number">
+            <span v-if="getStepStatus(tab.key) === 'completed'" class="step-check">
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+              </svg>
+            </span>
+            <span v-else>{{ index + 1 }}</span>
+          </span>
+          <span class="step-content">
+            <span class="step-label">{{ getStepLabel(tab.key) }}</span>
+            <span class="step-desc">{{ getStepDescription(tab.key) }}</span>
+          </span>
+          <span v-if="index < tabs.length - 1" class="step-connector"></span>
+        </button>
+      </div>
     </nav>
+
+    <!-- Contenido principal -->
+    <main class="app-main">
 
     <section
       v-if="activeTab === TAB_KEYS.ARCHIVES"
       class="tab-content"
     >
+      <!-- Card de información del paso -->
+      <div class="step-info-card">
+        <div class="step-info-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14,2 14,8 20,8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10,9 9,9 8,9"/>
+          </svg>
+        </div>
+        <div class="step-info-content">
+          <h2>Importar Padrón de Postulantes</h2>
+          <p>Carga el archivo Excel con la lista de candidatos inscritos para el examen de admisión.</p>
+        </div>
+        <div class="step-info-stats" v-if="archiveHasData">
+          <div class="stat-item">
+            <span class="stat-value">{{ archiveTotalRows }}</span>
+            <span class="stat-label">Registros</span>
+          </div>
+        </div>
+      </div>
+
       <section
         class="uploader"
-        :class="{ dragging: archiveIsDragging }"
+        :class="{ 'uploader--dragging': archiveIsDragging, 'uploader--has-data': archiveHasData }"
         @drop="onArchiveDrop"
         @dragover="onArchiveDragOver"
         @dragleave="onArchiveDragLeave"
@@ -2796,29 +2931,44 @@ function exportAnswerKeysObservationsPdf() {
           class="uploader__input"
           @change="onArchiveFileChange"
         />
-        <label for="archive-input">
-          <strong>Paso 1: Carga el padrón desde Excel (.xlsx)</strong>
-          <span>Arrastra el archivo o haz clic para seleccionarlo.</span>
-          <span class="uploader__hint">
-            Columnas esperadas: {{ ARCHIVE_COLUMNS.map((c) => c.label).join(', ') }}
-          </span>
-          <span class="uploader__hint">
-            Después de este paso continúa con la pestaña «Paso 2» para importar las hojas de identificación.
-          </span>
+        <label for="archive-input" class="uploader__label">
+          <div class="uploader__icon">
+            <svg viewBox="0 0 48 48" fill="none">
+              <rect x="6" y="6" width="36" height="36" rx="4" stroke="currentColor" stroke-width="2" fill="none"/>
+              <path d="M24 16v16M16 24h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="uploader__text">
+            <strong>Arrastra tu archivo Excel aquí</strong>
+            <span>o haz clic para seleccionar desde tu equipo</span>
+          </div>
+          <div class="uploader__meta">
+            <span class="uploader__badge">.xlsx</span>
+            <span class="uploader__hint">Columnas: {{ ARCHIVE_COLUMNS.map((c) => c.label).join(', ') }}</span>
+          </div>
         </label>
       </section>
 
       <div v-if="archiveImportError" class="alert alert--error">
-        {{ archiveImportError }}
+        <svg class="alert__icon" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+        </svg>
+        <span>{{ archiveImportError }}</span>
       </div>
 
       <section class="toolbar">
-        <div class="toolbar__left">
-          <button type="button" class="btn" @click="exportArchiveToExcel" :disabled="!archiveHasData">
-            Exportar a Excel
+        <div class="toolbar__actions">
+          <button type="button" class="btn btn--primary" @click="exportArchiveToExcel" :disabled="!archiveHasData">
+            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
+            </svg>
+            Exportar Excel
           </button>
-          <button type="button" class="btn" @click="clearAllArchives" :disabled="!archiveHasData">
-            Limpiar tabla
+          <button type="button" class="btn btn--ghost" @click="clearAllArchives" :disabled="!archiveHasData">
+            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
+            </svg>
+            Limpiar
           </button>
           <button
             type="button"
@@ -2826,97 +2976,157 @@ function exportAnswerKeysObservationsPdf() {
             @click="removeSelectedArchives"
             :disabled="!archiveTotalSelected"
           >
-            Eliminar seleccionados ({{ archiveTotalSelected }})
+            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+            </svg>
+            Eliminar ({{ archiveTotalSelected }})
           </button>
         </div>
-        <div class="toolbar__right">
-          <input
-            v-model="archiveSearch"
-            type="search"
-            class="input"
-            placeholder="Buscar por DNI, nombres o área"
-            aria-label="Buscar candidatos"
-          />
-          <div class="metrics">
-            <span>Registros: {{ archiveTotalRows }}</span>
-            <span v-if="archiveSearch">Coincidencias: {{ archiveTotalFiltered }}</span>
+        <div class="toolbar__search">
+          <div class="search-input">
+            <svg class="search-input__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/>
+            </svg>
+            <input
+              v-model="archiveSearch"
+              type="search"
+              class="search-input__field"
+              placeholder="Buscar postulantes..."
+              aria-label="Buscar candidatos"
+            />
+          </div>
+          <div class="toolbar__metrics">
+            <span class="metric">
+              <span class="metric__value">{{ archiveTotalRows }}</span>
+              <span class="metric__label">total</span>
+            </span>
+            <span v-if="archiveSearch" class="metric metric--highlight">
+              <span class="metric__value">{{ archiveTotalFiltered }}</span>
+              <span class="metric__label">encontrados</span>
+            </span>
           </div>
         </div>
       </section>
 
-      <section class="table-wrapper" v-if="archiveHasData">
-        <table>
-          <thead>
-            <tr>
-              <th class="col-number">#</th>
-              <th>
-                <input
-                  ref="archiveSelectAllRef"
-                  type="checkbox"
-                  :checked="archiveIsAllVisibleSelected"
-                  @change="(event) => toggleArchiveSelectAll(event.target.checked)"
-                />
-              </th>
-              <th v-for="column in ARCHIVE_COLUMNS" :key="column.key">
-                {{ column.label }}
-              </th>
-              <th class="actions-header">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(row, index) in archiveFilteredRows" :key="row.id">
-              <td class="col-number">
-                {{ index + 1 }}
-              </td>
-              <td>
-                <input
-                  type="checkbox"
-                  :checked="archiveSelection.has(row.id)"
-                  @change="() => toggleArchiveSelection(row.id)"
-                />
-              </td>
-              <td v-for="column in ARCHIVE_COLUMNS" :key="column.key">
-                <input
-                  v-model="row[column.key]"
-                  type="text"
-                  class="cell-input"
-                  :readonly="!isArchiveEditing(row.id)"
-                  :class="{ 'cell-input--locked': !isArchiveEditing(row.id) }"
-                />
-              </td>
-              <td class="actions-cell">
-                <button type="button" class="link" @click="toggleArchiveEdit(row.id)">
-                  {{ isArchiveEditing(row.id) ? 'Cerrar' : 'Editar' }}
-                </button>
-                <button type="button" class="link link--danger" @click="removeArchiveRow(row.id)">
-                  Eliminar
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <section class="data-card" v-if="archiveHasData">
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="col-index">#</th>
+                <th class="col-check">
+                  <label class="checkbox">
+                    <input
+                      ref="archiveSelectAllRef"
+                      type="checkbox"
+                      :checked="archiveIsAllVisibleSelected"
+                      @change="(event) => toggleArchiveSelectAll(event.target.checked)"
+                    />
+                    <span class="checkbox__mark"></span>
+                  </label>
+                </th>
+                <th v-for="column in ARCHIVE_COLUMNS" :key="column.key">
+                  {{ column.label }}
+                </th>
+                <th class="col-actions">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(row, index) in archiveFilteredRows"
+                :key="row.id"
+                :class="{ 'row--selected': archiveSelection.has(row.id), 'row--editing': isArchiveEditing(row.id) }"
+              >
+                <td class="col-index">{{ index + 1 }}</td>
+                <td class="col-check">
+                  <label class="checkbox">
+                    <input
+                      type="checkbox"
+                      :checked="archiveSelection.has(row.id)"
+                      @change="() => toggleArchiveSelection(row.id)"
+                    />
+                    <span class="checkbox__mark"></span>
+                  </label>
+                </td>
+                <td v-for="column in ARCHIVE_COLUMNS" :key="column.key">
+                  <input
+                    v-model="row[column.key]"
+                    type="text"
+                    class="cell-input"
+                    :readonly="!isArchiveEditing(row.id)"
+                    :class="{ 'cell-input--locked': !isArchiveEditing(row.id) }"
+                  />
+                </td>
+                <td class="col-actions">
+                  <div class="row-actions">
+                    <button
+                      type="button"
+                      class="action-btn"
+                      :class="{ 'action-btn--active': isArchiveEditing(row.id) }"
+                      @click="toggleArchiveEdit(row.id)"
+                      :title="isArchiveEditing(row.id) ? 'Guardar' : 'Editar'"
+                    >
+                      <svg v-if="isArchiveEditing(row.id)" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                      </svg>
+                      <svg v-else viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="action-btn action-btn--danger"
+                      @click="removeArchiveRow(row.id)"
+                      title="Eliminar"
+                    >
+                      <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
-      <section class="empty" v-else>
-        <p>Aún no hay registros. Carga un Excel o agrega filas manualmente.</p>
+      <section class="empty-state" v-else>
+        <div class="empty-state__icon">
+          <svg viewBox="0 0 48 48" fill="none">
+            <rect x="8" y="8" width="32" height="32" rx="4" stroke="currentColor" stroke-width="2" stroke-dasharray="4 2"/>
+            <path d="M20 24h8M24 20v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h3>Sin registros cargados</h3>
+        <p>Importa un archivo Excel o agrega registros manualmente para comenzar.</p>
       </section>
 
-      <section class="adder">
-        <h2>Agregar registro manual</h2>
-        <form class="adder__form" @submit.prevent="addArchiveRow">
-          <div v-for="column in ARCHIVE_COLUMNS" :key="column.key" class="field">
-            <label :for="`new-${column.key}`">{{ column.label }}</label>
+      <section class="form-card">
+        <header class="form-card__header">
+          <h3>Agregar registro manual</h3>
+          <p>Completa los campos para añadir un nuevo postulante</p>
+        </header>
+        <form class="form-grid" @submit.prevent="addArchiveRow">
+          <div v-for="column in ARCHIVE_COLUMNS" :key="column.key" class="form-field">
+            <label :for="`new-${column.key}`" class="form-field__label">{{ column.label }}</label>
             <input
               :id="`new-${column.key}`"
               v-model="archivePendingRow[column.key]"
               type="text"
+              class="form-field__input"
               :placeholder="column.placeholder"
             />
           </div>
-          <div class="adder__actions">
-            <button type="submit" class="btn">Guardar fila</button>
+          <div class="form-actions">
             <button type="button" class="btn btn--ghost" @click="resetArchivePendingRow">
-              Limpiar
+              Limpiar campos
+            </button>
+            <button type="submit" class="btn btn--primary">
+              <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+              </svg>
+              Agregar registro
             </button>
           </div>
         </form>
@@ -2927,9 +3137,32 @@ function exportAnswerKeysObservationsPdf() {
       v-else-if="activeTab === TAB_KEYS.IDENTIFIERS"
       class="tab-content"
     >
+      <!-- Card de información del paso -->
+      <div class="step-info-card">
+        <div class="step-info-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+        </div>
+        <div class="step-info-content">
+          <h2>Importar Hojas de Identificación</h2>
+          <p>Carga los archivos .dat con los datos de identificación de los postulantes.</p>
+        </div>
+        <div class="step-info-stats" v-if="identifierHasData">
+          <div class="stat-item">
+            <span class="stat-value">{{ identifierTotalRows }}</span>
+            <span class="stat-label">Registros</span>
+          </div>
+          <div class="stat-item" v-if="identifierSources.length">
+            <span class="stat-value">{{ identifierSources.length }}</span>
+            <span class="stat-label">Archivos</span>
+          </div>
+        </div>
+      </div>
+
       <section
         class="uploader"
-        :class="{ dragging: identifierIsDragging }"
+        :class="{ 'uploader--dragging': identifierIsDragging, 'uploader--has-data': identifierHasData }"
         @drop="onIdentifierDrop"
         @dragover="onIdentifierDragOver"
         @dragleave="onIdentifierDragLeave"
@@ -2942,10 +3175,31 @@ function exportAnswerKeysObservationsPdf() {
           class="uploader__input"
           @change="onIdentifierFileChange"
         />
-        <label for="identifier-input">
-          <strong>Paso 2: Carga hojas de identificación (.dat)</strong>
-          <span>Arrastra uno o varios archivos o haz clic para seleccionarlos.</span>
-          <span class="uploader__hint">Puedes cargar archivos de diferentes áreas; los registros se agregarán al listado existente.</span>
+        <label for="identifier-input" class="uploader__label">
+          <div class="uploader__icon">
+            <svg viewBox="0 0 48 48" fill="none">
+              <path d="M14 6h14l10 10v26a2 2 0 01-2 2H14a2 2 0 01-2-2V8a2 2 0 012-2z" stroke="currentColor" stroke-width="2" fill="none"/>
+              <path d="M28 6v10h10" stroke="currentColor" stroke-width="2" fill="none"/>
+              <path d="M18 26h12M18 32h12M18 20h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="uploader__text">
+            <strong>Arrastra tus archivos de identificación aquí</strong>
+            <span>o haz clic para seleccionar desde tu equipo</span>
+          </div>
+          <div class="uploader__action">
+            <span class="uploader__button">
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+              </svg>
+              Seleccionar archivos .dat
+            </span>
+          </div>
+          <div class="uploader__meta">
+            <span class="uploader__badge">.dat</span>
+            <span class="uploader__badge">.txt</span>
+            <span class="uploader__hint">Puedes seleccionar múltiples archivos</span>
+          </div>
         </label>
       </section>
 
@@ -3237,9 +3491,32 @@ function exportAnswerKeysObservationsPdf() {
       v-else-if="activeTab === TAB_KEYS.RESPONSES"
       class="tab-content"
     >
+      <!-- Card de información del paso -->
+      <div class="step-info-card">
+        <div class="step-info-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+          </svg>
+        </div>
+        <div class="step-info-content">
+          <h2>Importar Hojas de Respuestas</h2>
+          <p>Carga los archivos .dat con las respuestas marcadas por los postulantes (60 preguntas).</p>
+        </div>
+        <div class="step-info-stats" v-if="responsesHasData">
+          <div class="stat-item">
+            <span class="stat-value">{{ responsesTotalRows }}</span>
+            <span class="stat-label">Registros</span>
+          </div>
+          <div class="stat-item" v-if="responsesSourcesCount">
+            <span class="stat-value">{{ responsesSourcesCount }}</span>
+            <span class="stat-label">Archivos</span>
+          </div>
+        </div>
+      </div>
+
       <section
         class="uploader"
-        :class="{ dragging: responsesIsDragging }"
+        :class="{ 'uploader--dragging': responsesIsDragging, 'uploader--has-data': responsesHasData }"
         @drop="onResponseDrop"
         @dragover="onResponseDragOver"
         @dragleave="onResponseDragLeave"
@@ -3252,10 +3529,33 @@ function exportAnswerKeysObservationsPdf() {
           class="uploader__input"
           @change="onResponseFileChange"
         />
-        <label for="responses-input">
-          <strong>Paso 3: Carga hojas de respuestas (.dat)</strong>
-          <span>Arrastra uno o varios archivos o haz clic para seleccionarlos.</span>
-          <span class="uploader__hint">La cadena de respuestas debe incluir 60 preguntas marcadas.</span>
+        <label for="responses-input" class="uploader__label">
+          <div class="uploader__icon">
+            <svg viewBox="0 0 48 48" fill="none">
+              <rect x="10" y="6" width="28" height="36" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
+              <path d="M18 18h12M18 26h12M18 34h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="18" cy="18" r="1.5" fill="currentColor"/>
+              <circle cx="18" cy="26" r="1.5" fill="currentColor"/>
+              <circle cx="18" cy="34" r="1.5" fill="currentColor"/>
+            </svg>
+          </div>
+          <div class="uploader__text">
+            <strong>Arrastra tus archivos de respuestas aquí</strong>
+            <span>o haz clic para seleccionar desde tu equipo</span>
+          </div>
+          <div class="uploader__action">
+            <span class="uploader__button">
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+              </svg>
+              Seleccionar archivos .dat
+            </span>
+          </div>
+          <div class="uploader__meta">
+            <span class="uploader__badge">.dat</span>
+            <span class="uploader__badge">.txt</span>
+            <span class="uploader__hint">60 preguntas por hoja de respuestas</span>
+          </div>
         </label>
       </section>
 
@@ -3541,14 +3841,41 @@ function exportAnswerKeysObservationsPdf() {
       v-else-if="activeTab === TAB_KEYS.ANSWER_KEYS"
       class="tab-content"
     >
-      <section class="uploader uploader--form">
-        <form class="uploader__form" @submit.prevent="importAnswerKeyFiles">
-          <div class="field">
-            <label for="answer-key-area">Área</label>
+      <!-- Card de información del paso -->
+      <div class="step-info-card">
+        <div class="step-info-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+          </svg>
+        </div>
+        <div class="step-info-content">
+          <h2>Importar Claves de Respuestas</h2>
+          <p>Carga los archivos .dat con las respuestas correctas oficiales para cada área.</p>
+        </div>
+        <div class="step-info-stats" v-if="answerKeyHasData">
+          <div class="stat-item">
+            <span class="stat-value">{{ answerKeyTotalRows }}</span>
+            <span class="stat-label">Claves</span>
+          </div>
+          <div class="stat-item" v-if="answerKeySourcesCount">
+            <span class="stat-value">{{ answerKeySourcesCount }}</span>
+            <span class="stat-label">Archivos</span>
+          </div>
+        </div>
+      </div>
+
+      <section class="upload-form-card">
+        <header class="upload-form-card__header">
+          <h3>Cargar archivos de claves</h3>
+          <p>Selecciona el área y adjunta los archivos .dat de identificación y respuestas oficiales.</p>
+        </header>
+        <form class="upload-form-grid" @submit.prevent="importAnswerKeyFiles">
+          <div class="form-field">
+            <label for="answer-key-area" class="form-field__label">Área</label>
             <select
               id="answer-key-area"
               v-model="answerKeyArea"
-              class="input"
+              class="form-field__select"
               required
             >
               <option v-for="option in answerKeyAreaOptions" :key="option" :value="option">
@@ -3557,46 +3884,63 @@ function exportAnswerKeysObservationsPdf() {
             </select>
           </div>
 
-          <div class="field">
-            <label for="answer-key-identification">Archivo de identificación (.dat)</label>
-            <input
-              id="answer-key-identification"
-              ref="answerKeyIdentificationInputRef"
-              type="file"
-              class="input"
-              accept=".dat,.txt"
-              @change="onAnswerKeyIdentificationChange"
-              required
-            />
-            <small v-if="answerKeyIdentificationFile" class="sources-hint">
-              {{ answerKeyIdentificationFile.name }}
-            </small>
+          <div class="form-field">
+            <label for="answer-key-identification" class="form-field__label">Archivo de identificación</label>
+            <div class="file-input-wrapper">
+              <input
+                id="answer-key-identification"
+                ref="answerKeyIdentificationInputRef"
+                type="file"
+                class="file-input"
+                accept=".dat,.txt"
+                @change="onAnswerKeyIdentificationChange"
+                required
+              />
+              <div class="file-input-display">
+                <span class="file-input-button">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                  </svg>
+                  Seleccionar .dat
+                </span>
+                <span class="file-input-name">{{ answerKeyIdentificationFile?.name || 'Ningún archivo seleccionado' }}</span>
+              </div>
+            </div>
           </div>
 
-          <div class="field">
-            <label for="answer-key-responses">Archivo de respuestas correctas (.dat)</label>
-            <input
-              id="answer-key-responses"
-              ref="answerKeyResponsesInputRef"
-              type="file"
-              class="input"
-              accept=".dat,.txt"
-              @change="onAnswerKeyResponsesChange"
-              required
-            />
-            <small v-if="answerKeyResponsesFile" class="sources-hint">
-              {{ answerKeyResponsesFile.name }}
-            </small>
+          <div class="form-field">
+            <label for="answer-key-responses" class="form-field__label">Archivo de respuestas correctas</label>
+            <div class="file-input-wrapper">
+              <input
+                id="answer-key-responses"
+                ref="answerKeyResponsesInputRef"
+                type="file"
+                class="file-input"
+                accept=".dat,.txt"
+                @change="onAnswerKeyResponsesChange"
+                required
+              />
+              <div class="file-input-display">
+                <span class="file-input-button">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                  </svg>
+                  Seleccionar .dat
+                </span>
+                <span class="file-input-name">{{ answerKeyResponsesFile?.name || 'Ningún archivo seleccionado' }}</span>
+              </div>
+            </div>
           </div>
 
-          <button type="submit" class="btn">
-            Importar claves para el área
-          </button>
+          <div class="form-field form-field--action">
+            <button type="submit" class="btn btn--primary btn--lg">
+              <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+              </svg>
+              Importar claves para el área
+            </button>
+          </div>
         </form>
-        <p class="uploader__hint">
-          Selecciona el área y adjunta los archivos .dat de identificación y respuestas oficiales para esta
-          especialidad.
-        </p>
       </section>
 
       <div v-if="answerKeyImportError" class="alert alert--error">
@@ -3885,13 +4229,39 @@ function exportAnswerKeysObservationsPdf() {
       v-else
       class="tab-content"
     >
+      <!-- Card de información del paso -->
+      <div class="step-info-card step-info-card--gold">
+        <div class="step-info-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+        </div>
+        <div class="step-info-content">
+          <h2>Calificación Final</h2>
+          <p>Genera los puntajes aplicando las ponderaciones a las respuestas de los postulantes.</p>
+        </div>
+        <div class="step-info-stats" v-if="calificationResults.length">
+          <div class="stat-item">
+            <span class="stat-value">{{ calificationResults.length }}</span>
+            <span class="stat-label">Calificados</span>
+          </div>
+        </div>
+      </div>
+
       <section class="toolbar">
         <div class="toolbar__left">
-          <button type="button" class="btn" @click="openCalificationModal('ponderaciones')">
+          <button type="button" class="btn btn--primary" @click="openCalificationModal('ponderaciones')">
+            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+            </svg>
             Gestionar Ponderaciones
           </button>
-          <button type="button" class="btn" @click="openCalificationModal('calificar')" :disabled="!canCalify">
-            Calificar
+          <button type="button" class="btn btn--gold" @click="openCalificationModal('calificar')" :disabled="!canCalify">
+            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+              <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+            </svg>
+            Calcular Puntajes
           </button>
           <button
             type="button"
@@ -3899,12 +4269,35 @@ function exportAnswerKeysObservationsPdf() {
             @click="() => { resetCalificationResults(); calificationError.value = ''; }"
             :disabled="!calificationHasResults"
           >
+            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
+            </svg>
             Limpiar resultados
           </button>
         </div>
-        <div class="metrics">
-          <span>Ponderaciones: {{ ponderationCurrentTotals.questions }}/60 · peso {{ ponderationCurrentTotals.weight.toFixed(2) }}</span>
-          <span>Resultados: {{ calificationResults.length }}</span>
+        <div class="toolbar__right">
+          <div class="search-input">
+            <svg class="search-input__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/>
+            </svg>
+            <input
+              v-model="calificationSearch"
+              type="search"
+              class="search-input__field"
+              placeholder="Buscar por DNI o nombres"
+              aria-label="Buscar resultados"
+            />
+          </div>
+          <div class="toolbar__metrics">
+            <span class="metric">
+              <span class="metric__value">{{ ponderationCurrentTotals.questions }}/60</span>
+              <span class="metric__label">preguntas</span>
+            </span>
+            <span class="metric">
+              <span class="metric__value">{{ calificationResults.length }}</span>
+              <span class="metric__label">resultados</span>
+            </span>
+          </div>
         </div>
       </section>
 
@@ -3918,8 +4311,21 @@ function exportAnswerKeysObservationsPdf() {
           {{ selectedPonderationTotals.questions }}/60 preguntas ·
           peso {{ selectedPonderationTotals.weight.toFixed(2) }}
         </p>
+        
+        <div v-if="calificationSummary.unlinkedResponses > 0" class="alert alert--error" style="grid-column: 1 / -1; margin-top: 0.5rem;">
+          <strong>⚠ Atención:</strong> Se detectaron {{ calificationSummary.unlinkedResponses }} respuestas sin DNI vinculado.
+          <br>
+          <small>
+            Esto ocurre cuando no se ha cargado el <strong>Paso 2 (Identificadores)</strong> o los códigos de lectura no coinciden.
+            Sin identificación, estas respuestas NO se pueden asignar a ningún postulante.
+          </small>
+        </div>
+
         <p v-if="calificationSummary.missingResponses">
           Respuestas pendientes: {{ calificationSummary.missingResponses }}
+          <span v-if="calificationSummary.unlinkedResponses > 0" class="text-sm text-gray-500">
+            (probablemente debido a las {{ calificationSummary.unlinkedResponses }} respuestas sin vincular)
+          </span>
         </p>
         <p v-if="calificationSummary.missingKeys">Claves faltantes: {{ calificationSummary.missingKeys }}</p>
       </div>
@@ -3937,7 +4343,7 @@ function exportAnswerKeysObservationsPdf() {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, index) in calificationResults" :key="row.id">
+            <tr v-for="(row, index) in calificationFilteredResults" :key="row.id">
               <td class="col-number">{{ index + 1 }}</td>
               <td>{{ row.dni }}</td>
               <td>{{ row.paterno || '—' }}</td>
@@ -3949,19 +4355,33 @@ function exportAnswerKeysObservationsPdf() {
         </table>
       </section>
 
-      <section class="empty" v-else>
-        <p>Ejecuta una calificación para ver la tabla de resultados.</p>
+      <section class="empty-state" v-else>
+        <div class="empty-state__icon">
+          <svg viewBox="0 0 48 48" fill="none">
+            <circle cx="24" cy="24" r="16" stroke="currentColor" stroke-width="2" stroke-dasharray="4 2"/>
+            <path d="M24 16v8l6 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <h3>Sin resultados de calificación</h3>
+        <p>Ejecuta una calificación para ver la tabla de puntajes.</p>
       </section>
     </section>
+    </main>
   </div>
 
-
-  <div v-if="showCalificationModal" class="modal" aria-modal="true">
-    <div class="modal__content">
+  <!-- Modal de Calificación -->
+  <Teleport to="body">
+  <div v-if="showCalificationModal" class="modal-overlay" @click.self="closeCalificationModal">
+    <div class="modal" aria-modal="true">
       <header class="modal__header">
-        <h2>Calificación</h2>
-        <button type="button" class="icon-button icon-button--ghost" @click="closeCalificationModal" aria-label="Cerrar">
-          ✕
+        <div class="modal__title">
+          <h2>Calificación de Examen</h2>
+          <p>Gestiona ponderaciones y calcula puntajes</p>
+        </div>
+        <button type="button" class="modal__close" @click="closeCalificationModal" aria-label="Cerrar">
+          <svg viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
         </button>
       </header>
       
@@ -4201,139 +4621,455 @@ function exportAnswerKeysObservationsPdf() {
 
         <footer class="modal__footer">
           <button type="button" class="btn btn--ghost" @click="closeCalificationModal">Cancelar</button>
-          <button type="submit" class="btn">Calcular</button>
+          <button type="submit" class="btn btn--primary">
+            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" clip-rule="evenodd"/>
+            </svg>
+            Calcular Puntajes
+          </button>
         </footer>
       </form>
     </div>
   </div>
+  </Teleport>
 </template>
 <style scoped>
-.page {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem 1.5rem 4rem;
+/* ═══════════════════════════════════════════════════════════════════════════
+   LAYOUT PRINCIPAL
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.app-layout {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  color: #1f2937;
 }
 
+/* Header institucional */
+.app-header {
+  background: linear-gradient(135deg, var(--unap-blue-800) 0%, var(--unap-blue-900) 100%);
+  padding: var(--space-5) var(--space-8);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  z-index: 10;
+}
 
-.header h1 {
+.app-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--unap-gold-500), var(--unap-gold-400), var(--unap-gold-500));
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.brand-logo svg {
+  width: 52px;
+  height: 52px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+}
+
+.brand-text h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
   margin: 0;
-  font-size: 2rem;
+  letter-spacing: -0.02em;
 }
 
-.header p {
-  margin: 0.25rem 0 0;
-  color: #4b5563;
+.brand-subtitle {
+  font-size: 0.85rem;
+  color: var(--unap-gold-300);
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
-.tabs {
-  display: inline-flex;
-  gap: 0.5rem;
-  background-color: #e2e8f0;
-  padding: 0.35rem;
-  border-radius: 12px;
-  align-self: flex-start;
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
 }
 
-.tab {
-  border: none;
-  background: transparent;
-  padding: 0.5rem 1.25rem;
-  border-radius: 10px;
-  font-weight: 600;
-  color: #475569;
-  cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
+.header-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 500;
+  backdrop-filter: blur(8px);
 }
 
-.tab--active {
+.badge-icon svg {
+  width: 16px;
+  height: 16px;
+  color: var(--unap-gold-400);
+}
+
+/* Navegación stepper */
+.step-nav {
   background: white;
-  color: #1d4ed8;
-  box-shadow: 0 8px 20px -16px rgba(30, 64, 175, 0.6);
+  border-bottom: 1px solid var(--slate-200);
+  padding: var(--space-4) var(--space-8);
+  overflow-x: auto;
 }
+
+.step-nav-track {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-width: max-content;
+}
+
+.step-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  flex: 1;
+  min-width: 180px;
+}
+
+.step-item:hover {
+  background: var(--slate-50);
+}
+
+.step-item--active {
+  background: var(--unap-blue-50);
+}
+
+.step-item--completed .step-number {
+  background: var(--success-500);
+  border-color: var(--success-500);
+  color: white;
+}
+
+.step-number {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--slate-300);
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--slate-500);
+  transition: all var(--transition-base);
+  flex-shrink: 0;
+}
+
+.step-item--active .step-number {
+  background: var(--unap-blue-600);
+  border-color: var(--unap-blue-600);
+  color: white;
+  box-shadow: 0 0 0 4px rgba(0, 51, 102, 0.15);
+}
+
+.step-check svg {
+  width: 18px;
+  height: 18px;
+}
+
+.step-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+}
+
+.step-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--slate-700);
+  transition: color var(--transition-fast);
+}
+
+.step-item--active .step-label {
+  color: var(--unap-blue-700);
+}
+
+.step-desc {
+  font-size: 0.75rem;
+  color: var(--slate-500);
+}
+
+.step-connector {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 2px;
+  background: var(--slate-200);
+}
+
+.step-item--completed .step-connector {
+  background: var(--success-400);
+}
+
+/* Contenido principal */
+.app-main {
+  flex: 1;
+  padding: var(--space-8);
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAB CONTENT
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .tab-content {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--space-6);
+  animation: slideUp 0.4s ease-out;
 }
 
+/* Step info card */
+.step-info-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  background: linear-gradient(135deg, var(--unap-blue-700) 0%, var(--unap-blue-800) 100%);
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-blue);
+  position: relative;
+  overflow: hidden;
+}
+
+.step-info-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -10%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.step-info-icon {
+  width: 64px;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-info-icon svg {
+  width: 32px;
+  height: 32px;
+  color: var(--unap-gold-400);
+}
+
+.step-info-content {
+  flex: 1;
+}
+
+.step-info-content h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: white;
+  margin: 0 0 var(--space-1);
+}
+
+.step-info-content p {
+  font-size: 0.9rem;
+  color: var(--unap-blue-200);
+  margin: 0;
+}
+
+.step-info-stats {
+  display: flex;
+  gap: var(--space-4);
+}
+
+/* Variante dorada para paso final */
+.step-info-card--gold {
+  background: linear-gradient(135deg, var(--unap-gold-500) 0%, var(--unap-gold-600) 100%);
+}
+
+.step-info-card--gold::before {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+}
+
+.step-info-card--gold .step-info-icon {
+  background: rgba(0, 29, 61, 0.2);
+}
+
+.step-info-card--gold .step-info-icon svg {
+  color: var(--unap-blue-900);
+}
+
+.step-info-card--gold .step-info-content h2 {
+  color: var(--unap-blue-900);
+}
+
+.step-info-card--gold .step-info-content p {
+  color: var(--unap-blue-800);
+}
+
+.step-info-card--gold .stat-item {
+  background: rgba(0, 29, 61, 0.15);
+}
+
+.step-info-card--gold .stat-value {
+  color: var(--unap-blue-900);
+}
+
+.step-info-card--gold .stat-label {
+  color: var(--unap-blue-800);
+}
+
+.stat-item {
+  text-align: center;
+  padding: var(--space-3) var(--space-5);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(8px);
+}
+
+.stat-value {
+  display: block;
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--unap-gold-400);
+  font-family: var(--font-mono);
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--unap-blue-200);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Subtabs */
 .subtabs {
   display: inline-flex;
-  gap: 0.5rem;
-  background-color: #e2e8f0;
-  padding: 0.35rem;
-  border-radius: 12px;
+  gap: var(--space-1);
+  background: var(--slate-100);
+  padding: var(--space-1);
+  border-radius: var(--radius-lg);
   align-self: flex-start;
+  border: 1px solid var(--slate-200);
 }
 
 .subtab {
   border: none;
   background: transparent;
-  padding: 0.45rem 1.1rem;
-  border-radius: 10px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
   font-weight: 600;
-  color: #475569;
+  font-size: 0.85rem;
+  color: var(--slate-600);
   cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: all var(--transition-fast);
+}
+
+.subtab:hover {
+  color: var(--slate-800);
+  background: var(--slate-50);
 }
 
 .subtab--active {
   background: white;
-  color: #1d4ed8;
-  box-shadow: 0 8px 20px -16px rgba(30, 64, 175, 0.6);
+  color: var(--unap-blue-700);
+  box-shadow: var(--shadow-sm);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   UPLOADER
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .uploader {
   position: relative;
-  border: 2px dashed #93c5fd;
-  border-radius: 12px;
-  padding: 2.5rem 1rem;
-  text-align: center;
-  background-color: #f8fafc;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  border: 2px dashed var(--slate-300);
+  border-radius: var(--radius-xl);
+  background: white;
+  transition: all var(--transition-base);
+  overflow: hidden;
 }
 
+.uploader::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--unap-blue-50) 0%, transparent 50%);
+  opacity: 0;
+  transition: opacity var(--transition-base);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.uploader:hover::before,
+.uploader--dragging::before {
+  opacity: 1;
+}
+
+/* Uploader con formulario (no drag & drop) */
 .uploader--form {
-  text-align: left;
+  border-style: solid;
+  border-color: var(--slate-200);
+  padding: var(--space-6);
 }
 
-.uploader__form {
+.uploader--form::before {
+  display: none;
+}
+
+.uploader--form .uploader__form {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
   align-items: end;
+  position: relative;
+  z-index: 1;
 }
 
-.uploader__form .field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+.uploader--form .uploader__hint {
+  margin-top: var(--space-4);
+  grid-column: 1 / -1;
 }
 
-.uploader__form small {
-  color: #6b7280;
+.uploader--dragging {
+  border-color: var(--unap-blue-500);
+  border-style: solid;
+  box-shadow: 0 0 0 4px rgba(0, 82, 163, 0.15);
 }
 
-.uploader.dragging {
-  border-color: #2563eb;
-  background-color: #eff6ff;
-}
-
-.uploader label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  color: #1d4ed8;
-  cursor: pointer;
-}
-
-.uploader__hint {
-  color: #6b7280;
-  font-size: 0.85rem;
+.uploader--has-data {
+  border-style: solid;
+  border-color: var(--success-400);
+  background: var(--success-50);
 }
 
 .uploader__input {
@@ -4341,235 +5077,1019 @@ function exportAnswerKeysObservationsPdf() {
   inset: 0;
   opacity: 0;
   cursor: pointer;
+  z-index: 3;
 }
 
-.alert {
-  padding: 0.95rem 1.25rem;
-  border-radius: 8px;
+.uploader__label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-10) var(--space-6);
+  text-align: center;
+  position: relative;
+  z-index: 2;
+}
+
+/* Formularios dentro del uploader */
+.uploader__form {
+  position: relative;
+  z-index: 2;
+}
+
+.uploader__form .field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.uploader__form .field label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--slate-600);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.uploader__form .field input,
+.uploader__form .field select {
+  padding: var(--space-3);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  background: white;
+  transition: all var(--transition-fast);
+}
+
+.uploader__form .field input:focus,
+.uploader__form .field select:focus {
+  outline: none;
+  border-color: var(--unap-blue-400);
+  box-shadow: 0 0 0 3px rgba(0, 82, 163, 0.1);
+}
+
+.uploader__form .field input[type="file"] {
+  padding: var(--space-2);
+  background: var(--slate-50);
+  cursor: pointer;
+}
+
+.uploader__form .field input[type="file"]::-webkit-file-upload-button {
+  padding: var(--space-2) var(--space-3);
+  margin-right: var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--unap-blue-600);
+  color: white;
+  font-weight: 600;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.uploader__form .field input[type="file"]::-webkit-file-upload-button:hover {
+  background: var(--unap-blue-700);
+}
+
+.uploader__form .btn {
+  align-self: flex-end;
+}
+
+.uploader__icon {
+  width: 72px;
+  height: 72px;
+  background: linear-gradient(135deg, var(--unap-blue-100) 0%, var(--unap-blue-50) 100%);
+  border-radius: var(--radius-xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--transition-base);
+}
+
+.uploader:hover .uploader__icon {
+  transform: scale(1.05);
+}
+
+.uploader__icon svg {
+  width: 36px;
+  height: 36px;
+  color: var(--unap-blue-500);
+}
+
+.uploader__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.uploader__text strong {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--slate-800);
+}
+
+.uploader__text span {
+  font-size: 0.9rem;
+  color: var(--slate-500);
+}
+
+.uploader__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+}
+
+.uploader__badge {
+  display: inline-flex;
+  padding: var(--space-1) var(--space-3);
+  background: var(--unap-gold-100);
+  color: var(--unap-gold-600);
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+}
+
+.uploader__hint {
+  font-size: 0.8rem;
+  color: var(--slate-500);
+}
+
+.uploader__action {
+  margin-top: var(--space-2);
+}
+
+.uploader__button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transition: all var(--transition-fast);
+  pointer-events: none;
+}
+
+.uploader__button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.uploader:hover .uploader__button {
+  background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Upload Form Card (para paso 4) */
+.upload-form-card {
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-md);
+}
+
+.upload-form-card__header {
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--slate-100);
+}
+
+.upload-form-card__header h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--slate-800);
+  margin: 0 0 var(--space-1);
+}
+
+.upload-form-card__header p {
+  font-size: 0.9rem;
+  color: var(--slate-500);
+  margin: 0;
+}
+
+.upload-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--space-5);
+  align-items: start;
+}
+
+/* File Input personalizado */
+.file-input-wrapper {
+  position: relative;
+}
+
+.file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.file-input-display {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.file-input-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 0.85rem;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.file-input-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.file-input-wrapper:hover .file-input-button {
+  background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.file-input-name {
+  font-size: 0.8rem;
+  color: var(--slate-500);
+  padding: var(--space-2);
+  background: var(--slate-50);
+  border-radius: var(--radius-sm);
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.form-field--action {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  grid-column: 1 / -1;
+  margin-top: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--slate-100);
+}
+
+.form-field__select {
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  background: white;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.form-field__select:focus {
+  outline: none;
+  border-color: var(--unap-blue-400);
+  box-shadow: 0 0 0 3px rgba(0, 82, 163, 0.1);
+}
+
+.btn--lg {
+  padding: var(--space-3) var(--space-6);
   font-size: 0.95rem;
 }
 
-.alert--error {
-  background-color: #fee2e2;
-  color: #991b1b;
-  border: 1px solid #fecaca;
+/* ═══════════════════════════════════════════════════════════════════════════
+   ALERTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  font-size: 0.9rem;
+  animation: slideDown 0.3s ease-out;
 }
+
+.alert__icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.alert--error {
+  background: linear-gradient(135deg, var(--error-50) 0%, var(--error-100) 100%);
+  color: var(--error-600);
+  border: 1px solid var(--error-100);
+}
+
+.alert--warning {
+  background: linear-gradient(135deg, var(--warning-50) 0%, var(--warning-100) 100%);
+  color: var(--warning-600);
+  border: 1px solid var(--warning-100);
+}
+
+.alert--success {
+  background: linear-gradient(135deg, var(--success-50) 0%, var(--success-100) 100%);
+  color: var(--success-600);
+  border: 1px solid var(--success-100);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TOOLBAR
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--space-4);
   align-items: center;
   justify-content: space-between;
-  background-color: #f3f4f6;
-  border-radius: 10px;
-  padding: 1rem;
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--shadow-sm);
 }
 
-.toolbar__left,
+.toolbar__actions,
+.toolbar__left {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.toolbar__search,
 .toolbar__right {
   display: flex;
-  gap: 0.75rem;
+  align-items: center;
+  gap: var(--space-4);
   flex-wrap: wrap;
+}
+
+.search-input {
+  position: relative;
+  display: flex;
   align-items: center;
 }
 
+.search-input__icon {
+  position: absolute;
+  left: var(--space-3);
+  width: 18px;
+  height: 18px;
+  color: var(--slate-400);
+  pointer-events: none;
+}
+
+.search-input__field {
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-10);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  min-width: 260px;
+  transition: all var(--transition-fast);
+  background: var(--slate-50);
+}
+
+.search-input__field:focus {
+  outline: none;
+  border-color: var(--unap-blue-400);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(0, 82, 163, 0.1);
+}
+
+.toolbar__metrics,
 .metrics {
   display: flex;
-  gap: 0.75rem;
-  color: #4b5563;
-  font-size: 0.9rem;
+  gap: var(--space-3);
+  font-size: 0.85rem;
+  color: var(--slate-600);
 }
+
+.metric {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  background: var(--slate-100);
+  border-radius: var(--radius-sm);
+}
+
+.metric__value {
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--slate-800);
+}
+
+.metric__label {
+  font-size: 0.75rem;
+  color: var(--slate-500);
+}
+
+.metric--highlight {
+  background: var(--unap-gold-100);
+}
+
+.metric--highlight .metric__value {
+  color: var(--unap-gold-600);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BUTTONS
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .btn {
-  border: none;
-  border-radius: 6px;
-  padding: 0.55rem 1rem;
-  cursor: pointer;
-  background-color: #2563eb;
-  color: white;
-  font-weight: 600;
-  transition: background-color 0.2s ease, transform 0.2s ease;
-}
-
-.btn .icon {
   display: inline-flex;
   align-items: center;
-  margin-right: 0.4rem;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
 }
 
+.btn__icon,
 .btn .icon svg {
   width: 16px;
   height: 16px;
 }
 
-.btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
+.btn .icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: var(--space-1);
 }
 
-.btn:hover:not(:disabled) {
-  background-color: #1d4ed8;
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.btn--primary {
+  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
+  color: white;
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%);
   transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--slate-600);
+  border: 1px solid var(--slate-200);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: var(--slate-50);
+  border-color: var(--slate-300);
+  color: var(--slate-800);
 }
 
 .btn--danger {
-  background-color: #dc2626;
+  background: linear-gradient(135deg, var(--error-500) 0%, var(--error-600) 100%);
+  color: white;
 }
 
 .btn--danger:hover:not(:disabled) {
-  background-color: #b91c1c;
+  background: linear-gradient(135deg, var(--error-600) 0%, #b91c1c 100%);
+  transform: translateY(-1px);
+}
+
+.btn--gold {
+  background: linear-gradient(135deg, var(--unap-gold-500) 0%, var(--unap-gold-600) 100%);
+  color: var(--unap-blue-900);
+  box-shadow: var(--shadow-gold), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.btn--gold:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--unap-gold-400) 0%, var(--unap-gold-500) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(212, 175, 55, 0.4);
 }
 
 
-.ponderations-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  background: #f8fafc;
-  border: 1px solid #dbeafe;
-  border-radius: 12px;
-  padding: 1rem 1.25rem;
+/* ═══════════════════════════════════════════════════════════════════════════
+   DATA CARDS & TABLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.data-card {
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
 }
 
-.ponderations-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+.table-container {
+  overflow-x: auto;
 }
 
-.summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.75rem;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 10px;
-  padding: 1rem;
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
 }
 
-.modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.55);
+.data-table thead {
+  background: linear-gradient(135deg, var(--unap-blue-700) 0%, var(--unap-blue-800) 100%);
+}
+
+.data-table th {
+  padding: var(--space-4);
+  text-align: left;
+  font-weight: 600;
+  color: white;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.data-table tbody tr {
+  border-bottom: 1px solid var(--slate-100);
+  transition: background var(--transition-fast);
+}
+
+.data-table tbody tr:nth-child(even) {
+  background: var(--slate-50);
+}
+
+.data-table tbody tr:hover {
+  background: var(--unap-blue-50);
+}
+
+.data-table tbody tr.row--selected {
+  background: var(--unap-gold-50);
+}
+
+.data-table tbody tr.row--editing {
+  background: var(--unap-blue-50);
+  box-shadow: inset 4px 0 0 var(--unap-blue-500);
+}
+
+.data-table td {
+  padding: var(--space-3) var(--space-4);
+  vertical-align: middle;
+}
+
+.col-index {
+  width: 50px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--slate-400);
+  font-size: 0.8rem;
+}
+
+.col-check {
+  width: 40px;
+  text-align: center;
+}
+
+.col-actions {
+  width: 100px;
+}
+
+/* Checkbox personalizado */
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.checkbox input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.checkbox__mark {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--slate-300);
+  border-radius: 4px;
+  background: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem;
-  z-index: 20;
+  transition: all var(--transition-fast);
 }
 
-.modal__content {
+.checkbox input:checked + .checkbox__mark {
+  background: var(--unap-blue-600);
+  border-color: var(--unap-blue-600);
+}
+
+.checkbox input:checked + .checkbox__mark::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translateY(-1px);
+}
+
+.checkbox:hover .checkbox__mark {
+  border-color: var(--unap-blue-400);
+}
+
+/* Cell inputs */
+.cell-input {
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  background: transparent;
+  transition: all var(--transition-fast);
+}
+
+.cell-input:focus {
+  outline: none;
+  border-color: var(--unap-blue-400);
   background: white;
-  border-radius: 14px;
-  width: min(960px, 100%);
+  box-shadow: 0 0 0 2px rgba(0, 82, 163, 0.1);
+}
+
+.cell-input--locked {
+  color: var(--slate-700);
+  cursor: default;
+}
+
+.cell-input--locked:hover {
+  background: var(--slate-100);
+}
+
+/* Row actions */
+.row-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--slate-100);
+  color: var(--slate-500);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.action-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.action-btn:hover {
+  background: var(--unap-blue-100);
+  color: var(--unap-blue-600);
+}
+
+.action-btn--active {
+  background: var(--success-100);
+  color: var(--success-600);
+}
+
+.action-btn--danger:hover {
+  background: var(--error-100);
+  color: var(--error-600);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EMPTY STATE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-12) var(--space-6);
+  background: white;
+  border: 2px dashed var(--slate-200);
+  border-radius: var(--radius-xl);
+}
+
+.empty-state__icon {
+  width: 80px;
+  height: 80px;
+  background: var(--slate-100);
+  border-radius: var(--radius-xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-4);
+}
+
+.empty-state__icon svg {
+  width: 40px;
+  height: 40px;
+  color: var(--slate-400);
+}
+
+.empty-state h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--slate-700);
+  margin: 0 0 var(--space-2);
+}
+
+.empty-state p {
+  font-size: 0.9rem;
+  color: var(--slate-500);
+  margin: 0;
+  max-width: 300px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FORM CARD
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.form-card {
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-card__header {
+  margin-bottom: var(--space-5);
+}
+
+.form-card__header h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--slate-800);
+  margin: 0 0 var(--space-1);
+}
+
+.form-card__header p {
+  font-size: 0.85rem;
+  color: var(--slate-500);
+  margin: 0;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.form-field__label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--slate-600);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.form-field__input {
+  padding: var(--space-3);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  transition: all var(--transition-fast);
+  background: var(--slate-50);
+}
+
+.form-field__input:focus {
+  outline: none;
+  border-color: var(--unap-blue-400);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(0, 82, 163, 0.1);
+}
+
+.form-field__input::placeholder {
+  color: var(--slate-400);
+}
+
+.form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--slate-100);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 29, 61, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+  z-index: 100;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal {
+  background: white;
+  border-radius: var(--radius-xl);
+  width: min(1000px, 100%);
   max-height: calc(100vh - 4rem);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 24px 44px -24px rgba(15, 23, 42, 0.35);
+  box-shadow: var(--shadow-xl);
+  animation: scaleIn 0.3s ease-out;
+  overflow: hidden;
 }
 
 .modal__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 1.5rem 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
+  padding: var(--space-5) var(--space-6);
+  background: linear-gradient(135deg, var(--unap-blue-700) 0%, var(--unap-blue-800) 100%);
+  color: white;
 }
 
-.modal__header h2 {
-  margin: 0;
+.modal__title h2 {
   font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.modal__title p {
+  font-size: 0.85rem;
+  color: var(--unap-blue-200);
+  margin: var(--space-1) 0 0;
+}
+
+.modal__close {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.modal__close svg {
+  width: 20px;
+  height: 20px;
+}
+
+.modal__close:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .modal__body {
-  padding: 1.25rem 1.5rem;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  padding: var(--space-6);
+  overflow-y: auto;
+  flex: 1;
 }
 
 .modal__footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 0.75rem 1.5rem 1.25rem;
-  border-top: 1px solid #e5e7eb;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--slate-200);
+  background: var(--slate-50);
 }
+
+/* Ponderations panel */
+.ponderations-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.ponderations-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Summary */
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-4);
+  background: linear-gradient(135deg, var(--unap-blue-50) 0%, var(--slate-50) 100%);
+  border: 1px solid var(--unap-blue-100);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.summary p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--slate-700);
+}
+
+.summary strong {
+  color: var(--unap-blue-700);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL FORM & TABLES
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .modal-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.75rem 1rem;
+  gap: var(--space-4);
   align-items: end;
 }
 
 .modal-hint {
   margin: 0;
-  color: #1d4ed8;
+  color: var(--unap-blue-600);
   font-weight: 600;
+  font-size: 0.9rem;
 }
 
 .modal-table-wrapper {
   display: flex;
   flex-direction: column;
-}
-
-.ponderation-table-container {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
+.ponderation-table-container {
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: white;
+}
+
 .ponderation-table-container .table-header-info {
-  flex-shrink: 0;
-  padding: 0.75rem 1rem;
-  background: #f8fafc;
-  border-bottom: 1px solid #e5e7eb;
-  font-size: 0.875rem;
-  color: #6b7280;
+  padding: var(--space-3) var(--space-4);
+  background: var(--slate-50);
+  border-bottom: 1px solid var(--slate-200);
+  font-size: 0.85rem;
+  color: var(--slate-600);
   font-weight: 500;
 }
 
 .ponderation-table-container .table-scroll-wrapper {
-  max-height: 500px;
+  max-height: 400px;
   overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.ponderation-table-container .table-scroll-wrapper table {
-  width: 100%;
-  border-collapse: collapse;
 }
 
 .table-header-info {
-  padding: 0.75rem 1rem;
-  background: #f8fafc;
-  border-bottom: 1px solid #e5e7eb;
-  font-size: 0.875rem;
-  color: #6b7280;
+  padding: var(--space-3) var(--space-4);
+  background: var(--slate-50);
+  border-bottom: 1px solid var(--slate-200);
+  font-size: 0.85rem;
+  color: var(--slate-600);
   font-weight: 500;
-}
-
-.ponderations-add-form {
-  margin-bottom: 1rem;
-}
-
-.ponderations-add-form .form-row {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr auto;
-  gap: 0.75rem;
-  align-items: end;
-}
-
-.ponderations-add-form .field--button {
-  display: flex;
-  align-items: flex-end;
-}
-
-.ponderations-stats {
-  margin-top: 0.75rem;
 }
 
 .modal-table {
@@ -4579,14 +6099,23 @@ function exportAnswerKeysObservationsPdf() {
 
 .modal-table th,
 .modal-table td {
-  border: 1px solid #e5e7eb;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.95rem;
+  padding: var(--space-3) var(--space-4);
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--slate-100);
 }
 
 .modal-table th {
-  background: #f1f5f9;
+  background: var(--unap-blue-50);
   text-align: left;
+  font-weight: 600;
+  color: var(--unap-blue-700);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.modal-table tbody tr:hover {
+  background: var(--slate-50);
 }
 
 .modal-alert {
@@ -4595,26 +6124,37 @@ function exportAnswerKeysObservationsPdf() {
 
 .subtabs--modal {
   align-self: stretch;
+  margin: var(--space-4) var(--space-6);
+  background: var(--slate-100);
 }
 
-.btn--ghost {
-  background-color: transparent;
-  color: #374151;
-  border: 1px solid #d1d5db;
-}
+/* ═══════════════════════════════════════════════════════════════════════════
+   LEGACY COMPATIBILITY STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 .input {
-  padding: 0.5rem 0.75rem;
-  border-radius: 6px;
-  border: 1px solid #cbd5f5;
-  min-width: 220px;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--slate-200);
+  font-size: 0.9rem;
+  min-width: 200px;
+  transition: all var(--transition-fast);
+  background: var(--slate-50);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--unap-blue-400);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(0, 82, 163, 0.1);
 }
 
 .table-wrapper {
-  border-radius: 12px;
-  border: 1px solid #dbeafe;
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-xl);
   overflow: hidden;
-  box-shadow: 0 12px 25px -20px rgba(37, 99, 235, 0.45);
+  box-shadow: var(--shadow-md);
 }
 
 table {
@@ -4623,20 +6163,29 @@ table {
 }
 
 thead {
-  background: linear-gradient(90deg, #2563eb, #1d4ed8);
-  color: white;
+  background: linear-gradient(135deg, var(--unap-blue-700) 0%, var(--unap-blue-800) 100%);
 }
 
-th,
-td {
-  padding: 0.75rem;
+th {
+  padding: var(--space-4);
   text-align: left;
+  font-weight: 600;
+  color: white;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+td {
+  padding: var(--space-3) var(--space-4);
 }
 
 .col-number {
-  width: 3rem;
+  width: 50px;
   text-align: center;
+  font-family: var(--font-mono);
   font-weight: 600;
+  color: var(--slate-400);
 }
 
 .col-type {
@@ -4644,91 +6193,67 @@ td {
 }
 
 .actions-header {
-  width: 170px;
+  width: 120px;
+}
+
+tbody tr {
+  border-bottom: 1px solid var(--slate-100);
+  transition: background var(--transition-fast);
 }
 
 tbody tr:nth-child(even) {
-  background-color: #ffffff;
-}
-
-tbody tr:nth-child(odd) {
-  background-color: #f8fafc;
+  background: var(--slate-50);
 }
 
 tbody tr:hover {
-  background-color: #e0f2fe;
+  background: var(--unap-blue-50);
 }
 
 .row--issue {
-  box-shadow: inset 4px 0 0 #f59e0b;
+  box-shadow: inset 4px 0 0 var(--warning-500);
 }
 
-.cell-input {
+.cell-textarea {
   width: 100%;
+  padding: var(--space-2);
   border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
-  padding: 0.25rem 0.35rem;
-  border-radius: 4px;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  resize: vertical;
+  min-height: 48px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  transition: all var(--transition-fast);
+}
+
+.cell-textarea:focus {
+  outline: none;
+  border-color: var(--unap-blue-400);
+  background: white;
+  box-shadow: 0 0 0 2px rgba(0, 82, 163, 0.1);
 }
 
 .cell-input--tight {
   max-width: 60px;
 }
 
-.cell-input:focus {
-  outline: none;
-  border-color: #2563eb;
-  background-color: white;
-}
-
-.cell-textarea {
-  width: 100%;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  resize: vertical;
-  min-height: 48px;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
-  font-family: inherit;
-  font-size: 0.95rem;
-  padding: 0.35rem 0.45rem;
-}
-
-.cell-textarea:focus {
-  outline: none;
-  border-color: #2563eb;
-  background-color: #ffffff;
-}
-
-.cell-input--locked {
-  color: #4b5563;
-  background-color: transparent;
-  border-color: transparent;
-  cursor: not-allowed;
-}
-
-.cell-input--locked:hover {
-  background-color: #f1f5f9;
-}
-
 .actions-cell {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 34px;
   height: 34px;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
-  background-color: #ffffff;
-  color: #1f2937;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--slate-200);
+  background: white;
+  color: var(--slate-600);
   cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
 }
 
 .icon-button svg {
@@ -4737,132 +6262,160 @@ tbody tr:hover {
 }
 
 .icon-button:hover {
-  background-color: #eff6ff;
-  color: #1d4ed8;
-  transform: translateY(-1px);
+  background: var(--unap-blue-50);
+  color: var(--unap-blue-600);
+  border-color: var(--unap-blue-200);
 }
 
 .icon-button--active {
-  background-color: #e0f2fe;
-  border-color: #2563eb;
-  color: #1d4ed8;
+  background: var(--unap-blue-100);
+  border-color: var(--unap-blue-400);
+  color: var(--unap-blue-600);
 }
 
 .icon-button--danger {
-  border-color: #fca5a5;
-  color: #dc2626;
+  border-color: var(--error-100);
+  color: var(--error-500);
 }
 
 .icon-button--danger:hover {
-  background-color: #fee2e2;
-  color: #b91c1c;
+  background: var(--error-50);
+  border-color: var(--error-200);
+  color: var(--error-600);
 }
 
 .icon-button--ghost {
   background: transparent;
   border-color: transparent;
-  color: #6b7280;
+  color: var(--slate-500);
 }
 
 .icon-button--ghost:hover {
-  background: transparent;
-  color: #111827;
+  background: var(--slate-100);
+  color: var(--slate-700);
 }
 
 .link {
   background: none;
   border: none;
   cursor: pointer;
-  text-decoration: underline;
-  font-size: 0.9rem;
-  color: #1d4ed8;
+  font-size: 0.85rem;
+  color: var(--unap-blue-600);
+  font-weight: 500;
+  text-decoration: none;
+  transition: color var(--transition-fast);
 }
 
 .link:hover {
-  opacity: 0.8;
+  color: var(--unap-blue-700);
+  text-decoration: underline;
 }
 
-.link.link--danger {
-  color: #dc2626;
+.link--danger {
+  color: var(--error-500);
+}
+
+.link--danger:hover {
+  color: var(--error-600);
 }
 
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 0.15rem 0.45rem;
-  border-radius: 999px;
-  font-size: 0.8rem;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
   font-weight: 600;
 }
 
 .badge--ok {
-  background-color: #dcfce7;
-  color: #166534;
+  background: var(--success-100);
+  color: var(--success-600);
 }
 
 .badge--warn {
-  background-color: #fef3c7;
-  color: #92400e;
+  background: var(--warning-100);
+  color: var(--warning-600);
 }
 
 .empty {
   text-align: center;
-  color: #6b7280;
-  padding: 2rem 0;
-  border: 1px dashed #d1d5db;
-  border-radius: 12px;
+  color: var(--slate-500);
+  padding: var(--space-8);
+  border: 2px dashed var(--slate-200);
+  border-radius: var(--radius-xl);
+  background: white;
 }
 
 .adder {
-  border: 1px solid #dbeafe;
-  border-radius: 12px;
-  padding: 1.5rem;
-  background-color: #f8fafc;
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
 }
 
 .adder h2 {
-  margin-top: 0;
-  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--slate-800);
+  margin: 0 0 var(--space-4);
 }
 
 .adder__form {
   display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--space-2);
 }
 
 .field label {
-  font-size: 0.85rem;
-  color: #374151;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--slate-600);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
-.field input {
-  padding: 0.5rem 0.75rem;
-  border-radius: 6px;
-  border: 1px solid #cbd5f5;
+.field input,
+.field select {
+  padding: var(--space-3);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  background: var(--slate-50);
+  transition: all var(--transition-fast);
+}
+
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--unap-blue-400);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(0, 82, 163, 0.1);
 }
 
 .adder__actions {
   grid-column: 1 / -1;
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-3);
   justify-content: flex-end;
+  margin-top: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--slate-100);
 }
 
 .sources-panel {
-  border: 1px solid #dbeafe;
-  border-radius: 12px;
-  padding: 1.5rem;
-  background-color: #f8fafc;
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
 }
 
 .sources-header {
@@ -4870,70 +6423,156 @@ tbody tr:hover {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
 }
 
 .sources-header h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--slate-800);
   margin: 0;
 }
 
 .sources-header p {
-  margin: 0.15rem 0 0;
-  color: #4b5563;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  color: var(--slate-500);
+  margin: var(--space-1) 0 0;
 }
 
 .sources-counts {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-4);
   font-weight: 600;
-  color: #1f2937;
+  font-size: 0.9rem;
+  color: var(--slate-700);
 }
 
 .sources-table-wrapper {
-  border: 1px solid #c7d2fe;
-  border-radius: 10px;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-lg);
   overflow-x: auto;
-  background-color: white;
+  background: white;
 }
 
 .sources-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 520px;
+  min-width: 600px;
+}
+
+.sources-table th {
+  background: var(--slate-50);
+  font-size: 0.8rem;
+  color: var(--slate-600);
 }
 
 .sources-table th,
 .sources-table td {
-  padding: 0.65rem 0.85rem;
+  padding: var(--space-3) var(--space-4);
   text-align: left;
-  border-bottom: 1px solid #e0e7ff;
+  border-bottom: 1px solid var(--slate-100);
 }
 
 .sources-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--space-2);
   align-items: center;
 }
 
-.sources-actions .btn {
-  cursor: pointer;
-  text-align: center;
+.sources-hint {
+  color: var(--slate-500);
+  font-size: 0.85rem;
 }
 
-.sources-hint {
-  color: #4b5563;
-  font-size: 0.9rem;
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 1024px) {
+  .app-header {
+    padding: var(--space-4) var(--space-5);
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .step-nav {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .step-item {
+    min-width: 140px;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .app-main {
+    padding: var(--space-5);
+  }
 }
 
 @media (max-width: 768px) {
-  .table-wrapper {
-    overflow-x: auto;
+  .brand-text h1 {
+    font-size: 1.2rem;
   }
 
-  table {
-    min-width: 860px;
+  .step-nav-track {
+    gap: 0;
+  }
+
+  .step-item {
+    min-width: 100px;
+    flex-direction: column;
+    text-align: center;
+    gap: var(--space-2);
+  }
+
+  .step-content {
+    align-items: center;
+  }
+
+  .step-connector {
+    display: none;
+  }
+
+  .step-info-card {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar__actions {
+    justify-content: center;
+  }
+
+  .toolbar__search {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-input__field {
+    min-width: 100%;
+  }
+
+  .toolbar__metrics {
+    justify-content: center;
+  }
+
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .data-table {
+    min-width: 800px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
