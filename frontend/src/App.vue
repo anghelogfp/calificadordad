@@ -2825,18 +2825,13 @@ function exportAnswerKeysObservationsPdf() {
     <header class="app-header">
       <div class="header-brand">
         <div class="brand-logo">
-          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="48" height="48" rx="12" fill="url(#logoGradient)"/>
-            <path d="M24 8L38 16V32L24 40L10 32V16L24 8Z" stroke="#D4AF37" stroke-width="2" fill="none"/>
-            <path d="M24 14L32 18.5V27.5L24 32L16 27.5V18.5L24 14Z" fill="#D4AF37" fill-opacity="0.3"/>
-            <circle cx="24" cy="23" r="5" fill="#D4AF37"/>
-            <defs>
-              <linearGradient id="logoGradient" x1="0" y1="0" x2="48" y2="48">
-                <stop offset="0%" stop-color="#003366"/>
-                <stop offset="100%" stop-color="#001d3d"/>
-              </linearGradient>
-            </defs>
-          </svg>
+          <img
+  src="/public/unap.png"
+  alt="Logo"
+  width="80"
+  height="80"
+  style="border-radius: 12px"
+/>
         </div>
         <div class="brand-text">
           <h1>Sistema de Calificación</h1>
@@ -2845,12 +2840,7 @@ function exportAnswerKeysObservationsPdf() {
       </div>
       <div class="header-meta">
         <div class="header-badge">
-          <span class="badge-icon">
-            <svg viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
-            </svg>
-          </span>
-          Examen de Admisión
+            Dirección de Admisión 2026
         </div>
       </div>
     </header>
