@@ -4,7 +4,10 @@ export const TAB_KEYS = Object.freeze({
   IDENTIFIERS: 'identifiers',
   RESPONSES: 'responses',
   ANSWER_KEYS: 'answer_keys',
-  SCORES: 'scores',
+  PONDERATIONS: 'ponderations',
+  RESULTS: 'results',
+  // Alias de compatibilidad con datos guardados anteriormente
+  SCORES: 'results',
 })
 
 // Configuración de tabs
@@ -13,7 +16,8 @@ export const tabs = [
   { key: TAB_KEYS.IDENTIFIERS, label: 'Paso 2 · Identificadores (.dat)' },
   { key: TAB_KEYS.RESPONSES, label: 'Paso 3 · Respuestas (.dat)' },
   { key: TAB_KEYS.ANSWER_KEYS, label: 'Paso 4 · Claves de respuestas' },
-  { key: TAB_KEYS.SCORES, label: 'Paso 5 · Calificación' },
+  { key: TAB_KEYS.PONDERATIONS, label: 'Paso 5 · Ponderaciones' },
+  { key: TAB_KEYS.RESULTS, label: 'Paso 6 · Calificación' },
 ]
 
 // Subtabs
@@ -76,7 +80,7 @@ export const ANSWER_KEY_COLUMNS = [
   { key: 'observaciones', label: 'Observaciones' },
 ]
 
-// Áreas disponibles
+// Áreas disponibles por defecto (fallback cuando no hay API)
 export const ANSWER_KEY_AREAS = ['Biomédicas', 'Sociales', 'Ingeniería']
 
 // Alias de áreas para normalización
@@ -109,6 +113,25 @@ export const STORAGE_KEYS = Object.freeze({
   IDENTIFIER_SOURCES: 'calificador-identificador-sources',
   RESPONSES_SOURCES: 'calificador-respuestas-sources',
   ANSWER_KEY_SOURCES: 'calificador-claves-sources',
+  // Nuevas claves
+  CONVOCATORIA: 'calificador-convocatoria',
+  DAT_FORMAT: 'calificador-dat-format',
+  VACANTES: 'calificador-vacantes',
+})
+
+// Formato DAT por defecto
+export const DEFAULT_DAT_FORMAT = Object.freeze({
+  headerLength: 21,
+  answersLength: 60,
+  lithoOffset: 0,
+  lithoLength: 6,
+  tipoOffset: 6,
+  tipoLength: 1,
+  dniOffset: 7,
+  dniLength: 8,
+  aulaOffset: 15,
+  aulaLength: 3,
+  answersOffset: 18,
 })
 
 // Ponderaciones por defecto

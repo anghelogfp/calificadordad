@@ -35,16 +35,18 @@ export function normalize(value) {
 }
 
 /**
- * Normaliza un área a su forma canónica
+ * Normaliza un área a su forma canónica.
+ * @param {string} value - Valor a normalizar
+ * @param {string[]} [areaList] - Lista dinámica de áreas disponibles (fallback a ANSWER_KEY_AREAS)
  */
-export function normalizeArea(value) {
+export function normalizeArea(value, areaList = ANSWER_KEY_AREAS) {
   const raw = String(value ?? '')
   const trimmedOriginal = raw.trim()
   if (!trimmedOriginal) {
-    return ANSWER_KEY_AREAS[0]
+    return areaList[0] ?? ANSWER_KEY_AREAS[0]
   }
 
-  const exactMatch = ANSWER_KEY_AREAS.find((area) => area === trimmedOriginal)
+  const exactMatch = areaList.find((area) => area === trimmedOriginal)
   if (exactMatch) {
     return exactMatch
   }
@@ -52,13 +54,16 @@ export function normalizeArea(value) {
   const normalized = removeDiacritics(trimmedOriginal).toLowerCase()
   const aliasMatch = ANSWER_KEY_AREA_ALIASES[normalized]
   if (aliasMatch) {
-    return aliasMatch
+    // Verificar que el alias exista en la lista dinámica
+    const aliasInList = areaList.find((area) => area === aliasMatch)
+    if (aliasInList) return aliasInList
+    // Si no está en la lista dinámica, buscar parcialmente
   }
 
-  const matched = ANSWER_KEY_AREAS.find(
+  const matched = areaList.find(
     (area) => removeDiacritics(area).trim().toLowerCase() === normalized,
   )
-  return matched ?? ANSWER_KEY_AREAS[0]
+  return matched ?? areaList[0] ?? ANSWER_KEY_AREAS[0]
 }
 
 /**
@@ -104,8 +109,8 @@ export function buildResponseMatchKey(row) {
 /**
  * Construye una clave para lookup por área y tipo
  */
-export function buildAreaTipoKey(area, tipo) {
-  const normalizedArea = normalizeArea(area)
+export function buildAreaTipoKey(area, tipo, areaList = ANSWER_KEY_AREAS) {
+  const normalizedArea = normalizeArea(area, areaList)
   const normalizedTipo = (tipo || '').trim().toUpperCase().slice(0, 1)
   if (!normalizedTipo) return ''
   return `${normalizedArea}|${normalizedTipo}`
@@ -114,8 +119,8 @@ export function buildAreaTipoKey(area, tipo) {
 /**
  * Construye una clave única para ponderaciones
  */
-export function buildPonderationKey(area, subject) {
-  return `${normalizeArea(area)}|${normalize(subject)}`
+export function buildPonderationKey(area, subject, areaList = ANSWER_KEY_AREAS) {
+  return `${normalizeArea(area, areaList)}|${normalize(subject)}`
 }
 
 /**

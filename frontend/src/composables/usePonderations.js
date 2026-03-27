@@ -16,13 +16,13 @@ import {
 /**
  * Crea una fila de ponderación
  */
-export function createPonderationRow(data = {}) {
-  const area = normalizeArea(data.area)
+export function createPonderationRow(data = {}, areaList = ANSWER_KEY_AREAS) {
+  const area = normalizeArea(data.area, areaList)
   const subject = String(data.subject ?? '').trim()
   const questionCount = Math.max(0, Math.round(Number(data.questionCount ?? 0)))
   const ponderation = Number(data.ponderation ?? 0) || 0
   const order = Math.max(0, Math.round(Number(data.order ?? 0)))
-  const id = data.id ?? buildPonderationKey(area, subject)
+  const id = data.id ?? buildPonderationKey(area, subject, areaList)
 
   return {
     id,
@@ -36,29 +36,46 @@ export function createPonderationRow(data = {}) {
 
 /**
  * Composable para gestión de ponderaciones
+ * @param {import('vue').Ref} [areaNames] - Lista reactiva de nombres de área (fallback a ANSWER_KEY_AREAS)
+ * @param {import('vue').Ref} [activeConvocatoriaId] - ID de la convocatoria activa
  */
-export function usePonderations() {
+export function usePonderations(areaNames, activeConvocatoriaId) {
+  const effectiveAreaNames = computed(() =>
+    areaNames?.value?.length ? areaNames.value : ANSWER_KEY_AREAS
+  )
+
   // Estado principal
   const ponderationRows = useStorage(STORAGE_KEYS.PONDERATION, [])
   const ponderationEditing = ref(new Set())
-  const ponderationModalArea = ref(ANSWER_KEY_AREAS[0])
+  const ponderationModalArea = ref(effectiveAreaNames.value[0] ?? ANSWER_KEY_AREAS[0])
   const newPonderation = reactive({ subject: '', questionCount: 1, ponderation: 1 })
   const ponderationError = ref('')
   const ponderationApiLoading = ref(false)
   const ponderationApiError = ref('')
+
+  // Sincronizar el área seleccionada cuando cambian las áreas disponibles
+  watch(effectiveAreaNames, (names) => {
+    if (names.length && !names.includes(ponderationModalArea.value)) {
+      ponderationModalArea.value = names[0]
+    }
+  })
 
   // API functions
   async function fetchPonderacionesFromAPI() {
     try {
       ponderationApiLoading.value = true
       ponderationApiError.value = ''
-      const response = await fetch(`${API_BASE_URL}/ponderaciones/`)
+      let url = `${API_BASE_URL}/ponderaciones/`
+      if (activeConvocatoriaId?.value) {
+        url += `?convocatoria=${activeConvocatoriaId.value}`
+      }
+      const response = await fetch(url)
       if (!response.ok) {
         throw new Error(`Error al cargar ponderaciones: ${response.statusText}`)
       }
       const data = await response.json()
       return data.map((item) => ({
-        id: buildPonderationKey(item.area, item.subject),
+        id: buildPonderationKey(item.area, item.subject, effectiveAreaNames.value),
         area: item.area,
         subject: item.subject,
         questionCount: item.question_count,
@@ -76,7 +93,7 @@ export function usePonderations() {
 
   async function savePonderationToAPI(row) {
     try {
-      const area = normalizeArea(row.area)
+      const area = normalizeArea(row.area, effectiveAreaNames.value)
       const subject = String(row.subject ?? '').trim()
       const payload = {
         area,
@@ -85,10 +102,12 @@ export function usePonderations() {
         ponderation: Number(row.ponderation ?? 0) || 0,
         order: Math.max(1, Math.round(Number(row.order ?? 1))),
       }
+      if (activeConvocatoriaId?.value) {
+        payload.convocatoria = activeConvocatoriaId.value
+      }
 
-      const checkResponse = await fetch(
-        `${API_BASE_URL}/ponderaciones/?area=${encodeURIComponent(area)}`
-      )
+      const checkUrl = `${API_BASE_URL}/ponderaciones/?area=${encodeURIComponent(area)}${activeConvocatoriaId?.value ? `&convocatoria=${activeConvocatoriaId.value}` : ''}`
+      const checkResponse = await fetch(checkUrl)
       if (checkResponse.ok) {
         const existing = await checkResponse.json()
         const found = existing.find(
@@ -99,17 +118,13 @@ export function usePonderations() {
         if (found) {
           response = await fetch(`${API_BASE_URL}/ponderaciones/${found.id}/`, {
             method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           })
         } else {
           response = await fetch(`${API_BASE_URL}/ponderaciones/`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           })
         }
@@ -128,25 +143,19 @@ export function usePonderations() {
 
   async function deletePonderationFromAPI(row) {
     try {
-      const area = normalizeArea(row.area)
+      const area = normalizeArea(row.area, effectiveAreaNames.value)
       const subject = String(row.subject ?? '').trim()
 
-      const response = await fetch(
-        `${API_BASE_URL}/ponderaciones/?area=${encodeURIComponent(area)}`
-      )
-      if (!response.ok) {
-        throw new Error(`Error al buscar ponderación: ${response.statusText}`)
-      }
+      const url = `${API_BASE_URL}/ponderaciones/?area=${encodeURIComponent(area)}${activeConvocatoriaId?.value ? `&convocatoria=${activeConvocatoriaId.value}` : ''}`
+      const response = await fetch(url)
+      if (!response.ok) throw new Error(`Error al buscar ponderación: ${response.statusText}`)
       const data = await response.json()
       const found = data.find((item) => normalize(item.subject) === normalize(subject))
 
       if (found) {
-        const deleteResponse = await fetch(
-          `${API_BASE_URL}/ponderaciones/${found.id}/`,
-          {
-            method: 'DELETE',
-          }
-        )
+        const deleteResponse = await fetch(`${API_BASE_URL}/ponderaciones/${found.id}/`, {
+          method: 'DELETE',
+        })
         if (!deleteResponse.ok) {
           throw new Error(`Error al eliminar ponderación: ${deleteResponse.statusText}`)
         }
@@ -162,38 +171,31 @@ export function usePonderations() {
 
   // Computed
   const ponderationAreaList = computed(() => {
-    const areas = new Set(ANSWER_KEY_AREAS)
-    ponderationRows.value.forEach((row) => areas.add(normalizeArea(row.area)))
+    const areas = new Set(effectiveAreaNames.value)
+    ponderationRows.value.forEach((row) => areas.add(normalizeArea(row.area, effectiveAreaNames.value)))
     return Array.from(areas)
   })
 
   const ponderationEntriesByArea = computed(() => {
     const map = new Map()
     DEFAULT_PONDERATIONS.forEach((row) => {
-      const area = normalizeArea(row.area)
-      if (!map.has(area)) {
-        map.set(area, [])
-      }
+      const area = normalizeArea(row.area, effectiveAreaNames.value)
+      if (!map.has(area)) map.set(area, [])
       const list = map.get(area)
       if (!list.some((item) => normalize(item.subject) === normalize(row.subject))) {
-        list.push(createPonderationRow(row))
+        list.push(createPonderationRow(row, effectiveAreaNames.value))
       }
     })
 
     ponderationRows.value.forEach((row) => {
-      const area = normalizeArea(row.area)
-      if (!map.has(area)) {
-        map.set(area, [])
-      }
+      const area = normalizeArea(row.area, effectiveAreaNames.value)
+      if (!map.has(area)) map.set(area, [])
       const list = map.get(area)
       const existingIndex = list.findIndex((item) => normalize(item.subject) === normalize(row.subject))
       if (existingIndex >= 0) {
-        list[existingIndex] = createPonderationRow({
-          ...list[existingIndex],
-          ...row,
-        })
+        list[existingIndex] = createPonderationRow({ ...list[existingIndex], ...row }, effectiveAreaNames.value)
       } else {
-        list.push(createPonderationRow(row))
+        list.push(createPonderationRow(row, effectiveAreaNames.value))
       }
     })
 
@@ -263,19 +265,16 @@ export function usePonderations() {
   }
 
   async function removePonderationRow(row) {
-    const rowId = row.id || buildPonderationKey(row.area, row.subject)
-
+    const rowId = row.id || buildPonderationKey(row.area, row.subject, effectiveAreaNames.value)
     try {
       await deletePonderationFromAPI(row)
     } catch (error) {
       console.error('Error al eliminar de API, continuando con eliminación local:', error)
     }
-
     const index = ponderationRows.value.findIndex((item) => {
-      const itemId = item.id || buildPonderationKey(item.area, item.subject)
+      const itemId = item.id || buildPonderationKey(item.area, item.subject, effectiveAreaNames.value)
       return itemId === rowId
     })
-
     if (index !== -1) {
       ponderationRows.value.splice(index, 1)
     }
@@ -291,44 +290,54 @@ export function usePonderations() {
       ponderationError.value = 'Ingresa la asignatura.'
       return
     }
-
     if (!Number.isFinite(questionCount) || questionCount <= 0) {
       ponderationError.value = 'La cantidad de preguntas debe ser mayor a cero.'
       return
     }
-
     if (!Number.isFinite(ponderation) || ponderation <= 0) {
       ponderationError.value = 'La ponderación debe ser un número positivo.'
       return
     }
 
     const area = ponderationModalArea.value
-    const areaRows = ponderationRows.value.filter((r) => normalizeArea(r.area) === normalizeArea(area))
+    const areaRows = ponderationRows.value.filter(
+      (r) => normalizeArea(r.area, effectiveAreaNames.value) === normalizeArea(area, effectiveAreaNames.value)
+    )
     const maxOrder = areaRows.length > 0 ? Math.max(...areaRows.map((r) => r.order || 0)) : 0
-    const row = createPonderationRow({
-      area,
-      subject,
-      questionCount,
-      ponderation,
-      order: maxOrder + 1,
-    })
+    const row = createPonderationRow({ area, subject, questionCount, ponderation, order: maxOrder + 1 }, effectiveAreaNames.value)
 
     await upsertPonderationOverride(row)
     resetNewPonderation()
   }
 
+  async function applySimpleMode(answersLength) {
+    const areas = effectiveAreaNames.value
+    ponderationRows.value = []
+    for (const area of areas) {
+      const row = createPonderationRow(
+        { area, subject: 'General', questionCount: answersLength, ponderation: 1, order: 1 },
+        effectiveAreaNames.value
+      )
+      try {
+        await savePonderationToAPI(row)
+      } catch (e) {
+        console.error('Error saving simple mode to API:', e)
+      }
+      ponderationRows.value = [...ponderationRows.value, row]
+    }
+  }
+
   async function upsertPonderationOverride(row) {
-    const area = normalizeArea(row.area)
+    const area = normalizeArea(row.area, effectiveAreaNames.value)
     const subject = String(row.subject ?? '').trim()
-    const key = buildPonderationKey(area, subject)
+    const key = buildPonderationKey(area, subject, effectiveAreaNames.value)
     const questionCount = Math.max(0, Math.round(Number(row.questionCount ?? 0)))
     const ponderation = Number(row.ponderation ?? 0) || 0
     const order = Math.max(1, Math.round(Number(row.order ?? 1)))
 
     const defaultEntry = DEFAULT_PONDERATIONS.find(
-      (entry) => buildPonderationKey(entry.area, entry.subject) === key
+      (entry) => buildPonderationKey(entry.area, entry.subject, effectiveAreaNames.value) === key
     )
-
     const matchesDefault =
       defaultEntry &&
       Math.round(Number(defaultEntry.questionCount ?? 0)) === questionCount &&
@@ -342,21 +351,12 @@ export function usePonderations() {
 
     const rowId = row.id || key
     const nextRows = ponderationRows.value.filter((item) => {
-      const itemId = item.id || buildPonderationKey(item.area, item.subject)
+      const itemId = item.id || buildPonderationKey(item.area, item.subject, effectiveAreaNames.value)
       return itemId !== rowId
     })
 
     if (!matchesDefault) {
-      nextRows.push(
-        createPonderationRow({
-          id: key,
-          area,
-          subject,
-          questionCount,
-          ponderation,
-          order,
-        })
-      )
+      nextRows.push(createPonderationRow({ id: key, area, subject, questionCount, ponderation, order }, effectiveAreaNames.value))
     }
 
     ponderationRows.value = nextRows
@@ -365,22 +365,16 @@ export function usePonderations() {
   function ensureDefaultPonderations() {
     let changed = false
     DEFAULT_PONDERATIONS.forEach((entry) => {
-      const area = normalizeArea(entry.area)
+      const area = normalizeArea(entry.area, effectiveAreaNames.value)
       const subjectKey = normalize(entry.subject)
       const exists = ponderationRows.value.some(
-        (row) => normalizeArea(row.area) === area && normalize(row.subject) === subjectKey
+        (row) => normalizeArea(row.area, effectiveAreaNames.value) === area && normalize(row.subject) === subjectKey
       )
       if (!exists) {
-        ponderationRows.value.push(
-          createPonderationRow({
-            ...entry,
-            area,
-          })
-        )
+        ponderationRows.value.push(createPonderationRow({ ...entry, area }, effectiveAreaNames.value))
         changed = true
       }
     })
-
     if (changed) {
       ponderationRows.value.forEach((row) => {
         if (!row.order || row.order === 0) {
@@ -392,27 +386,22 @@ export function usePonderations() {
     }
   }
 
-  // Initialize
   async function initializePonderations() {
     const apiData = await fetchPonderacionesFromAPI()
     if (apiData && apiData.length > 0) {
       const uniqueRows = new Map()
       apiData.forEach((row) => {
-        const createdRow = createPonderationRow(row)
-        const id = createdRow.id
-        if (!uniqueRows.has(id)) {
-          uniqueRows.set(id, createdRow)
-        }
+        const createdRow = createPonderationRow(row, effectiveAreaNames.value)
+        if (!uniqueRows.has(createdRow.id)) uniqueRows.set(createdRow.id, createdRow)
       })
       ponderationRows.value = Array.from(uniqueRows.values())
     } else if (ponderationRows.value.length === 0) {
-      ponderationRows.value = DEFAULT_PONDERATIONS.map((row) => createPonderationRow(row))
+      ponderationRows.value = DEFAULT_PONDERATIONS.map((row) => createPonderationRow(row, effectiveAreaNames.value))
       try {
-        await fetch(`${API_BASE_URL}/ponderaciones/bulk_create/`, {
+        const bulkUrl = `${API_BASE_URL}/ponderaciones/bulk_create/${activeConvocatoriaId?.value ? `?convocatoria=${activeConvocatoriaId.value}` : ''}`
+        await fetch(bulkUrl, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(
             ponderationRows.value.map((row) => ({
               area: row.area,
@@ -420,6 +409,7 @@ export function usePonderations() {
               question_count: row.questionCount,
               ponderation: row.ponderation,
               order: row.order,
+              ...(activeConvocatoriaId?.value ? { convocatoria: activeConvocatoriaId.value } : {}),
             }))
           ),
         })
@@ -429,11 +419,8 @@ export function usePonderations() {
     } else {
       const uniqueRows = new Map()
       ponderationRows.value.forEach((row) => {
-        const createdRow = createPonderationRow(row)
-        const id = createdRow.id
-        if (!uniqueRows.has(id)) {
-          uniqueRows.set(id, createdRow)
-        }
+        const createdRow = createPonderationRow(row, effectiveAreaNames.value)
+        if (!uniqueRows.has(createdRow.id)) uniqueRows.set(createdRow.id, createdRow)
       })
       ponderationRows.value = Array.from(uniqueRows.values())
     }
@@ -447,12 +434,11 @@ export function usePonderations() {
     ensureDefaultPonderations()
   }
 
-  // Watch
   watch(
     ponderationRows,
     (rows) => {
       rows.forEach((row) => {
-        row.area = normalizeArea(row.area)
+        row.area = normalizeArea(row.area, effectiveAreaNames.value)
         row.subject = String(row.subject ?? '').trim()
         row.questionCount = Math.max(0, Math.round(Number(row.questionCount ?? 0)))
         row.ponderation = Number(row.ponderation ?? 0) || 0
@@ -469,7 +455,6 @@ export function usePonderations() {
   })
 
   return {
-    // Estado
     ponderationRows,
     ponderationEditing,
     ponderationModalArea,
@@ -477,16 +462,12 @@ export function usePonderations() {
     ponderationError,
     ponderationApiLoading,
     ponderationApiError,
-
-    // Computed
     ponderationAreaList,
     ponderationEntriesByArea,
     ponderationCurrentAreaRows,
     ponderationPlanByArea,
     ponderationTotalsByArea,
     ponderationCurrentTotals,
-
-    // Methods
     initializePonderations,
     resetNewPonderation,
     isPonderationEditing,
@@ -494,6 +475,7 @@ export function usePonderations() {
     removePonderationRow,
     addPonderationRow,
     upsertPonderationOverride,
+    applySimpleMode,
     ensureDefaultPonderations,
   }
 }

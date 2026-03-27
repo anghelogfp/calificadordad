@@ -1,4 +1,5 @@
 <script setup>
+import { reactive } from 'vue'
 import { formatTimestamp } from '@/utils/helpers'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
@@ -14,6 +15,9 @@ const props = defineProps({
     required: true
   }
 })
+
+const calification = reactive(props.calification)
+const ponderations = reactive(props.ponderations)
 
 const emit = defineEmits(['openModal'])
 
@@ -38,7 +42,7 @@ function openModal(tab) {
     </StepInfoCard>
 
     <Toolbar
-      v-model:search-value="calification.calificationSearch.value"
+      v-model:search-value="calification.calificationSearch"
       search-placeholder="Buscar por DNI o nombres"
       :total-rows="calification.calificationResults.length"
       :filtered-count="calification.calificationFilteredResults.length"

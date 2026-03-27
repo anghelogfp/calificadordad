@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Vue CDN</title>
+</head>
+<body>
+    <div id="app">
+        <h1>Test Vue desde CDN</h1>
+        <p>Si ves este mensaje, Vue CDN está funcionando.</p>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script>
+        const { createApp } = Vue;
+
+        const App = {
+            data() {
+                return {
+                    message: 'Vue CDN funcionando correctamente'
+                }
+            },
+            template: `
+                <div>
+                    <h1>Sistema de Calificación DAD - Vue CDN</h1>
+                    <p>{{ message }}</p>
+                    <p>Timestamp: {{ new Date().toISOString() }}</p>
+                </div>
+            `
+        };
+
+        const app = createApp(App);
+        app.mount('#app');
+    </script>
+</body>
+</html>

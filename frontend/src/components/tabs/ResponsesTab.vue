@@ -1,4 +1,5 @@
 <script setup>
+import { reactive } from 'vue'
 import { RESPONSES_SUBTABS } from '@/constants'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import FileUploader from '@/components/shared/FileUploader.vue'
@@ -20,6 +21,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:subTab'])
+
+const responses = reactive(props.responses)
 
 const tableColumns = [
   { key: 'lectura', label: 'N° lectura' },
@@ -86,7 +89,7 @@ function getRowClass(row) {
     </div>
 
     <Toolbar
-      v-model:search-value="responses.search.value"
+      v-model:search-value="responses.search"
       search-placeholder="Buscar por DNI, litho o observaciones"
       :total-rows="responses.totalRows"
       :filtered-count="responses.filteredRows.length"
@@ -143,6 +146,7 @@ function getRowClass(row) {
         :selection="responses.selection"
         :editing="responses.editing"
         :is-all-selected="responses.isAllVisibleSelected"
+        :is-indeterminate="responses.isSomeVisibleSelected"
         :row-class="getRowClass"
         @toggle-selection="responses.toggleSelection"
         @toggle-select-all="responses.toggleSelectAll"

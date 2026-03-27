@@ -1,4 +1,8 @@
 <script setup>
+import { ref, watch } from 'vue'
+
+const checkboxRef = ref(null)
+
 const props = defineProps({
   columns: {
     type: Array,
@@ -17,11 +21,11 @@ const props = defineProps({
     type: Object, // Set
     default: () => new Set()
   },
-  selectAllRef: {
-    type: Object,
-    default: null
-  },
   isAllSelected: {
+    type: Boolean,
+    default: false
+  },
+  isIndeterminate: {
     type: Boolean,
     default: false
   },
@@ -81,6 +85,12 @@ function getRowClasses(row) {
     ...props.rowClass(row)
   }
 }
+
+watch(() => props.isIndeterminate, (val) => {
+  if (checkboxRef.value) {
+    checkboxRef.value.indeterminate = val
+  }
+}, { immediate: true })
 </script>
 
 <template>
@@ -93,7 +103,7 @@ function getRowClasses(row) {
             <th v-if="showCheckbox" class="col-check">
               <label class="checkbox">
                 <input
-                  :ref="(el) => selectAllRef = el"
+                  ref="checkboxRef"
                   type="checkbox"
                   :checked="isAllSelected"
                   @change="onToggleSelectAll"

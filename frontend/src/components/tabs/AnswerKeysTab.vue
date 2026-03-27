@@ -1,4 +1,5 @@
 <script setup>
+import { reactive } from 'vue'
 import { ANSWER_KEY_SUBTABS } from '@/constants'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
@@ -19,6 +20,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:subTab'])
+
+const answerKeys = reactive(props.answerKeys)
 
 const tableColumns = [
   { key: 'area', label: 'Área', type: 'select' },
@@ -72,7 +75,7 @@ function getRowClass(row) {
           <label for="answer-key-area" class="form-field__label">Área</label>
           <select
             id="answer-key-area"
-            v-model="answerKeys.answerKeyArea.value"
+            v-model="answerKeys.answerKeyArea"
             class="form-field__select"
             required
           >
@@ -87,7 +90,7 @@ function getRowClass(row) {
           <div class="file-input-wrapper">
             <input
               id="answer-key-identification"
-              :ref="(el) => answerKeys.identificationInputRef.value = el"
+              :ref="(el) => answerKeys.identificationInputRef = el"
               type="file"
               class="file-input"
               accept=".dat,.txt"
@@ -111,7 +114,7 @@ function getRowClass(row) {
           <div class="file-input-wrapper">
             <input
               id="answer-key-responses"
-              :ref="(el) => answerKeys.responsesInputRef.value = el"
+              :ref="(el) => answerKeys.responsesInputRef = el"
               type="file"
               class="file-input"
               accept=".dat,.txt"
@@ -146,7 +149,7 @@ function getRowClass(row) {
     </div>
 
     <Toolbar
-      v-model:search-value="answerKeys.search.value"
+      v-model:search-value="answerKeys.search"
       search-placeholder="Buscar por área, tipo, litho o observaciones"
       :total-rows="answerKeys.totalRows"
       :filtered-count="answerKeys.filteredRows.length"
@@ -203,6 +206,7 @@ function getRowClass(row) {
         :selection="answerKeys.selection"
         :editing="answerKeys.editing"
         :is-all-selected="answerKeys.isAllVisibleSelected"
+        :is-indeterminate="answerKeys.isSomeVisibleSelected"
         :row-class="getRowClass"
         @toggle-selection="answerKeys.toggleSelection"
         @toggle-select-all="answerKeys.toggleSelectAll"

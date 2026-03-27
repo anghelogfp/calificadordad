@@ -1,4 +1,5 @@
 import { generateId, stripDigits, removeWhitespace } from './helpers'
+import { DEFAULT_DAT_FORMAT } from '@/constants'
 
 /**
  * Crea una fila de identificador con valores por defecto
@@ -25,13 +26,13 @@ export function createIdentifierRow(data = {}) {
 /**
  * Construye observación para una fila de identificador
  */
-export function buildIdentifierObservation(row) {
+export function buildIdentifierObservation(row, formatConfig = DEFAULT_DAT_FORMAT) {
   const issues = []
 
   const lithoDigits = stripDigits(row.litho)
   if (!lithoDigits) {
     issues.push('Litho sin marcar')
-  } else if (lithoDigits.length !== 6) {
+  } else if (lithoDigits.length !== formatConfig.lithoLength) {
     issues.push(`Litho incompleto (${lithoDigits})`)
   }
 
@@ -43,14 +44,14 @@ export function buildIdentifierObservation(row) {
   const dniDigits = stripDigits(row.dni)
   if (!dniDigits) {
     issues.push('DNI sin marcar')
-  } else if (dniDigits.length !== 8) {
+  } else if (dniDigits.length !== formatConfig.dniLength) {
     issues.push(`DNI incompleto (${dniDigits})`)
   }
 
   const aulaDigits = stripDigits(row.aula)
   if (!aulaDigits) {
     issues.push('Aula sin marcar')
-  } else if (aulaDigits.length !== 3) {
+  } else if (aulaDigits.length !== formatConfig.aulaLength) {
     issues.push(`Aula incompleta (${aulaDigits})`)
   }
 
@@ -59,8 +60,11 @@ export function buildIdentifierObservation(row) {
 
 /**
  * Parsea una línea de archivo de identificación
+ * @param {string} line
+ * @param {number} lineNumber
+ * @param {object} [formatConfig] - Configuración de formato DAT (usa DEFAULT_DAT_FORMAT si no se pasa)
  */
-export function parseIdentifierLine(line, lineNumber) {
+export function parseIdentifierLine(line, lineNumber, formatConfig = DEFAULT_DAT_FORMAT) {
   const raw = line.endsWith('\r') ? line.slice(0, -1) : line
   if (!raw.trim() || raw.trim().length <= 1) {
     return null
@@ -70,12 +74,12 @@ export function parseIdentifierLine(line, lineNumber) {
     return { error: `L${lineNumber}: longitud insuficiente (${raw.length} caracteres)` }
   }
 
-  const header = raw.slice(0, 21)
-  if (!/^\d{21}$/.test(header)) {
+  const header = raw.slice(0, formatConfig.headerLength)
+  if (!/^\d+$/.test(header)) {
     return { error: `L${lineNumber}: cabecera inválida (${header})` }
   }
 
-  let remainder = raw.slice(21)
+  let remainder = raw.slice(formatConfig.headerLength)
   let cursor = 0
 
   const examMatch = remainder.slice(cursor).match(/^\s*(\d{4})/)
@@ -106,11 +110,11 @@ export function parseIdentifierLine(line, lineNumber) {
     remainder = remainder.slice(1)
   }
 
-  const lithoSegment = remainder.slice(0, 6)
-  const tipoSegment = remainder.slice(6, 7)
-  const dniSegment = remainder.slice(7, 15)
-  const aulaSegment = remainder.slice(15, 18)
-  const answersSegment = remainder.slice(18).trim()
+  const lithoSegment = remainder.slice(formatConfig.lithoOffset, formatConfig.lithoOffset + formatConfig.lithoLength)
+  const tipoSegment = remainder.slice(formatConfig.tipoOffset, formatConfig.tipoOffset + formatConfig.tipoLength)
+  const dniSegment = remainder.slice(formatConfig.dniOffset, formatConfig.dniOffset + formatConfig.dniLength)
+  const aulaSegment = remainder.slice(formatConfig.aulaOffset, formatConfig.aulaOffset + formatConfig.aulaLength)
+  const answersSegment = remainder.slice(formatConfig.answersOffset).trim()
 
   const row = createIdentifierRow({
     rawLine: raw,
@@ -126,7 +130,7 @@ export function parseIdentifierLine(line, lineNumber) {
     answers: answersSegment,
   })
 
-  row.observaciones = buildIdentifierObservation(row)
+  row.observaciones = buildIdentifierObservation(row, formatConfig)
 
   return { row }
 }
@@ -153,14 +157,16 @@ export function createResponseRow(data = {}) {
 
 /**
  * Construye observación para una fila de respuesta
+ * @param {object} row
+ * @param {object} [formatConfig] - Configuración de formato DAT
  */
-export function buildResponseObservation(row) {
+export function buildResponseObservation(row, formatConfig = DEFAULT_DAT_FORMAT) {
   const issues = []
 
   const dniDigits = stripDigits(row.dni)
   if (!dniDigits) {
     issues.push('DNI no vinculado')
-  } else if (dniDigits.length !== 8) {
+  } else if (dniDigits.length !== formatConfig.dniLength) {
     issues.push(`DNI incompleto (${dniDigits})`)
   }
 
@@ -172,7 +178,7 @@ export function buildResponseObservation(row) {
   const lithoDigits = stripDigits(row.litho)
   if (!lithoDigits) {
     issues.push('Litho sin marcar')
-  } else if (lithoDigits.length !== 6) {
+  } else if (lithoDigits.length !== formatConfig.lithoLength) {
     issues.push(`Litho incompleto (${lithoDigits})`)
   }
 
@@ -180,8 +186,8 @@ export function buildResponseObservation(row) {
   const answersNormalized = answersRaw.replaceAll(/\s/g, '')
   if (!answersNormalized) {
     issues.push('Sin respuestas marcadas')
-  } else if (answersNormalized.length !== 60) {
-    issues.push(`Cadena incompleta (${answersNormalized.length}/60)`)
+  } else if (answersNormalized.length !== formatConfig.answersLength) {
+    issues.push(`Cadena incompleta (${answersNormalized.length}/${formatConfig.answersLength})`)
   } else if (/[^A-E*]/.test(answersNormalized)) {
     issues.push('Respuestas con marcas no válidas')
   }
@@ -191,8 +197,11 @@ export function buildResponseObservation(row) {
 
 /**
  * Parsea una línea de archivo de respuestas
+ * @param {string} line
+ * @param {number} lineNumber
+ * @param {object} [formatConfig] - Configuración de formato DAT
  */
-export function parseResponseLine(line, lineNumber) {
+export function parseResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_FORMAT) {
   const raw = line.endsWith('\r') ? line.slice(0, -1) : line
   if (!raw.trim() || raw.trim().length <= 1) {
     return null
@@ -202,12 +211,12 @@ export function parseResponseLine(line, lineNumber) {
     return { error: `L${lineNumber}: longitud insuficiente (${raw.length} caracteres)` }
   }
 
-  const header = raw.slice(0, 21)
-  if (!/^\d{21}$/.test(header)) {
+  const header = raw.slice(0, formatConfig.headerLength)
+  if (!/^\d+$/.test(header)) {
     return { error: `L${lineNumber}: cabecera inválida (${header})` }
   }
 
-  let remainder = raw.slice(21)
+  let remainder = raw.slice(formatConfig.headerLength)
   let cursor = 0
 
   const examMatch = remainder.slice(cursor).match(/^\s*(\d{4})/)
@@ -238,8 +247,8 @@ export function parseResponseLine(line, lineNumber) {
     remainder = remainder.slice(1)
   }
 
-  const lithoSegment = remainder.slice(0, 6)
-  const answersSegment = remainder.slice(6)
+  const lithoSegment = remainder.slice(0, formatConfig.lithoLength)
+  const answersSegment = remainder.slice(formatConfig.lithoLength)
 
   const row = createResponseRow({
     rawLine: raw,
@@ -252,7 +261,7 @@ export function parseResponseLine(line, lineNumber) {
     answers: answersSegment,
   })
 
-  row.observaciones = buildResponseObservation(row)
+  row.observaciones = buildResponseObservation(row, formatConfig)
 
   return { row }
 }

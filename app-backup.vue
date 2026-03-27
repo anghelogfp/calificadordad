@@ -2,6 +2,7 @@
 import { onMounted, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { TAB_KEYS, tabs, IDENTIFIER_SUBTABS, RESPONSES_SUBTABS, ANSWER_KEY_SUBTABS } from '@/constants'
+
 // Composables
 import { useArchives } from '@/composables/useArchives'
 import { useIdentifiers } from '@/composables/useIdentifiers'
@@ -20,7 +21,6 @@ import IdentifiersTab from '@/components/tabs/IdentifiersTab.vue'
 import ResponsesTab from '@/components/tabs/ResponsesTab.vue'
 import AnswerKeysTab from '@/components/tabs/AnswerKeysTab.vue'
 import ScoresTab from '@/components/tabs/ScoresTab.vue'
-import PonderationsTab from '@/components/tabs/PonderationsTab.vue'
 
 // Modal
 import CalificationModal from '@/components/modals/CalificationModal.vue'
@@ -88,55 +88,6 @@ watch(
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
-// STEP NAV HELPERS
-// ═══════════════════════════════════════════════════════════════════════════
-
-function getStepStatus(key) {
-  if (key === TAB_KEYS.ARCHIVES) return archives.rows.value.length > 0 ? 'completed' : ''
-  if (key === TAB_KEYS.IDENTIFIERS) return identifiers.rows.value.length > 0 ? 'completed' : ''
-  if (key === TAB_KEYS.RESPONSES) return responses.rows.value.length > 0 ? 'completed' : ''
-  if (key === TAB_KEYS.ANSWER_KEYS) return answerKeys.rows.value.length > 0 ? 'completed' : ''
-  if (key === TAB_KEYS.PONDERATIONS) return ponderations.ponderationRows.value.length > 0 ? 'completed' : ''
-  if (key === TAB_KEYS.RESULTS || key === TAB_KEYS.SCORES) return calification.calificationResults.value.length > 0 ? 'completed' : ''
-  return ''
-}
-
-function getStepLabel(key) {
-  const tab = tabs.find((t) => t.key === key)
-  const full = tab?.label || key
-  const parts = full.split(' · ')
-  return parts.length > 1 ? parts[1] : full
-}
-
-function getStepDescription(key) {
-  if (key === TAB_KEYS.ARCHIVES) {
-    const n = archives.rows.value.length
-    return n > 0 ? `${n} postulantes` : 'Sin cargar'
-  }
-  if (key === TAB_KEYS.IDENTIFIERS) {
-    const n = identifiers.rows.value.length
-    return n > 0 ? `${n} registros` : 'Sin cargar'
-  }
-  if (key === TAB_KEYS.RESPONSES) {
-    const n = responses.rows.value.length
-    return n > 0 ? `${n} respuestas` : 'Sin cargar'
-  }
-  if (key === TAB_KEYS.ANSWER_KEYS) {
-    const n = answerKeys.rows.value.length
-    return n > 0 ? `${n} claves` : 'Sin cargar'
-  }
-  if (key === TAB_KEYS.PONDERATIONS) {
-    const n = ponderations.ponderationRows.value.length
-    return n > 0 ? `${n} ponderaciones` : 'Sin configurar'
-  }
-  if (key === TAB_KEYS.RESULTS || key === TAB_KEYS.SCORES) {
-    const n = calification.calificationResults.value.length
-    return n > 0 ? `${n} calificados` : 'Sin calificar'
-  }
-  return ''
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // LIFECYCLE
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -152,9 +103,11 @@ onMounted(async () => {
     <StepNav
       :tabs="tabs"
       :active-tab="activeTab"
-      :get-step-status="getStepStatus"
-      :get-step-label="getStepLabel"
-      :get-step-description="getStepDescription"
+      :archives-count="archives.rows.value.length"
+      :identifiers-count="identifiers.rows.value.length"
+      :responses-count="responses.rows.value.length"
+      :answer-keys-count="answerKeys.rows.value.length"
+      :scores-count="calification.calificationResults.value.length"
       @update:active-tab="activeTab = $event"
     />
 
@@ -185,11 +138,6 @@ onMounted(async () => {
         @update:sub-tab="answerKeySubTab = $event"
       />
 
-      <PonderationsTab
-        v-else-if="activeTab === TAB_KEYS.PONDERATIONS"
-        :ponderations="ponderations"
-      />
-
       <ScoresTab
         v-else-if="activeTab === TAB_KEYS.SCORES"
         :calification="calification"
@@ -200,8 +148,11 @@ onMounted(async () => {
 
     <CalificationModal
       :show="calification.showCalificationModal.value"
+      :tab="calification.calificationModalTab.value"
       :calification="calification"
+      :ponderations="ponderations"
       @close="calification.closeCalificationModal"
+      @update:tab="calification.calificationModalTab.value = $event"
     />
   </div>
 </template>

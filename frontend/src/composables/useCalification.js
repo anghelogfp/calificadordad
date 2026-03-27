@@ -1,6 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
-import { STORAGE_KEYS, ANSWER_KEY_AREAS } from '@/constants'
+import { STORAGE_KEYS, ANSWER_KEY_AREAS, API_BASE_URL, DEFAULT_DAT_FORMAT } from '@/constants'
 import {
   normalize,
   normalizeArea,
@@ -11,6 +11,18 @@ import {
 
 /**
  * Composable para gestión de calificación
+ * @param {Ref} archiveRows
+ * @param {Ref} responsesRows
+ * @param {Ref} answerKeyRows
+ * @param {Ref} ponderationRows
+ * @param {Ref} ponderationEntriesByArea
+ * @param {Ref} ponderationTotalsByArea
+ * @param {Ref} responsesByDni
+ * @param {Ref} answerKeyLookupByAreaTipo
+ * @param {Ref} [areaNames] - Lista de nombres de área disponibles
+ * @param {Ref} [activeConvocatoriaId]
+ * @param {Ref} [formatConfig] - Configuración del formato DAT
+ * @param {Ref} [areaByName] - Map de área por nombre para acceder a vacantes
  */
 export function useCalification(
   archiveRows,
@@ -20,18 +32,47 @@ export function useCalification(
   ponderationEntriesByArea,
   ponderationTotalsByArea,
   responsesByDni,
-  answerKeyLookupByAreaTipo
+  answerKeyLookupByAreaTipo,
+  areaNames,
+  activeConvocatoriaId,
+  formatConfig,
+  areaByName
 ) {
-  // Estado del modal
+  const effectiveAreaNames = computed(() =>
+    areaNames?.value?.length ? areaNames.value : ANSWER_KEY_AREAS
+  )
+  const effectiveAnswersLength = computed(() =>
+    formatConfig?.value?.answersLength ?? DEFAULT_DAT_FORMAT.answersLength
+  )
+
+  // Estado del modal de calificación
   const showCalificationModal = ref(false)
-  const calificationModalTab = ref('calificar')
-  const calificationArea = ref(ANSWER_KEY_AREAS[0])
-  const calificationPonderationArea = ref(ANSWER_KEY_AREAS[0])
+  const calificationArea = ref(effectiveAreaNames.value[0] ?? ANSWER_KEY_AREAS[0])
+  const calificationPonderationArea = ref(effectiveAreaNames.value[0] ?? ANSWER_KEY_AREAS[0])
+  const calificationError = ref('')
+  const calificationSearch = ref('')
+
+  // Valores de calificación persistidos por área
+  const calificationConfigStorage = useStorage('calificador-calification-config', {})
+
+  function getConfigForArea(area) {
+    const stored = calificationConfigStorage.value[area]
+    return {
+      correctValue: stored?.correctValue ?? 10,
+      incorrectValue: stored?.incorrectValue ?? 0,
+      blankValue: stored?.blankValue ?? 2,
+    }
+  }
+
+  function initConfigForArea(area) {
+    if (!calificationConfigStorage.value[area]) {
+      calificationConfigStorage.value[area] = { correctValue: 10, incorrectValue: 0, blankValue: 2 }
+    }
+  }
+
   const calificationCorrectValue = ref(10)
   const calificationIncorrectValue = ref(0)
   const calificationBlankValue = ref(2)
-  const calificationError = ref('')
-  const calificationSearch = ref('')
 
   // Resultados
   const scoreStorage = useStorage(STORAGE_KEYS.SCORE_RESULTS, { summary: null, rows: [] })
@@ -40,28 +81,24 @@ export function useCalification(
 
   // Computed
   const calificationFilteredResults = computed(() => {
-    if (!calificationSearch.value.trim()) {
-      return calificationResults.value
-    }
+    if (!calificationSearch.value.trim()) return calificationResults.value
     const needle = normalize(calificationSearch.value)
-    return calificationResults.value.filter((row) => {
-      return (
-        normalize(row.dni).includes(needle) ||
-        normalize(row.paterno).includes(needle) ||
-        normalize(row.materno).includes(needle) ||
-        normalize(row.nombres).includes(needle)
-      )
-    })
+    return calificationResults.value.filter((row) =>
+      normalize(row.dni).includes(needle) ||
+      normalize(row.paterno).includes(needle) ||
+      normalize(row.materno).includes(needle) ||
+      normalize(row.nombres).includes(needle)
+    )
   })
 
   const ponderationAreaList = computed(() => {
-    const areas = new Set(ANSWER_KEY_AREAS)
-    ponderationRows.value.forEach((row) => areas.add(normalizeArea(row.area)))
+    const areas = new Set(effectiveAreaNames.value)
+    ponderationRows.value.forEach((row) => areas.add(normalizeArea(row.area, effectiveAreaNames.value)))
     return Array.from(areas)
   })
 
   const selectedPonderationTotals = computed(() => {
-    const area = normalizeArea(calificationPonderationArea.value)
+    const area = normalizeArea(calificationPonderationArea.value, effectiveAreaNames.value)
     const entry = ponderationTotalsByArea.value.get(area)
     return {
       questions: entry?.questions ?? 0,
@@ -70,13 +107,15 @@ export function useCalification(
   })
 
   const selectedPonderationPlan = computed(() => {
-    const area = normalizeArea(calificationPonderationArea.value)
+    const area = normalizeArea(calificationPonderationArea.value, effectiveAreaNames.value)
     return ponderationEntriesByArea.value.get(area) || []
   })
 
   const calificationAreaOptions = computed(() => ponderationAreaList.value)
   const calificationHasResults = computed(() => calificationResults.value.length > 0)
-  const selectedPonderationIsReady = computed(() => selectedPonderationTotals.value.questions === 60)
+  const selectedPonderationIsReady = computed(() =>
+    selectedPonderationTotals.value.questions === effectiveAnswersLength.value
+  )
 
   const canCalify = computed(() =>
     responsesRows.value.length > 0 &&
@@ -85,7 +124,7 @@ export function useCalification(
     selectedPonderationIsReady.value
   )
 
-  // Watch para persistir resultados
+  // Persistir resultados
   watch(
     [calificationResults, calificationSummary],
     () => {
@@ -97,52 +136,54 @@ export function useCalification(
     { deep: true }
   )
 
-  watch(calificationArea, (value) => {
-    const normalized = normalizeArea(value)
-    if (calificationArea.value !== normalized) {
-      calificationArea.value = normalized
-    }
+  // Cargar configuración cuando cambia el área
+  watch(calificationArea, (area) => {
+    const normalized = normalizeArea(area, effectiveAreaNames.value)
+    initConfigForArea(normalized)
+    const cfg = getConfigForArea(normalized)
+    calificationCorrectValue.value = cfg.correctValue
+    calificationIncorrectValue.value = cfg.incorrectValue
+    calificationBlankValue.value = cfg.blankValue
     if (!ponderationEntriesByArea.value.has(calificationPonderationArea.value)) {
       calificationPonderationArea.value = normalized
     }
   })
 
   // Methods
-  function openCalificationModal(tab = 'calificar') {
-    if (tab === 'calificar') {
-      if (!canCalify.value) {
-        calificationError.value = 'Necesitas cargar respuestas, claves y ponderaciones antes de calificar.'
-        return
-      }
-
-      const areas = calificationAreaOptions.value
-      const readyAreas = areas.filter((areaOption) => {
-        const entry = ponderationTotalsByArea.value.get(areaOption)
-        return entry?.questions === 60
-      })
-
-      if (!readyAreas.length) {
-        calificationError.value = 'Completa las 60 preguntas para el área antes de calificar.'
-        return
-      }
-
-      const preferredArea =
-        calificationArea.value && readyAreas.includes(calificationArea.value)
-          ? calificationArea.value
-          : readyAreas[0]
-      calificationArea.value = preferredArea
-      calificationPonderationArea.value = readyAreas.includes(calificationPonderationArea.value)
-        ? calificationPonderationArea.value
-        : preferredArea
-      calificationCorrectValue.value = 10
-      calificationIncorrectValue.value = 0
-      calificationBlankValue.value = 2
-      calificationError.value = ''
-    } else {
-      calificationError.value = ''
+  function openCalificationModal() {
+    if (!canCalify.value) {
+      calificationError.value = 'Necesitas cargar respuestas, claves y ponderaciones antes de calificar.'
+      return
     }
 
-    calificationModalTab.value = tab
+    const areas = calificationAreaOptions.value
+    const readyAreas = areas.filter((areaOption) => {
+      const entry = ponderationTotalsByArea.value.get(areaOption)
+      return entry?.questions === effectiveAnswersLength.value
+    })
+
+    if (!readyAreas.length) {
+      calificationError.value = `Completa las ${effectiveAnswersLength.value} preguntas para el área antes de calificar.`
+      return
+    }
+
+    const preferredArea =
+      calificationArea.value && readyAreas.includes(calificationArea.value)
+        ? calificationArea.value
+        : readyAreas[0]
+
+    calificationArea.value = preferredArea
+    calificationPonderationArea.value = readyAreas.includes(calificationPonderationArea.value)
+      ? calificationPonderationArea.value
+      : preferredArea
+
+    // Cargar configuración guardada para el área
+    initConfigForArea(preferredArea)
+    const cfg = getConfigForArea(preferredArea)
+    calificationCorrectValue.value = cfg.correctValue
+    calificationIncorrectValue.value = cfg.incorrectValue
+    calificationBlankValue.value = cfg.blankValue
+    calificationError.value = ''
     showCalificationModal.value = true
   }
 
@@ -155,11 +196,31 @@ export function useCalification(
     calificationSummary.value = null
   }
 
+  async function saveCalificationConfigToAPI(area, correctValue, incorrectValue, blankValue) {
+    if (!activeConvocatoriaId?.value) return
+    try {
+      await fetch(`${API_BASE_URL}/calification-configs/upsert/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          convocatoria: activeConvocatoriaId.value,
+          area_name: area,
+          correct_value: correctValue,
+          incorrect_value: incorrectValue,
+          blank_value: blankValue,
+        }),
+      })
+    } catch {
+      // No crítico, ya está guardado localmente
+    }
+  }
+
   function runCalification() {
     calificationError.value = ''
-    const area = normalizeArea(calificationArea.value)
-    const ponderationArea = normalizeArea(calificationPonderationArea.value)
+    const area = normalizeArea(calificationArea.value, effectiveAreaNames.value)
+    const ponderationArea = normalizeArea(calificationPonderationArea.value, effectiveAreaNames.value)
     const entries = ponderationEntriesByArea.value.get(ponderationArea) || []
+    const answersLength = effectiveAnswersLength.value
 
     if (!entries.length) {
       calificationError.value = 'No hay ponderaciones registradas para el área seleccionada.'
@@ -167,8 +228,8 @@ export function useCalification(
     }
 
     const plan = buildQuestionPlan(entries)
-    if (plan.length !== 60) {
-      calificationError.value = `Las ponderaciones seleccionadas cubren ${plan.length} preguntas. Deben sumar 60.`
+    if (plan.length !== answersLength) {
+      calificationError.value = `Las ponderaciones cubren ${plan.length} preguntas. Deben sumar ${answersLength}.`
       return
     }
 
@@ -191,7 +252,9 @@ export function useCalification(
       return
     }
 
-    const candidates = archiveRows.value.filter((row) => normalizeArea(row.area) === area)
+    const candidates = archiveRows.value.filter(
+      (row) => normalizeArea(row.area, effectiveAreaNames.value) === area
+    )
     if (!candidates.length) {
       calificationError.value = 'No hay postulantes registrados para el área seleccionada.'
       return
@@ -212,7 +275,7 @@ export function useCalification(
 
       const matchForArea = responseList
         .map((row) => {
-          const key = buildAreaTipoKey(area, row.tipo)
+          const key = buildAreaTipoKey(area, row.tipo, effectiveAreaNames.value)
           const answer = key ? answerKeyLookupByAreaTipo.value.get(key) : undefined
           return { row, answer }
         })
@@ -224,10 +287,8 @@ export function useCalification(
       }
 
       const { row: responseRow, answer: answerRow } = matchForArea
-
       const answersRaw = (responseRow?.answers || '').toUpperCase()
       const correctAnswersRaw = (answerRow?.answers || '').toUpperCase()
-
       const answers = answersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
       const correctAnswers = correctAnswersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
 
@@ -235,13 +296,10 @@ export function useCalification(
 
       for (let index = 0; index < plan.length; index += 1) {
         const weight = Number(plan[index]?.weight) || 0
-        if (weight <= 0) {
-          continue
-        }
+        if (weight <= 0) continue
 
         const responseChar = answers[index] || ' '
         const correctChar = correctAnswers[index] || ' '
-
         let contribution = 0
 
         const isCorrectCharValid = /^[A-E]$/.test(correctChar)
@@ -255,12 +313,10 @@ export function useCalification(
           contribution = blankValue * weight
         }
 
-        const roundedContribution = Math.round(contribution * 100) / 100
-        total += roundedContribution
+        total += Math.round(contribution * 100) / 100
       }
 
       const finalScore = Math.round(total * 100) / 100
-
       processedResults.push({
         id: `${dni}-${area}`,
         dni,
@@ -269,12 +325,16 @@ export function useCalification(
         nombres: candidate.nombres || '',
         area,
         score: finalScore,
+        position: 0,
+        isIngresante: false,
       })
     })
 
     processedResults.sort((a, b) => b.score - a.score)
 
-    const unlinkedResponses = responsesRows.value.filter(r => !r.dni || r.dni.trim() === '').length
+    const unlinkedResponses = responsesRows.value.filter(
+      (r) => !r.dni || r.dni.trim() === ''
+    ).length
 
     calificationResults.value = processedResults
     calificationSummary.value = {
@@ -285,15 +345,21 @@ export function useCalification(
       missingKeys,
       unlinkedResponses,
       totalWeight: Number(totalWeight.toFixed(3)),
+      answersLength,
+      correctValue,
+      incorrectValue,
+      blankValue,
     }
+
+    // Persistir configuración usada
+    calificationConfigStorage.value[area] = { correctValue, incorrectValue, blankValue }
+    saveCalificationConfigToAPI(area, correctValue, incorrectValue, blankValue)
 
     showCalificationModal.value = false
   }
 
   return {
-    // Estado
     showCalificationModal,
-    calificationModalTab,
     calificationArea,
     calificationPonderationArea,
     calificationCorrectValue,
@@ -303,8 +369,6 @@ export function useCalification(
     calificationSearch,
     calificationResults,
     calificationSummary,
-
-    // Computed
     calificationFilteredResults,
     calificationAreaOptions,
     calificationHasResults,
@@ -312,8 +376,6 @@ export function useCalification(
     selectedPonderationPlan,
     selectedPonderationIsReady,
     canCalify,
-
-    // Methods
     openCalificationModal,
     closeCalificationModal,
     resetCalificationResults,

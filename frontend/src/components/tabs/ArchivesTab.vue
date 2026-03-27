@@ -1,4 +1,5 @@
 <script setup>
+import { reactive } from 'vue'
 import { ARCHIVE_COLUMNS } from '@/constants'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import FileUploader from '@/components/shared/FileUploader.vue'
@@ -12,6 +13,8 @@ const props = defineProps({
     required: true
   }
 })
+
+const archives = reactive(props.archives)
 
 const tableColumns = ARCHIVE_COLUMNS.map(col => ({
   key: col.key,
@@ -73,7 +76,7 @@ function getRowClass(row) {
     </div>
 
     <Toolbar
-      v-model:search-value="archives.search.value"
+      v-model:search-value="archives.search"
       search-placeholder="Buscar postulantes..."
       :total-rows="archives.totalRows"
       :filtered-count="archives.totalFiltered"
@@ -112,6 +115,7 @@ function getRowClass(row) {
       :selection="archives.selection"
       :editing="archives.editing"
       :is-all-selected="archives.isAllVisibleSelected"
+      :is-indeterminate="archives.isSomeVisibleSelected"
       :row-class="getRowClass"
       @toggle-selection="archives.toggleSelection"
       @toggle-select-all="archives.toggleSelectAll"

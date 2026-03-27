@@ -1,4 +1,5 @@
 <script setup>
+import { reactive } from 'vue'
 import { IDENTIFIER_SUBTABS } from '@/constants'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import FileUploader from '@/components/shared/FileUploader.vue'
@@ -21,6 +22,8 @@ const props = defineProps({
 
 const emit = defineEmits(['update:subTab'])
 
+const identifiers = reactive(props.identifiers)
+
 const tableColumns = [
   { key: 'lectura', label: 'N° lectura' },
   { key: 'dni', label: 'DNI', maxlength: 8 },
@@ -28,11 +31,6 @@ const tableColumns = [
   { key: 'tipo', label: 'Tip', maxlength: 1, tight: true },
   { key: 'litho', label: 'Litho', maxlength: 6 },
   { key: 'observaciones', label: 'Observaciones', badge: true },
-]
-
-const subTabsList = [
-  { key: IDENTIFIER_SUBTABS.LIST, label: `Registros (${props.identifiers.totalRows})` },
-  { key: IDENTIFIER_SUBTABS.SOURCES, label: `Archivos cargados (${props.identifiers.sources.length})` },
 ]
 
 function getRowClass(row) {
@@ -89,7 +87,7 @@ function getRowClass(row) {
     </div>
 
     <Toolbar
-      v-model:search-value="identifiers.search.value"
+      v-model:search-value="identifiers.search"
       search-placeholder="Buscar por DNI, lectura, litho u observaciones"
       :total-rows="identifiers.totalRows"
       :filtered-count="identifiers.totalFiltered"
@@ -146,6 +144,7 @@ function getRowClass(row) {
         :selection="identifiers.selection"
         :editing="identifiers.editing"
         :is-all-selected="identifiers.isAllVisibleSelected"
+        :is-indeterminate="identifiers.isSomeVisibleSelected"
         :row-class="getRowClass"
         @toggle-selection="identifiers.toggleSelection"
         @toggle-select-all="identifiers.toggleSelectAll"

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Estático</title>
+</head>
+<body>
+    <div id="app">
+        <h1>Test HTML Estático</h1>
+        <p>Si ves este mensaje, el servidor web está funcionando.</p>
+    </div>
+
+    <script>
+        console.log('JavaScript en HTML estático se está ejecutando');
+        document.getElementById('app').innerHTML += '<p>JavaScript ejecutado correctamente</p>';
+    </script>
+</body>
+</html>

@@ -27,9 +27,27 @@ export function useTableState(options = {}) {
     rows.value = rows.value.map((row) => createRow(row))
   }
 
-  // Estados de UI
-  const selection = ref(new Set())
-  const editing = ref(new Set())
+  // Estados de UI - con manejo especial para Sets en localStorage
+  const selection = (() => {
+    const stored = storageKey ? useStorage(`${storageKey}_selection`, []) : ref([])
+    return computed({
+      get: () => new Set(stored.value),
+      set: (newSet) => {
+        stored.value = Array.from(newSet)
+      }
+    })
+  })()
+
+  const editing = (() => {
+    const stored = storageKey ? useStorage(`${storageKey}_editing`, []) : ref([])
+    return computed({
+      get: () => new Set(stored.value),
+      set: (newSet) => {
+        stored.value = Array.from(newSet)
+      }
+    })
+  })()
+
   const search = ref('')
   const isDragging = ref(false)
   const importError = ref('')

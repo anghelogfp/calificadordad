@@ -1,4 +1,10 @@
 <script setup>
+const props = defineProps({
+  convocatoria: { type: Object, default: null },
+  onOpenBackup: { type: Function, default: null },
+})
+
+const emit = defineEmits(['openBackup', 'openConvocatoria'])
 </script>
 
 <template>
@@ -6,7 +12,7 @@
     <div class="header-brand">
       <div class="brand-logo">
         <img
-          src="/public/unap.png"
+          src="/unap.png"
           alt="Logo"
           width="80"
           height="80"
@@ -18,9 +24,38 @@
         <span class="brand-subtitle">Universidad Nacional del Altiplano - Puno</span>
       </div>
     </div>
+
     <div class="header-meta">
+      <!-- Selector de convocatoria -->
+      <button
+        type="button"
+        class="convocatoria-btn"
+        :class="{ 'convocatoria-btn--active': convocatoria?.status === 'active' }"
+        @click="emit('openConvocatoria')"
+        title="Gestionar convocatoria"
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd"/>
+        </svg>
+        <span>{{ convocatoria ? convocatoria.name : 'Seleccionar convocatoria' }}</span>
+        <span v-if="convocatoria?.status === 'active'" class="status-dot status-dot--active" />
+        <span v-else-if="convocatoria" class="status-dot status-dot--closed" />
+      </button>
+
+      <!-- Botón Backup -->
+      <button
+        type="button"
+        class="header-icon-btn"
+        @click="emit('openBackup')"
+        title="Backup de sesión"
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor">
+          <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
+        </svg>
+      </button>
+
       <div class="header-badge">
-        Dirección de Admisión 2026
+        Dirección de Admisión {{ new Date().getFullYear() }}
       </div>
     </div>
   </header>
@@ -42,9 +77,7 @@
 .app-header::after {
   content: '';
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  bottom: 0; left: 0; right: 0;
   height: 3px;
   background: linear-gradient(90deg, var(--unap-gold-500), var(--unap-gold-400), var(--unap-gold-500));
 }
@@ -53,12 +86,6 @@
   display: flex;
   align-items: center;
   gap: var(--space-4);
-}
-
-.brand-logo svg {
-  width: 52px;
-  height: 52px;
-  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
 }
 
 .brand-text h1 {
@@ -79,8 +106,63 @@
 .header-meta {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
+
+/* Botón convocatoria */
+.convocatoria-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  backdrop-filter: blur(8px);
+  max-width: 280px;
+}
+
+.convocatoria-btn svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.8; }
+.convocatoria-btn span:not(.status-dot) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.convocatoria-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.convocatoria-btn--active {
+  border-color: var(--unap-gold-400);
+}
+
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot--active { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+.status-dot--closed { background: var(--slate-400); }
+
+/* Botón ícono header */
+.header-icon-btn {
+  width: 36px; height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.header-icon-btn svg { width: 18px; height: 18px; opacity: 0.8; }
+.header-icon-btn:hover { background: rgba(255, 255, 255, 0.15); border-color: rgba(255, 255, 255, 0.3); }
 
 .header-badge {
   display: flex;
@@ -105,8 +187,7 @@
 }
 
 @media (max-width: 768px) {
-  .brand-text h1 {
-    font-size: 1.2rem;
-  }
+  .brand-text h1 { font-size: 1.2rem; }
+  .convocatoria-btn { max-width: 200px; }
 }
 </style>

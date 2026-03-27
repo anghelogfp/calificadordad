@@ -9,5 +9,16 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
+  },
+  server: {
+    host: true,
+    port: 5173,
+    hmr: false  // Deshabilitar HMR para compatibilidad
+  },
+  build: {
+    target: 'es2015'
+  },
+  optimizeDeps: {
+    include: ['vue']
   }
 })
