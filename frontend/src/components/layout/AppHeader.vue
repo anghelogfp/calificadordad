@@ -1,10 +1,10 @@
 <script setup>
 const props = defineProps({
   convocatoria: { type: Object, default: null },
-  onOpenBackup: { type: Function, default: null },
+  historyCount: { type: Number, default: 0 },
 })
 
-const emit = defineEmits(['openBackup', 'openConvocatoria'])
+const emit = defineEmits(['openBackup', 'openConvocatoria', 'openHistory'])
 </script>
 
 <template>
@@ -40,6 +40,20 @@ const emit = defineEmits(['openBackup', 'openConvocatoria'])
         <span>{{ convocatoria ? convocatoria.name : 'Seleccionar convocatoria' }}</span>
         <span v-if="convocatoria?.status === 'active'" class="status-dot status-dot--active" />
         <span v-else-if="convocatoria" class="status-dot status-dot--closed" />
+      </button>
+
+      <!-- Botón Historial -->
+      <button
+        type="button"
+        class="history-btn"
+        @click="emit('openHistory')"
+        title="Ver historial de procesos"
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+        </svg>
+        <span>Historial</span>
+        <span v-if="historyCount > 0" class="history-badge">{{ historyCount }}</span>
       </button>
 
       <!-- Botón Backup -->
@@ -163,6 +177,27 @@ const emit = defineEmits(['openBackup', 'openConvocatoria'])
 
 .header-icon-btn svg { width: 18px; height: 18px; opacity: 0.8; }
 .header-icon-btn:hover { background: rgba(255, 255, 255, 0.15); border-color: rgba(255, 255, 255, 0.3); }
+
+/* Historial */
+.history-btn {
+  display: flex; align-items: center; gap: var(--space-2);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  color: white; font-size: 0.85rem; font-weight: 500;
+  cursor: pointer; transition: all var(--transition-fast);
+  backdrop-filter: blur(8px);
+}
+.history-btn svg { width: 16px; height: 16px; opacity: 0.8; flex-shrink: 0; }
+.history-btn:hover { background: rgba(255, 255, 255, 0.15); border-color: rgba(255, 255, 255, 0.3); }
+
+.history-badge {
+  background: var(--unap-gold-500); color: var(--unap-blue-900);
+  border-radius: var(--radius-full); font-size: 0.7rem; font-weight: 700;
+  min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
+  padding: 0 var(--space-1);
+}
 
 .header-badge {
   display: flex;

@@ -10,6 +10,12 @@ const props = defineProps({
 })
 
 const ponderations = reactive(props.ponderations)
+
+function confirmRemovePonderation(row) {
+  if (confirm(`¿Eliminar la asignatura "${row.subject}"?`)) {
+    ponderations.removePonderationRow(row)
+  }
+}
 </script>
 
 <template>
@@ -60,22 +66,16 @@ const ponderations = reactive(props.ponderations)
         </span>
       </div>
 
-      <!-- Modo Simple -->
-      <div class="simple-mode-card">
-        <div class="simple-mode-info">
-          <h3 class="simple-mode-title">Modo Simple</h3>
-          <p class="simple-mode-desc">
-            Para calificaciones con puntaje plano sin asignaturas. Configura una entrada "General" por área con
-            <strong>todas las {{ answersLength }} preguntas</strong> en peso 1. Luego en "Calcular Puntajes" define:
-            correcta=2, incorrecta=0, blanco=0.2 (o lo que corresponda).
-          </p>
-        </div>
-        <button type="button" class="btn btn--gold btn--simple" @click="ponderations.applySimpleMode(answersLength)">
-          <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.381z" clip-rule="evenodd"/>
-          </svg>
-          Aplicar Modo Simple a todas las áreas
-        </button>
+      <!-- Info Modo Simple -->
+      <div class="simple-mode-info-banner">
+        <svg viewBox="0 0 20 20" fill="currentColor" class="simple-mode-info-icon">
+          <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.381z" clip-rule="evenodd"/>
+        </svg>
+        <p>
+          <strong>¿Sin asignaturas?</strong> Puedes omitir este paso. Al calificar, selecciona
+          <strong>Modo Simple</strong> en el modal y el puntaje se calculará directamente
+          con los valores de correcta / incorrecta / en blanco.
+        </p>
       </div>
 
       <!-- Formulario para agregar asignatura -->
@@ -186,7 +186,7 @@ const ponderations = reactive(props.ponderations)
                   <button
                     type="button"
                     class="icon-btn icon-btn--danger"
-                    @click="ponderations.removePonderationRow(row)"
+                    @click="confirmRemovePonderation(row)"
                     title="Eliminar"
                   >
                     <svg viewBox="0 0 24 24">
@@ -488,39 +488,28 @@ td.col-actions {
 .alert--error { background: var(--error-50); color: var(--error-700); border: 1px solid var(--error-200); }
 .alert--warning { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
 
-.simple-mode-card {
+.simple-mode-info-banner {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-5);
+  align-items: flex-start;
+  gap: var(--space-3);
   background: linear-gradient(135deg, #fefdf0 0%, #fef9e7 100%);
   border: 1px solid var(--unap-gold-300, #d4af37);
   border-radius: var(--radius-lg);
-  padding: var(--space-5);
-  flex-wrap: wrap;
+  padding: var(--space-4) var(--space-5);
 }
 
-.simple-mode-info {
-  flex: 1;
-  min-width: 200px;
+.simple-mode-info-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--unap-gold-600, #b8860b);
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
-.simple-mode-title {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--unap-blue-800);
-  margin: 0 0 var(--space-1);
-}
-
-.simple-mode-desc {
+.simple-mode-info-banner p {
   font-size: 0.875rem;
-  color: var(--slate-600);
+  color: var(--slate-700);
   margin: 0;
   line-height: 1.5;
-}
-
-.btn--simple {
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 </style>

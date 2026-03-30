@@ -22,8 +22,20 @@ const tableColumns = ARCHIVE_COLUMNS.map(col => ({
   editable: true,
 }))
 
-function getRowClass(row) {
-  return {}
+function getRowClass(row) { return {} }
+
+function confirmRemoveSelected() {
+  const count = archives.totalSelected
+  if (!count) return
+  if (confirm(`¿Eliminar ${count} registro(s) seleccionado(s)? Esta acción no se puede deshacer.`)) {
+    archives.removeSelected()
+  }
+}
+
+function confirmClearAll() {
+  if (confirm('¿Limpiar todos los registros? Esta acción no se puede deshacer.')) {
+    archives.clearAll()
+  }
 }
 </script>
 
@@ -80,6 +92,7 @@ function getRowClass(row) {
       search-placeholder="Buscar postulantes..."
       :total-rows="archives.totalRows"
       :filtered-count="archives.totalFiltered"
+      :selected-count="archives.totalSelected"
     >
       <template #actions>
         <button type="button" class="btn btn--primary" @click="archives.exportArchiveToExcel" :disabled="!archives.hasData">
@@ -88,7 +101,7 @@ function getRowClass(row) {
           </svg>
           Exportar Excel
         </button>
-        <button type="button" class="btn btn--ghost" @click="archives.clearAll" :disabled="!archives.hasData">
+        <button type="button" class="btn btn--ghost" @click="confirmClearAll" :disabled="!archives.hasData">
           <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
           </svg>
@@ -97,7 +110,7 @@ function getRowClass(row) {
         <button
           type="button"
           class="btn btn--danger"
-          @click="archives.removeSelected"
+          @click="confirmRemoveSelected"
           :disabled="!archives.totalSelected"
         >
           <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
@@ -116,10 +129,12 @@ function getRowClass(row) {
       :editing="archives.editing"
       :is-all-selected="archives.isAllVisibleSelected"
       :is-indeterminate="archives.isSomeVisibleSelected"
+      :selected-count="archives.totalSelected"
       :row-class="getRowClass"
       @toggle-selection="archives.toggleSelection"
       @toggle-select-all="archives.toggleSelectAll"
       @toggle-edit="archives.toggleEdit"
+      @cancel-edit="archives.toggleEdit"
       @remove-row="archives.removeRow"
     />
 

@@ -2,6 +2,7 @@
 import { onMounted, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { TAB_KEYS, tabs, IDENTIFIER_SUBTABS, RESPONSES_SUBTABS, ANSWER_KEY_SUBTABS } from '@/constants'
+
 // Composables
 import { useArchives } from '@/composables/useArchives'
 import { useIdentifiers } from '@/composables/useIdentifiers'
@@ -9,12 +10,13 @@ import { useResponses } from '@/composables/useResponses'
 import { useAnswerKeys } from '@/composables/useAnswerKeys'
 import { usePonderations } from '@/composables/usePonderations'
 import { useCalification } from '@/composables/useCalification'
+import { useHistory } from '@/composables/useHistory'
 
-// Layout Components
+// Layout
 import AppHeader from '@/components/layout/AppHeader.vue'
 import StepNav from '@/components/layout/StepNav.vue'
 
-// Tab Components
+// Tabs
 import ArchivesTab from '@/components/tabs/ArchivesTab.vue'
 import IdentifiersTab from '@/components/tabs/IdentifiersTab.vue'
 import ResponsesTab from '@/components/tabs/ResponsesTab.vue'
@@ -22,8 +24,9 @@ import AnswerKeysTab from '@/components/tabs/AnswerKeysTab.vue'
 import ScoresTab from '@/components/tabs/ScoresTab.vue'
 import PonderationsTab from '@/components/tabs/PonderationsTab.vue'
 
-// Modal
+// Modals & Panels
 import CalificationModal from '@/components/modals/CalificationModal.vue'
+import HistoryPanel from '@/components/panels/HistoryPanel.vue'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NAVIGATION STATE
@@ -35,28 +38,19 @@ const responsesSubTab = useStorage('calificador-respuestas-subtab', RESPONSES_SU
 const answerKeySubTab = useStorage('calificador-claves-subtab', ANSWER_KEY_SUBTABS.LIST)
 
 // ═══════════════════════════════════════════════════════════════════════════
-// COMPOSABLES INITIALIZATION
+// COMPOSABLES
 // ═══════════════════════════════════════════════════════════════════════════
 
-// 1. Archives (independiente)
 const archives = useArchives()
-
-// 2. Identifiers (independiente)
 const identifiers = useIdentifiers()
-
-// 3. Responses (depende de identifiers)
 const responses = useResponses(
   identifiers.identifierLookup,
   identifiers.identifierLookupByLitho
 )
-
-// 4. Answer Keys (depende de archives)
 const answerKeys = useAnswerKeys(archives.rows)
-
-// 5. Ponderations (independiente)
 const ponderations = usePonderations()
+const history = useHistory()
 
-// 6. Calification (depende de todos)
 const calification = useCalification(
   archives.rows,
   responses.rows,
@@ -69,10 +63,9 @@ const calification = useCalification(
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
-// WATCHERS - Sincronización entre composables
+// WATCHERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Sincronizar datos de identificadores con respuestas
 watch(
   [identifiers.rows, responses.rows],
   () => {
@@ -88,7 +81,23 @@ watch(
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
-// STEP NAV HELPERS
+// HISTORIAL
+// ═══════════════════════════════════════════════════════════════════════════
+
+function saveToHistory() {
+  const process = calification.getActiveProcess()
+  if (process) {
+    history.saveProcess(process)
+  }
+}
+
+function handleLoadProcess(process) {
+  calification.loadProcess(process)
+  activeTab.value = TAB_KEYS.RESULTS
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STEP NAV
 // ═══════════════════════════════════════════════════════════════════════════
 
 function getStepStatus(key) {
@@ -97,7 +106,7 @@ function getStepStatus(key) {
   if (key === TAB_KEYS.RESPONSES) return responses.rows.value.length > 0 ? 'completed' : ''
   if (key === TAB_KEYS.ANSWER_KEYS) return answerKeys.rows.value.length > 0 ? 'completed' : ''
   if (key === TAB_KEYS.PONDERATIONS) return ponderations.ponderationRows.value.length > 0 ? 'completed' : ''
-  if (key === TAB_KEYS.RESULTS || key === TAB_KEYS.SCORES) return calification.calificationResults.value.length > 0 ? 'completed' : ''
+  if (key === TAB_KEYS.RESULTS || key === TAB_KEYS.SCORES) return calification.calificationHasResults.value ? 'completed' : ''
   return ''
 }
 
@@ -130,8 +139,8 @@ function getStepDescription(key) {
     return n > 0 ? `${n} ponderaciones` : 'Sin configurar'
   }
   if (key === TAB_KEYS.RESULTS || key === TAB_KEYS.SCORES) {
-    const n = calification.calificationResults.value.length
-    return n > 0 ? `${n} calificados` : 'Sin calificar'
+    const areas = calification.processAreas.value
+    return areas.length > 0 ? `${areas.length} área(s) calculada(s)` : 'Sin calificar'
   }
   return ''
 }
@@ -147,7 +156,11 @@ onMounted(async () => {
 
 <template>
   <div class="app-layout">
-    <AppHeader />
+    <AppHeader
+      :history-count="history.historyList.value.length"
+      @open-backup="() => {}"
+      @open-history="history.openHistoryPanel"
+    />
 
     <StepNav
       :tabs="tabs"
@@ -194,6 +207,7 @@ onMounted(async () => {
         v-else-if="activeTab === TAB_KEYS.SCORES"
         :calification="calification"
         :ponderations="ponderations"
+        :on-save-to-history="saveToHistory"
         @open-modal="calification.openCalificationModal"
       />
     </main>
@@ -202,6 +216,14 @@ onMounted(async () => {
       :show="calification.showCalificationModal.value"
       :calification="calification"
       @close="calification.closeCalificationModal"
+    />
+
+    <HistoryPanel
+      :show="history.showHistoryPanel.value"
+      :history-list="history.historyList.value"
+      @close="history.closeHistoryPanel"
+      @load-process="handleLoadProcess"
+      @delete-process="history.deleteProcess"
     />
   </div>
 </template>
@@ -222,8 +244,6 @@ onMounted(async () => {
 }
 
 @media (max-width: 1024px) {
-  .app-main {
-    padding: var(--space-5);
-  }
+  .app-main { padding: var(--space-5); }
 }
 </style>

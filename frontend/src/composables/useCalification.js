@@ -9,21 +9,17 @@ import {
   buildQuestionPlan,
 } from '@/utils/helpers'
 
-/**
- * Composable para gestión de calificación
- * @param {Ref} archiveRows
- * @param {Ref} responsesRows
- * @param {Ref} answerKeyRows
- * @param {Ref} ponderationRows
- * @param {Ref} ponderationEntriesByArea
- * @param {Ref} ponderationTotalsByArea
- * @param {Ref} responsesByDni
- * @param {Ref} answerKeyLookupByAreaTipo
- * @param {Ref} [areaNames] - Lista de nombres de área disponibles
- * @param {Ref} [activeConvocatoriaId]
- * @param {Ref} [formatConfig] - Configuración del formato DAT
- * @param {Ref} [areaByName] - Map de área por nombre para acceder a vacantes
- */
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
+}
+
+function generateDefaultName() {
+  const date = new Date()
+  const year = date.getFullYear()
+  const month = date.toLocaleDateString('es-PE', { month: 'long' })
+  return `Admisión ${year} · ${month.charAt(0).toUpperCase() + month.slice(1)}`
+}
+
 export function useCalification(
   archiveRows,
   responsesRows,
@@ -45,7 +41,28 @@ export function useCalification(
     formatConfig?.value?.answersLength ?? DEFAULT_DAT_FORMAT.answersLength
   )
 
-  // Estado del modal de calificación
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PROCESO ACTIVO
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  const activeProcess = useStorage(STORAGE_KEYS.ACTIVE_PROCESS, {
+    id: null,
+    name: '',
+    areas: {},
+  })
+
+  // Nombre editable del proceso (sincronizado con activeProcess)
+  const processName = ref(activeProcess.value.name || '')
+
+  // Área actualmente mostrada en la tabla de resultados
+  const calificationDisplayArea = ref(
+    Object.keys(activeProcess.value.areas || {})[0] || null
+  )
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ESTADO DEL MODAL
+  // ═══════════════════════════════════════════════════════════════════════════
+
   const showCalificationModal = ref(false)
   const calificationArea = ref(effectiveAreaNames.value[0] ?? ANSWER_KEY_AREAS[0])
   const calificationPonderationArea = ref(effectiveAreaNames.value[0] ?? ANSWER_KEY_AREAS[0])
@@ -73,13 +90,36 @@ export function useCalification(
   const calificationCorrectValue = ref(10)
   const calificationIncorrectValue = ref(0)
   const calificationBlankValue = ref(2)
+  const simpleMode = ref(false)
 
-  // Resultados
-  const scoreStorage = useStorage(STORAGE_KEYS.SCORE_RESULTS, { summary: null, rows: [] })
-  const calificationResults = ref(Array.isArray(scoreStorage.value?.rows) ? scoreStorage.value.rows : [])
-  const calificationSummary = ref(scoreStorage.value?.summary || null)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RESULTADOS REACTIVOS
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  // Computed
+  // Áreas con resultados en el proceso activo
+  const processAreas = computed(() => Object.keys(activeProcess.value.areas || {}))
+
+  // Resultados del área actualmente seleccionada (para la tabla)
+  const calificationResults = computed(() => {
+    const area = calificationDisplayArea.value
+    return area ? (activeProcess.value.areas[area]?.results || []) : []
+  })
+
+  // Resumen del área actualmente seleccionada
+  const calificationSummary = computed(() => {
+    const area = calificationDisplayArea.value
+    return area ? (activeProcess.value.areas[area]?.summary || null) : null
+  })
+
+  // Todos los resultados combinados de todas las áreas (para dashboard)
+  const calificationAllResults = computed(() =>
+    Object.values(activeProcess.value.areas || {}).flatMap(a => a.results || [])
+  )
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // COMPUTED
+  // ═══════════════════════════════════════════════════════════════════════════
+
   const calificationFilteredResults = computed(() => {
     if (!calificationSearch.value.trim()) return calificationResults.value
     const needle = normalize(calificationSearch.value)
@@ -112,7 +152,7 @@ export function useCalification(
   })
 
   const calificationAreaOptions = computed(() => ponderationAreaList.value)
-  const calificationHasResults = computed(() => calificationResults.value.length > 0)
+  const calificationHasResults = computed(() => processAreas.value.length > 0)
   const selectedPonderationIsReady = computed(() =>
     selectedPonderationTotals.value.questions === effectiveAnswersLength.value
   )
@@ -120,23 +160,16 @@ export function useCalification(
   const canCalify = computed(() =>
     responsesRows.value.length > 0 &&
     answerKeyRows.value.length > 0 &&
-    ponderationRows.value.length > 0 &&
-    selectedPonderationIsReady.value
+    (simpleMode.value || (
+      ponderationRows.value.length > 0 &&
+      selectedPonderationIsReady.value
+    ))
   )
 
-  // Persistir resultados
-  watch(
-    [calificationResults, calificationSummary],
-    () => {
-      scoreStorage.value = {
-        rows: calificationResults.value,
-        summary: calificationSummary.value,
-      }
-    },
-    { deep: true }
-  )
+  // ═══════════════════════════════════════════════════════════════════════════
+  // WATCHERS
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  // Cargar configuración cuando cambia el área
   watch(calificationArea, (area) => {
     const normalized = normalizeArea(area, effectiveAreaNames.value)
     initConfigForArea(normalized)
@@ -149,7 +182,15 @@ export function useCalification(
     }
   })
 
-  // Methods
+  // Sync processName with active process
+  watch(() => activeProcess.value.name, (name) => {
+    processName.value = name || ''
+  })
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MÉTODOS - MODAL
+  // ═══════════════════════════════════════════════════════════════════════════
+
   function openCalificationModal() {
     if (!canCalify.value) {
       calificationError.value = 'Necesitas cargar respuestas, claves y ponderaciones antes de calificar.'
@@ -177,12 +218,17 @@ export function useCalification(
       ? calificationPonderationArea.value
       : preferredArea
 
-    // Cargar configuración guardada para el área
     initConfigForArea(preferredArea)
     const cfg = getConfigForArea(preferredArea)
     calificationCorrectValue.value = cfg.correctValue
     calificationIncorrectValue.value = cfg.incorrectValue
     calificationBlankValue.value = cfg.blankValue
+
+    // Sugerir nombre si el proceso aún no tiene nombre
+    if (!processName.value) {
+      processName.value = generateDefaultName()
+    }
+
     calificationError.value = ''
     showCalificationModal.value = true
   }
@@ -191,10 +237,42 @@ export function useCalification(
     showCalificationModal.value = false
   }
 
-  function resetCalificationResults() {
-    calificationResults.value = []
-    calificationSummary.value = null
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MÉTODOS - PROCESO
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function startNewProcess() {
+    activeProcess.value = { id: null, name: '', areas: {} }
+    calificationDisplayArea.value = null
+    processName.value = ''
+    calificationSearch.value = ''
   }
+
+  function switchDisplayArea(area) {
+    calificationDisplayArea.value = area
+    calificationSearch.value = ''
+  }
+
+  function getActiveProcess() {
+    if (!activeProcess.value.id || processAreas.value.length === 0) return null
+    return { ...activeProcess.value }
+  }
+
+  function loadProcess(process) {
+    activeProcess.value = { ...process }
+    processName.value = process.name || ''
+    const areas = Object.keys(process.areas || {})
+    calificationDisplayArea.value = areas[0] || null
+    calificationSearch.value = ''
+  }
+
+  function resetCalificationResults() {
+    startNewProcess()
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MÉTODOS - API
+  // ═══════════════════════════════════════════════════════════════════════════
 
   async function saveCalificationConfigToAPI(area, correctValue, incorrectValue, blankValue) {
     if (!activeConvocatoriaId?.value) return
@@ -215,42 +293,40 @@ export function useCalification(
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CALIFICACIÓN
+  // ═══════════════════════════════════════════════════════════════════════════
+
   function runCalification() {
     calificationError.value = ''
     const area = normalizeArea(calificationArea.value, effectiveAreaNames.value)
     const ponderationArea = normalizeArea(calificationPonderationArea.value, effectiveAreaNames.value)
-    const entries = ponderationEntriesByArea.value.get(ponderationArea) || []
     const answersLength = effectiveAnswersLength.value
+    let plan
 
-    if (!entries.length) {
-      calificationError.value = 'No hay ponderaciones registradas para el área seleccionada.'
-      return
-    }
-
-    const plan = buildQuestionPlan(entries)
-    if (plan.length !== answersLength) {
-      calificationError.value = `Las ponderaciones cubren ${plan.length} preguntas. Deben sumar ${answersLength}.`
-      return
+    if (simpleMode.value) {
+      plan = Array.from({ length: answersLength }, () => ({ weight: 1 }))
+    } else {
+      const entries = ponderationEntriesByArea.value.get(ponderationArea) || []
+      if (!entries.length) {
+        calificationError.value = 'No hay ponderaciones registradas para el área seleccionada.'
+        return
+      }
+      plan = buildQuestionPlan(entries)
+      if (plan.length !== answersLength) {
+        calificationError.value = `Las ponderaciones cubren ${plan.length} preguntas. Deben sumar ${answersLength}.`
+        return
+      }
     }
 
     const totalWeight = plan.reduce((acc, item) => acc + (Number(item.weight) || 0), 0)
-
     const correctValue = Number(calificationCorrectValue.value)
     const incorrectValue = Number(calificationIncorrectValue.value)
     const blankValue = Number(calificationBlankValue.value)
 
-    if (!Number.isFinite(correctValue)) {
-      calificationError.value = 'El valor para respuesta correcta no es válido.'
-      return
-    }
-    if (!Number.isFinite(incorrectValue)) {
-      calificationError.value = 'El valor para respuesta incorrecta no es válido.'
-      return
-    }
-    if (!Number.isFinite(blankValue)) {
-      calificationError.value = 'El valor para respuesta en blanco no es válido.'
-      return
-    }
+    if (!Number.isFinite(correctValue)) { calificationError.value = 'El valor para respuesta correcta no es válido.'; return }
+    if (!Number.isFinite(incorrectValue)) { calificationError.value = 'El valor para respuesta incorrecta no es válido.'; return }
+    if (!Number.isFinite(blankValue)) { calificationError.value = 'El valor para respuesta en blanco no es válido.'; return }
 
     const candidates = archiveRows.value.filter(
       (row) => normalizeArea(row.area, effectiveAreaNames.value) === area
@@ -268,10 +344,7 @@ export function useCalification(
       const dni = stripDigits(candidate.dni)
       const responseList = responsesByDni.value.get(dni) || []
 
-      if (!responseList.length) {
-        missingResponses += 1
-        return
-      }
+      if (!responseList.length) { missingResponses += 1; return }
 
       const matchForArea = responseList
         .map((row) => {
@@ -281,10 +354,7 @@ export function useCalification(
         })
         .find((item) => item.answer)
 
-      if (!matchForArea || !matchForArea.answer) {
-        missingKeys += 1
-        return
-      }
+      if (!matchForArea || !matchForArea.answer) { missingKeys += 1; return }
 
       const { row: responseRow, answer: answerRow } = matchForArea
       const answersRaw = (responseRow?.answers || '').toUpperCase()
@@ -293,7 +363,6 @@ export function useCalification(
       const correctAnswers = correctAnswersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
 
       let total = 0
-
       for (let index = 0; index < plan.length; index += 1) {
         const weight = Number(plan[index]?.weight) || 0
         if (weight <= 0) continue
@@ -316,15 +385,14 @@ export function useCalification(
         total += Math.round(contribution * 100) / 100
       }
 
-      const finalScore = Math.round(total * 100) / 100
       processedResults.push({
-        id: `${dni}-${area}`,
-        dni,
+        id: `${stripDigits(candidate.dni)}-${area}`,
+        dni: stripDigits(candidate.dni),
         paterno: candidate.paterno || '',
         materno: candidate.materno || '',
         nombres: candidate.nombres || '',
         area,
-        score: finalScore,
+        score: Math.round(total * 100) / 100,
         position: 0,
         isIngresante: false,
       })
@@ -336,8 +404,7 @@ export function useCalification(
       (r) => !r.dni || r.dni.trim() === ''
     ).length
 
-    calificationResults.value = processedResults
-    calificationSummary.value = {
+    const summary = {
       area,
       timestamp: new Date().toISOString(),
       totalCandidates: candidates.length,
@@ -351,6 +418,21 @@ export function useCalification(
       blankValue,
     }
 
+    // Crear proceso si no existe
+    const currentId = activeProcess.value.id || generateId()
+    const currentName = processName.value.trim() || generateDefaultName()
+
+    activeProcess.value = {
+      id: currentId,
+      name: currentName,
+      areas: {
+        ...activeProcess.value.areas,
+        [area]: { results: processedResults, summary },
+      },
+    }
+
+    calificationDisplayArea.value = area
+
     // Persistir configuración usada
     calificationConfigStorage.value[area] = { correctValue, incorrectValue, blankValue }
     saveCalificationConfigToAPI(area, correctValue, incorrectValue, blankValue)
@@ -359,7 +441,9 @@ export function useCalification(
   }
 
   return {
+    // Modal state
     showCalificationModal,
+    simpleMode,
     calificationArea,
     calificationPonderationArea,
     calificationCorrectValue,
@@ -367,18 +451,34 @@ export function useCalification(
     calificationBlankValue,
     calificationError,
     calificationSearch,
+    processName,
+
+    // Results
     calificationResults,
     calificationSummary,
+    calificationAllResults,
     calificationFilteredResults,
+    processAreas,
+    calificationDisplayArea,
+
+    // Computed
     calificationAreaOptions,
     calificationHasResults,
     selectedPonderationTotals,
     selectedPonderationPlan,
     selectedPonderationIsReady,
     canCalify,
+    ponderationAreaList,
+
+    // Methods
     openCalificationModal,
     closeCalificationModal,
-    resetCalificationResults,
     runCalification,
+    resetCalificationResults,
+    startNewProcess,
+    switchDisplayArea,
+    getActiveProcess,
+    loadProcess,
+    activeProcess,
   }
 }

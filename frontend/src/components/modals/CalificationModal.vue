@@ -7,16 +7,10 @@ const props = defineProps({
 })
 
 const calification = reactive(props.calification)
-
 const emit = defineEmits(['close'])
 
-function close() {
-  emit('close')
-}
-
-function runCalification() {
-  props.calification.runCalification()
-}
+function close() { emit('close') }
+function runCalification() { props.calification.runCalification() }
 </script>
 
 <template>
@@ -36,16 +30,72 @@ function runCalification() {
         </header>
 
         <form class="modal__body modal-form" @submit.prevent="runCalification">
+
+          <!-- Modo -->
+          <div class="mode-toggle">
+            <button
+              type="button"
+              class="mode-btn"
+              :class="{ 'mode-btn--active': !calification.simpleMode }"
+              @click="calification.simpleMode = false"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/>
+              </svg>
+              Modo Normal
+            </button>
+            <button
+              type="button"
+              class="mode-btn"
+              :class="{ 'mode-btn--active': calification.simpleMode }"
+              @click="calification.simpleMode = true"
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.381z" clip-rule="evenodd"/>
+              </svg>
+              Modo Simple
+            </button>
+          </div>
+
+          <div v-if="calification.simpleMode" class="simple-banner">
+            Puntaje directo: <strong>correcta × valor</strong>, sin ponderaciones por asignatura.
+          </div>
+
+          <!-- Nombre del proceso -->
+          <div class="field">
+            <label for="process-name">
+              Nombre del proceso
+              <span class="field__hint">Se agrupa junto a las demás áreas que calcules</span>
+            </label>
+            <input
+              id="process-name"
+              v-model="calification.processName"
+              type="text"
+              class="input"
+              placeholder="Ej: Admisión 2026 · Primera vuelta"
+              maxlength="80"
+              required
+            />
+          </div>
+
+          <div class="field-divider"></div>
+
+          <!-- Área -->
           <div class="field">
             <label for="calification-area">Área a calificar</label>
             <select id="calification-area" v-model="calification.calificationArea" class="input" required>
               <option v-for="area in calification.calificationAreaOptions" :key="area" :value="area">
                 {{ area }}
+                <template v-if="calification.processAreas.includes(area)"> ✓ ya calculada</template>
               </option>
             </select>
+            <span v-if="calification.processAreas.includes(calification.calificationArea)" class="field__warning">
+              Esta área ya tiene resultados. Al calcular se reemplazarán.
+            </span>
           </div>
 
-          <div class="field">
+          <!-- Ponderación (solo Modo Normal) -->
+          <div v-if="!calification.simpleMode" class="field">
             <label for="calification-set">Ponderación a aplicar</label>
             <select id="calification-set" v-model="calification.calificationPonderationArea" class="input" required>
               <option v-for="area in calification.calificationAreaOptions" :key="area" :value="area">
@@ -54,22 +104,23 @@ function runCalification() {
             </select>
           </div>
 
+          <!-- Valores -->
           <div class="scores-row">
             <div class="field">
-              <label for="value-correct">Valor correcta</label>
+              <label for="value-correct">Correcta</label>
               <input id="value-correct" v-model.number="calification.calificationCorrectValue" type="number" step="0.01" class="input input--sm" required />
             </div>
             <div class="field">
-              <label for="value-incorrect">Valor incorrecta</label>
+              <label for="value-incorrect">Incorrecta</label>
               <input id="value-incorrect" v-model.number="calification.calificationIncorrectValue" type="number" step="0.01" class="input input--sm" required />
             </div>
             <div class="field">
-              <label for="value-blank">Valor en blanco</label>
+              <label for="value-blank">En blanco</label>
               <input id="value-blank" v-model.number="calification.calificationBlankValue" type="number" step="0.01" class="input input--sm" required />
             </div>
           </div>
 
-          <div v-if="!calification.selectedPonderationIsReady" class="info-banner">
+          <div v-if="!calification.simpleMode && !calification.selectedPonderationIsReady" class="info-banner">
             ⚠ Las ponderaciones del área no están completas. Ve al Paso 5 para configurarlas.
           </div>
 
@@ -79,7 +130,11 @@ function runCalification() {
 
           <footer class="modal__footer">
             <button type="button" class="btn btn--ghost" @click="close">Cancelar</button>
-            <button type="submit" class="btn btn--gold" :disabled="!calification.selectedPonderationIsReady">
+            <button
+              type="submit"
+              class="btn btn--gold"
+              :disabled="!calification.simpleMode && !calification.selectedPonderationIsReady"
+            >
               <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" clip-rule="evenodd"/>
               </svg>
@@ -107,7 +162,7 @@ function runCalification() {
 .modal {
   background: white;
   border-radius: var(--radius-xl);
-  width: min(560px, 100%);
+  width: min(580px, 100%);
   display: flex; flex-direction: column;
   box-shadow: var(--shadow-xl);
   animation: scaleIn 0.3s ease-out;
@@ -133,21 +188,61 @@ function runCalification() {
   width: 36px; height: 36px; border: none; border-radius: var(--radius-md);
   background: rgba(255,255,255,0.1); color: white; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-fast); flex-shrink: 0;
 }
 .modal__close svg { width: 20px; height: 20px; }
 .modal__close:hover { background: rgba(255,255,255,0.2); }
 
-.modal__body {
-  padding: var(--space-6);
-  overflow-y: auto;
-  flex: 1;
+.modal__body { padding: var(--space-6); overflow-y: auto; flex: 1; }
+
+.modal-form { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.mode-toggle {
+  display: flex;
+  gap: var(--space-2);
+  background: var(--slate-100);
+  border-radius: var(--radius-lg);
+  padding: var(--space-1);
 }
 
-.modal-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
+.mode-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background: transparent;
+  color: var(--slate-500);
+}
+
+.mode-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+.mode-btn--active {
+  background: white;
+  color: var(--unap-blue-700);
+  box-shadow: var(--shadow-sm);
+}
+
+.simple-banner {
+  padding: var(--space-3) var(--space-4);
+  background: linear-gradient(135deg, #fefdf0 0%, #fef9e7 100%);
+  border: 1px solid var(--unap-gold-300, #d4af37);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  color: var(--unap-blue-800);
+}
+
+.field-divider {
+  height: 1px;
+  background: var(--slate-200);
+  margin: var(--space-1) 0;
 }
 
 .scores-row {
@@ -163,15 +258,26 @@ function runCalification() {
   background: var(--slate-50);
 }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
+.field { display: flex; flex-direction: column; gap: var(--space-1); }
 
 .field label {
   font-size: 0.75rem; font-weight: 600; color: var(--slate-600);
   text-transform: uppercase; letter-spacing: 0.03em;
+  display: flex; flex-direction: column; gap: 2px;
+}
+
+.field__hint {
+  font-size: 0.7rem; font-weight: 400; color: var(--slate-400);
+  text-transform: none; letter-spacing: 0;
+}
+
+.field__warning {
+  font-size: 0.78rem;
+  color: var(--warning-600);
+  background: var(--warning-50);
+  border: 1px solid var(--warning-100);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
 }
 
 .input {
@@ -198,11 +304,7 @@ function runCalification() {
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md); font-size: 0.875rem;
 }
-
-.alert--error {
-  background: var(--error-50); color: var(--error-700);
-  border: 1px solid var(--error-200);
-}
+.alert--error { background: var(--error-50); color: var(--error-600); border: 1px solid var(--error-100); }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center;

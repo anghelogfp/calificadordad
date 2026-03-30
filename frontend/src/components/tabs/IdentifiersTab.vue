@@ -24,6 +24,15 @@ const emit = defineEmits(['update:subTab'])
 
 const identifiers = reactive(props.identifiers)
 
+function confirmRemoveSelected() {
+  const count = identifiers.totalSelected
+  if (!count) return
+  if (confirm(`¿Eliminar ${count} registro(s) seleccionado(s)?`)) identifiers.removeSelected()
+}
+function confirmClearAll() {
+  if (confirm('¿Limpiar todos los identificadores?')) identifiers.clearAllIdentifiers()
+}
+
 const tableColumns = [
   { key: 'lectura', label: 'N° lectura' },
   { key: 'dni', label: 'DNI', maxlength: 8 },
@@ -91,6 +100,7 @@ function getRowClass(row) {
       search-placeholder="Buscar por DNI, lectura, litho u observaciones"
       :total-rows="identifiers.totalRows"
       :filtered-count="identifiers.totalFiltered"
+      :selected-count="identifiers.totalSelected"
     >
       <template #actions>
         <button type="button" class="btn" @click="identifiers.exportIdentifiersToExcel" :disabled="!identifiers.identifierHasData">
@@ -112,13 +122,13 @@ function getRowClass(row) {
           </span>
           Observaciones PDF
         </button>
-        <button type="button" class="btn" @click="identifiers.clearAllIdentifiers" :disabled="!identifiers.identifierHasData">
+        <button type="button" class="btn" @click="confirmClearAll" :disabled="!identifiers.identifierHasData">
           Limpiar tabla
         </button>
         <button
           type="button"
           class="btn btn--danger"
-          @click="identifiers.removeSelected"
+          @click="confirmRemoveSelected"
           :disabled="!identifiers.totalSelected"
         >
           Eliminar seleccionados ({{ identifiers.totalSelected }})
@@ -145,10 +155,12 @@ function getRowClass(row) {
         :editing="identifiers.editing"
         :is-all-selected="identifiers.isAllVisibleSelected"
         :is-indeterminate="identifiers.isSomeVisibleSelected"
+        :selected-count="identifiers.totalSelected"
         :row-class="getRowClass"
         @toggle-selection="identifiers.toggleSelection"
         @toggle-select-all="identifiers.toggleSelectAll"
         @toggle-edit="identifiers.toggleEdit"
+        @cancel-edit="identifiers.toggleEdit"
         @remove-row="identifiers.removeRow"
       />
 

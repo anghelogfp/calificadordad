@@ -24,6 +24,15 @@ const emit = defineEmits(['update:subTab'])
 
 const responses = reactive(props.responses)
 
+function confirmRemoveSelected() {
+  const count = responses.totalSelected
+  if (!count) return
+  if (confirm(`¿Eliminar ${count} registro(s) seleccionado(s)?`)) responses.removeSelected()
+}
+function confirmClearAll() {
+  if (confirm('¿Limpiar todas las respuestas?')) responses.clearAllResponses()
+}
+
 const tableColumns = [
   { key: 'lectura', label: 'N° lectura' },
   { key: 'dni', label: 'DNI', maxlength: 8 },
@@ -93,6 +102,7 @@ function getRowClass(row) {
       search-placeholder="Buscar por DNI, litho o observaciones"
       :total-rows="responses.totalRows"
       :filtered-count="responses.filteredRows.length"
+      :selected-count="responses.totalSelected"
     >
       <template #actions>
         <button type="button" class="btn" @click="responses.exportResponsesToExcel" :disabled="!responses.responsesHasData">
@@ -114,13 +124,13 @@ function getRowClass(row) {
           </span>
           Observaciones PDF
         </button>
-        <button type="button" class="btn" @click="responses.clearAllResponses" :disabled="!responses.responsesHasData">
+        <button type="button" class="btn" @click="confirmClearAll" :disabled="!responses.responsesHasData">
           Limpiar tabla
         </button>
         <button
           type="button"
           class="btn btn--danger"
-          @click="responses.removeSelected"
+          @click="confirmRemoveSelected"
           :disabled="!responses.totalSelected"
         >
           Eliminar seleccionados ({{ responses.totalSelected }})
@@ -147,10 +157,12 @@ function getRowClass(row) {
         :editing="responses.editing"
         :is-all-selected="responses.isAllVisibleSelected"
         :is-indeterminate="responses.isSomeVisibleSelected"
+        :selected-count="responses.totalSelected"
         :row-class="getRowClass"
         @toggle-selection="responses.toggleSelection"
         @toggle-select-all="responses.toggleSelectAll"
         @toggle-edit="responses.toggleEdit"
+        @cancel-edit="responses.toggleEdit"
         @remove-row="responses.removeRow"
       />
 
