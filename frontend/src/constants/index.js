@@ -44,6 +44,7 @@ export const ARCHIVE_COLUMNS = [
   { key: 'nombres', label: 'Nombres', placeholder: 'María Fernanda' },
   { key: 'observaciones', label: 'Observaciones', placeholder: 'Sin observaciones' },
   { key: 'area', label: 'Área', placeholder: 'Ingeniería' },
+  { key: 'programa', label: 'Programa de estudios', placeholder: 'Ing. Civil' },
 ]
 
 // Alias de claves para mapeo de columnas Excel
@@ -53,7 +54,8 @@ export const ARCHIVE_KEY_ALIASES = {
   materno: ['materno', 'apellido materno', 'ape_mat'],
   nombres: ['nombres', 'nombre', 'nombres completos'],
   observaciones: ['observaciones', 'observacione', 'obs'],
-  area: ['area', 'área', 'especialidad'],
+  area: ['area', 'área', 'especialidad', 'desarea', 'des_area', 'area_des', 'descripcion area', 'descripción área', 'areades', 'cod_area', 'codarea', 'area de postulacion', 'área de postulación'],
+  programa: ['programa', 'desprograma', 'des_programa', 'carrera', 'escuela', 'programa de estudios', 'prog'],
 }
 
 // Inicializar aliases completos
@@ -117,6 +119,7 @@ export const STORAGE_KEYS = Object.freeze({
   CONVOCATORIA: 'calificador-convocatoria',
   DAT_FORMAT: 'calificador-dat-format',
   VACANTES: 'calificador-vacantes',
+  VACANTES_PROGRAMA: 'calificador-vacantes-programa',
   HISTORY: 'calificador-historial',
   ACTIVE_PROCESS: 'calificador-proceso-activo',
 })

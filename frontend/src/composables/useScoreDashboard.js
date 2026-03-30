@@ -6,34 +6,12 @@ import { computed } from 'vue'
  */
 export function useScoreDashboard(calificationResults, areaByName) {
   /**
-   * Resultados con ranking y estado INGRESANTE por área
+   * Resultados ordenados globalmente. isIngresante y positionInPrograma
+   * ya vienen calculados por useCalification — no se recalculan aquí.
    */
   const rankedResults = computed(() => {
     if (!calificationResults.value?.length) return []
-
-    // Agrupar por área y ordenar dentro de cada área
-    const byArea = new Map()
-    calificationResults.value.forEach((row) => {
-      if (!byArea.has(row.area)) byArea.set(row.area, [])
-      byArea.get(row.area).push(row)
-    })
-
-    const ranked = []
-    byArea.forEach((rows, area) => {
-      const sorted = [...rows].sort((a, b) => b.score - a.score)
-      const areaData = areaByName?.value?.get(area)
-      const vacantes = areaData?.vacantes ?? 0
-
-      sorted.forEach((row, idx) => {
-        ranked.push({
-          ...row,
-          position: idx + 1,
-          isIngresante: vacantes > 0 && idx < vacantes,
-        })
-      })
-    })
-
-    return ranked
+    return [...calificationResults.value].sort((a, b) => b.score - a.score)
   })
 
   /**

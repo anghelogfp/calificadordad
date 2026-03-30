@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, watch } from 'vue'
+import { onMounted, ref, computed, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { TAB_KEYS, tabs, IDENTIFIER_SUBTABS, RESPONSES_SUBTABS, ANSWER_KEY_SUBTABS } from '@/constants'
 
@@ -11,6 +11,13 @@ import { useAnswerKeys } from '@/composables/useAnswerKeys'
 import { usePonderations } from '@/composables/usePonderations'
 import { useCalification } from '@/composables/useCalification'
 import { useHistory } from '@/composables/useHistory'
+import { useBackup } from '@/composables/useBackup'
+import { useConvocatoria } from '@/composables/useConvocatoria'
+import { useAreas } from '@/composables/useAreas'
+import { useDatFormat } from '@/composables/useDatFormat'
+import { useScoreDashboard } from '@/composables/useScoreDashboard'
+import { useExport } from '@/composables/useExport'
+import { useVacantesPrograma } from '@/composables/useVacantesPrograma'
 
 // Layout
 import AppHeader from '@/components/layout/AppHeader.vue'
@@ -26,7 +33,11 @@ import PonderationsTab from '@/components/tabs/PonderationsTab.vue'
 
 // Modals & Panels
 import CalificationModal from '@/components/modals/CalificationModal.vue'
+import BackupModal from '@/components/modals/BackupModal.vue'
 import HistoryPanel from '@/components/panels/HistoryPanel.vue'
+import ConvocatoriaPanel from '@/components/panels/ConvocatoriaPanel.vue'
+import DashboardPanel from '@/components/panels/DashboardPanel.vue'
+import ConfigPanel from '@/components/panels/ConfigPanel.vue'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NAVIGATION STATE
@@ -50,6 +61,12 @@ const responses = useResponses(
 const answerKeys = useAnswerKeys(archives.rows)
 const ponderations = usePonderations()
 const history = useHistory()
+const backup = useBackup()
+const convocatoria = useConvocatoria()
+const areas = useAreas(convocatoria.activeConvocatoria)
+const datFormat = useDatFormat(convocatoria.activeConvocatoria)
+const exporter = useExport()
+const vacantesPrograma = useVacantesPrograma()
 
 const calification = useCalification(
   archives.rows,
@@ -59,8 +76,32 @@ const calification = useCalification(
   ponderations.ponderationEntriesByArea,
   ponderations.ponderationTotalsByArea,
   responses.responsesByDni,
-  answerKeys.answerKeyLookupByAreaTipo
+  answerKeys.answerKeyLookupByAreaTipo,
+  areas.areaNames,
+  convocatoria.activeConvocatoriaId,
+  datFormat.formatConfig,
+  areas.areaByName,
+  vacantesPrograma.vacantesPrograma
 )
+
+const dashboard = useScoreDashboard(calification.calificationAllResults, areas.areaByName)
+const showDashboardPanel = ref(false)
+const showConfigPanel = ref(false)
+
+// Programas disponibles agrupados por área, derivados del padrón cargado
+const programasByArea = computed(() => {
+  const map = new Map()
+  archives.rows.value.forEach((row) => {
+    const area = row.area?.trim() || 'Sin área'
+    const prog = row.programa?.trim()
+    if (!prog) return
+    if (!map.has(area)) map.set(area, new Set())
+    map.get(area).add(prog)
+  })
+  const result = new Map()
+  map.forEach((set, area) => result.set(area, Array.from(set).sort()))
+  return result
+})
 
 // ═══════════════════════════════════════════════════════════════════════════
 // WATCHERS
@@ -139,8 +180,8 @@ function getStepDescription(key) {
     return n > 0 ? `${n} ponderaciones` : 'Sin configurar'
   }
   if (key === TAB_KEYS.RESULTS || key === TAB_KEYS.SCORES) {
-    const areas = calification.processAreas.value
-    return areas.length > 0 ? `${areas.length} área(s) calculada(s)` : 'Sin calificar'
+    const processAreas = calification.processAreas.value
+    return processAreas.length > 0 ? `${processAreas.length} área(s) calculada(s)` : 'Sin calificar'
   }
   return ''
 }
@@ -151,15 +192,19 @@ function getStepDescription(key) {
 
 onMounted(async () => {
   await ponderations.initializePonderations()
+  convocatoria.fetchConvocatorias()
 })
 </script>
 
 <template>
   <div class="app-layout">
     <AppHeader
+      :convocatoria="convocatoria.activeConvocatoria.value"
       :history-count="history.historyList.value.length"
-      @open-backup="() => {}"
+      @open-backup="backup.showModal.value = true"
+      @open-convocatoria="convocatoria.showPanel.value = true"
       @open-history="history.openHistoryPanel"
+      @open-config="showConfigPanel = true"
     />
 
     <StepNav
@@ -207,8 +252,12 @@ onMounted(async () => {
         v-else-if="activeTab === TAB_KEYS.SCORES"
         :calification="calification"
         :ponderations="ponderations"
+        :dashboard="dashboard"
+        :exporter="exporter"
+        :convocatoria-name="convocatoria.activeConvocatoriaName.value"
         :on-save-to-history="saveToHistory"
         @open-modal="calification.openCalificationModal"
+        @open-dashboard="showDashboardPanel = true"
       />
     </main>
 
@@ -218,12 +267,38 @@ onMounted(async () => {
       @close="calification.closeCalificationModal"
     />
 
+    <BackupModal
+      :show="backup.showModal.value"
+      :backup="backup"
+      @close="backup.showModal.value = false"
+    />
+
     <HistoryPanel
       :show="history.showHistoryPanel.value"
       :history-list="history.historyList.value"
       @close="history.closeHistoryPanel"
       @load-process="handleLoadProcess"
       @delete-process="history.deleteProcess"
+    />
+
+    <ConvocatoriaPanel
+      :convocatoria="convocatoria"
+      @close="convocatoria.showPanel.value = false"
+    />
+
+    <DashboardPanel
+      :show="showDashboardPanel"
+      :dashboard="dashboard"
+      @close="showDashboardPanel = false"
+    />
+
+    <ConfigPanel
+      :show="showConfigPanel"
+      :programas-by-area="programasByArea"
+      :vacantes-programa="vacantesPrograma"
+      :dat-format="datFormat"
+      :convocatoria-id="convocatoria.activeConvocatoriaId.value"
+      @close="showConfigPanel = false"
     />
   </div>
 </template>

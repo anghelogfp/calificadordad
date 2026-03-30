@@ -30,12 +30,12 @@ export function useExport() {
       const sheet = workbook.addWorksheet(area)
 
       // Encabezado institucional
-      sheet.mergeCells('A1:H1')
+      sheet.mergeCells('A1:I1')
       sheet.getCell('A1').value = 'Universidad Nacional del Altiplano - Puno'
       sheet.getCell('A1').font = { bold: true, size: 14 }
       sheet.getCell('A1').alignment = { horizontal: 'center' }
 
-      sheet.mergeCells('A2:H2')
+      sheet.mergeCells('A2:I2')
       sheet.getCell('A2').value = `Resultados de Calificación - ${convocatoriaName} - Área: ${area}`
       sheet.getCell('A2').font = { size: 11 }
       sheet.getCell('A2').alignment = { horizontal: 'center' }
@@ -45,7 +45,7 @@ export function useExport() {
       // Cabeceras
       const headerRow = sheet.addRow([
         'Posición', 'DNI', 'Apellido Paterno', 'Apellido Materno', 'Nombres',
-        'Área', 'Puntaje', 'Estado',
+        'Programa de Estudios', 'Área', 'Puntaje', 'Estado',
       ])
       headerRow.eachCell((cell) => {
         cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
@@ -65,6 +65,7 @@ export function useExport() {
           row.paterno || '',
           row.materno || '',
           row.nombres || '',
+          row.programa || '',
           row.area,
           row.score,
           row.isIngresante ? 'INGRESANTE' : 'NO INGRESANTE',
@@ -81,9 +82,9 @@ export function useExport() {
         }
 
         // Score en negrita
-        dataRow.getCell(7).font = { bold: true }
+        dataRow.getCell(8).font = { bold: true }
         // Estado con color
-        const estadoCell = dataRow.getCell(8)
+        const estadoCell = dataRow.getCell(9)
         estadoCell.font = {
           bold: true,
           color: { argb: row.isIngresante ? 'FF155724' : 'FF721C24' },
@@ -93,7 +94,7 @@ export function useExport() {
       // Anchos de columna
       sheet.columns = [
         { width: 10 }, { width: 12 }, { width: 20 }, { width: 20 }, { width: 25 },
-        { width: 15 }, { width: 12 }, { width: 16 },
+        { width: 30 }, { width: 15 }, { width: 12 }, { width: 16 },
       ]
     })
 
@@ -144,34 +145,37 @@ export function useExport() {
       // Tabla
       autoTable(doc, {
         startY: 40,
-        head: [['#', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Puntaje', 'Estado']],
+        head: [['#', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Programa', 'Puntaje', 'Estado']],
         body: rows.map((row) => [
           row.position,
           row.dni,
           row.paterno || '',
           row.materno || '',
           row.nombres || '',
+          row.programa || '',
           row.score.toFixed(2),
           row.isIngresante ? 'INGRESANTE' : 'NO INGRESANTE',
         ]),
-        headStyles: { fillColor: [30, 58, 95], textColor: 255, fontStyle: 'bold', fontSize: 8 },
-        bodyStyles: { fontSize: 8 },
-        columnStyles: { 0: { halign: 'center', cellWidth: 10 }, 5: { halign: 'center' }, 6: { halign: 'center' } },
+        headStyles: { fillColor: [30, 58, 95], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+        bodyStyles: { fontSize: 7 },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 10 },
+          6: { halign: 'center', cellWidth: 18 },
+          7: { halign: 'center', cellWidth: 24 },
+        },
         didParseCell: (data) => {
-          if (data.section === 'body' && data.column.index === 6) {
+          if (data.section === 'body' && data.column.index === 7) {
             const isIng = data.cell.raw === 'INGRESANTE'
             data.cell.styles.textColor = isIng ? [21, 87, 36] : [114, 28, 36]
             data.cell.styles.fontStyle = 'bold'
             if (isIng) {
-              data.row.cells[0].styles.fillColor = [212, 237, 218]
-              // Colorear toda la fila
               Object.values(data.row.cells).forEach((cell) => {
                 cell.styles.fillColor = [212, 237, 218]
               })
             }
           }
         },
-        margin: { left: 10, right: 10 },
+        margin: { left: 8, right: 8 },
       })
     })
 

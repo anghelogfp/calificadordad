@@ -1,7 +1,7 @@
 # Calificador DAD — Documentación del Sistema
 
-> Última actualización: 2026-03-27
-> Estado: Funcional. Próxima tarea: refactor de ponderaciones con sistema de plantillas nombradas.
+> Última actualización: 2026-03-30
+> Estado: Funcional con mejoras A+C+D+E implementadas. Próxima tarea: B — Sistema de Plantillas de Ponderación.
 
 ---
 
@@ -92,7 +92,11 @@ calificadordad/
         │   ├── modals/
         │   │   ├── CalificationModal.vue   — modal para configurar y ejecutar calificación
         │   │   └── BackupModal.vue         — modal de backup
-        │   ├── panels/                     — paneles adicionales
+        │   ├── panels/
+        │   │   ├── HistoryPanel.vue        — historial de procesos guardados
+        │   │   ├── ConvocatoriaPanel.vue   — gestión de convocatoria activa
+        │   │   ├── DashboardPanel.vue      — estadísticas globales y distribución de puntajes (CSS histogram)
+        │   │   └── ConfigPanel.vue         — vacantes por programa de estudios + configuración formato .dat
         │   └── shared/
         │       ├── DataTable.vue           — tabla reutilizable con selección y edición
         │       ├── StepInfoCard.vue        — tarjeta de información del paso
@@ -157,8 +161,9 @@ GET/POST   /api/areas/
 
 ```
 Paso 1 — Padrón Excel
-  → Carga archivo .xlsx con columnas: DNI, apellido paterno, apellido materno, nombres, observaciones, área
-  → Mapeo flexible de columnas con aliases
+  → Carga archivo .xlsx con columnas: DNI, ap. paterno, ap. materno, nombres, observaciones, área, programa
+  → Columna "programa" (programa de estudios) mapea aliases: desprograma, des_programa, carrera, escuela, prog, etc.
+  → Mapeo flexible de columnas con aliases en ARCHIVE_KEY_ALIASES (constants/index.js)
   → Almacena en localStorage (STORAGE_KEYS.ARCHIVE)
 
 Paso 2 — Identificadores (.dat)
@@ -186,7 +191,11 @@ Paso 5 — Ponderaciones
 Paso 6 — Calificación
   → Abre modal: selecciona área a calificar + ponderación a aplicar + valores (correcta/incorrecta/blanco)
   → Motor: para cada postulante del área, busca sus respuestas, las compara con la clave, aplica pesos
+  → Ranking por programa: agrupa postulantes por programa de estudios, ordena por puntaje dentro
+    de cada grupo y marca como ingresante según las vacantes configuradas en ConfigPanel
+  → Cada resultado incluye: position (global), positionInPrograma, isIngresante, programa
   → Genera tabla de puntajes ordenada de mayor a menor
+  → Columna Estado (INGRESANTE / NO INGRESANTE) visible cuando hay vacantes configuradas
   → Almacena resultados en localStorage
 ```
 
@@ -263,7 +272,7 @@ getStepDescription(key) → string (ej: '45 postulantes' o 'Sin cargar')
 'calificador-calification-config'→ { [area]: { correctValue, incorrectValue, blankValue } }
 'calificador-convocatoria'       → ID de convocatoria activa
 'calificador-dat-format'         → configuración del formato .dat
-'calificador-vacantes'           → vacantes por área
+'calificador-vacantes-programa'  → vacantes por programa de estudios { [nombrePrograma]: number }
 ```
 
 ---
@@ -281,8 +290,14 @@ Para cada postulante del área seleccionada:
        si responseChar es A-E pero ≠ correctChar → total += incorrectValue * weight
        si responseChar es blanco/inválido → total += blankValue * weight
   5. score = round(total, 2)
+  6. Cada resultado incluye campo "programa" (leído del padrón)
 
-Ordena resultados de mayor a menor puntaje
+Ranking por programa (post-score):
+  - Agrupa resultados por programa de estudios
+  - Dentro de cada grupo: ordena por score desc, asigna positionInPrograma (1, 2, 3...)
+  - isIngresante = positionInPrograma <= vacantesPrograma[programa] (si cupo > 0)
+  - Luego aplana y ordena globalmente por score desc, asigna position global (1, 2, 3...)
+
 Genera summary: área, timestamp, totalCandidates, missingResponses, missingKeys, unlinkedResponses
 ```
 
@@ -321,11 +336,46 @@ Total              60 pregs
 
 ---
 
-## Próxima mejora planeada: Sistema de Plantillas de Ponderación
+## Mejoras implementadas (sesión 2026-03-27 / 2026-03-30)
+
+### A — Gaps funcionales corregidos
+- `useCalification` recibe ahora 13 parámetros: `archives.rows`, `responses.rows`, `answerKeys.rows`, `ponderations.ponderationRows`, `ponderations.ponderationEntriesByArea`, `ponderations.ponderationTotalsByArea`, `responses.responsesByDni`, `answerKeys.answerKeyLookupByAreaTipo`, `areas.areaNames`, `convocatoria.activeConvocatoriaId`, `datFormat.formatConfig`, `areas.areaByName`, `vacantesPrograma.vacantesPrograma`
+- Watcher en `App.vue` que re-aplica datos de identificadores a respuestas cuando cualquiera de los dos cambia
+- `convocatoria.fetchConvocatorias()` llamado en `onMounted`
+
+### C — UX de resultados mejorada (ScoresTab)
+- Panel de estadísticas con 6 tarjetas (total, ingresantes, no ingresantes, máx, promedio, mín)
+- Filas ingresantes resaltadas en verde, badge de puntaje verde para ingresantes
+- Columna Estado (INGRESANTE / NO INGRESANTE) visible solo cuando hay vacantes configuradas
+- Confirmaciones inline en vez de `confirm()` del browser (banner amarillo con Cancelar/Confirmar)
+- Botones de exportación Excel y PDF
+- Botón "Estadísticas" que abre DashboardPanel
+
+### D — DashboardPanel (nuevo)
+- Panel slide-in desde la derecha (480px)
+- Tarjetas de resumen global: total, ingresantes, no ingresantes, promedio, máx, mín
+- Tabla de comparación por área
+- Histograma de distribución de puntajes en buckets de 10 — implementado con CSS puro (sin librería de charts)
+- Barras con hover interactivo (azul → dorado)
+
+### E — Configuración global (ConfigPanel + vacantes por programa)
+- **ConfigPanel** (nuevo panel): dos secciones
+  1. Vacantes por programa de estudios — programas leídos automáticamente del padrón cargado, agrupados por área
+  2. Formato del archivo .dat — grid con offsets y longitudes configurables, botón guardar/restaurar
+- **`useVacantesPrograma`** (nuevo composable): persiste `{ [nombrePrograma]: number }` en localStorage
+- **Campo `programa`** agregado al padrón (alias `desprograma`, `carrera`, `escuela`, etc.)
+- **Ranking por programa**: en `useCalification`, post-scoring, agrupa por programa, rankea dentro de cada grupo, asigna `isIngresante` según cupo del programa
+- **Columna Programa** en tabla de resultados (ScoresTab) entre Nombres y Puntaje
+- **`useScoreDashboard`** simplificado: no recalcula `isIngresante`, confía en el valor pre-computado de `useCalification`
+- **AppHeader**: botón de engranaje que emite `open-config`
+
+---
+
+## Próxima mejora planeada: B — Sistema de Plantillas de Ponderación
 
 ### Problema actual
 
-El sistema tiene **una única configuración de ponderación por área**. No se pueden guardar múltiples "recetas" ni reutilizarlas entre convocatorias.
+El sistema actualmente tiene **una única configuración de ponderación por área**. No se pueden guardar múltiples "recetas" ni reutilizarlas entre convocatorias.
 
 ### Concepto
 

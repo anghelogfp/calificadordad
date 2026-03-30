@@ -32,7 +32,8 @@ export function useCalification(
   areaNames,
   activeConvocatoriaId,
   formatConfig,
-  areaByName
+  areaByName,
+  vacantesPrograma
 ) {
   const effectiveAreaNames = computed(() =>
     areaNames?.value?.length ? areaNames.value : ANSWER_KEY_AREAS
@@ -392,13 +393,34 @@ export function useCalification(
         materno: candidate.materno || '',
         nombres: candidate.nombres || '',
         area,
+        programa: candidate.programa || '',
         score: Math.round(total * 100) / 100,
         position: 0,
+        positionInPrograma: 0,
         isIngresante: false,
       })
     })
 
+    // Rankear dentro de cada programa y asignar isIngresante por cupo
+    const byPrograma = new Map()
+    processedResults.forEach((r) => {
+      const prog = r.programa || ''
+      if (!byPrograma.has(prog)) byPrograma.set(prog, [])
+      byPrograma.get(prog).push(r)
+    })
+
+    byPrograma.forEach((rows, prog) => {
+      rows.sort((a, b) => b.score - a.score)
+      const cupo = vacantesPrograma?.value?.[prog] ?? 0
+      rows.forEach((r, i) => {
+        r.positionInPrograma = i + 1
+        r.isIngresante = cupo > 0 && r.positionInPrograma <= cupo
+      })
+    })
+
+    // Orden global por puntaje para la tabla
     processedResults.sort((a, b) => b.score - a.score)
+    processedResults.forEach((r, i) => { r.position = i + 1 })
 
     const unlinkedResponses = responsesRows.value.filter(
       (r) => !r.dni || r.dni.trim() === ''
