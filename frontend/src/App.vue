@@ -72,9 +72,7 @@ const calification = useCalification(
   archives.rows,
   responses.rows,
   answerKeys.rows,
-  ponderations.ponderationRows,
-  ponderations.ponderationEntriesByArea,
-  ponderations.ponderationTotalsByArea,
+  ponderations,
   responses.responsesByDni,
   answerKeys.answerKeyLookupByAreaTipo,
   areas.areaNames,
@@ -176,8 +174,8 @@ function getStepDescription(key) {
     return n > 0 ? `${n} claves` : 'Sin cargar'
   }
   if (key === TAB_KEYS.PONDERATIONS) {
-    const n = ponderations.ponderationRows.value.length
-    return n > 0 ? `${n} ponderaciones` : 'Sin configurar'
+    const n = ponderations.plantillas.value.length
+    return n > 0 ? `${n} plantilla${n !== 1 ? 's' : ''}` : 'Sin configurar'
   }
   if (key === TAB_KEYS.RESULTS || key === TAB_KEYS.SCORES) {
     const processAreas = calification.processAreas.value
@@ -246,6 +244,7 @@ onMounted(async () => {
       <PonderationsTab
         v-else-if="activeTab === TAB_KEYS.PONDERATIONS"
         :ponderations="ponderations"
+        :answers-length="datFormat.formatConfig.value?.answersLength ?? 60"
       />
 
       <ScoresTab

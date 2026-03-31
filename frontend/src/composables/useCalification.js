@@ -24,9 +24,7 @@ export function useCalification(
   archiveRows,
   responsesRows,
   answerKeyRows,
-  ponderationRows,
-  ponderationEntriesByArea,
-  ponderationTotalsByArea,
+  ponderationsComposable,      // resultado de usePonderations() — reemplaza los 3 parámetros anteriores
   responsesByDni,
   answerKeyLookupByAreaTipo,
   areaNames,
@@ -52,10 +50,8 @@ export function useCalification(
     areas: {},
   })
 
-  // Nombre editable del proceso (sincronizado con activeProcess)
   const processName = ref(activeProcess.value.name || '')
 
-  // Área actualmente mostrada en la tabla de resultados
   const calificationDisplayArea = ref(
     Object.keys(activeProcess.value.areas || {})[0] || null
   )
@@ -66,11 +62,10 @@ export function useCalification(
 
   const showCalificationModal = ref(false)
   const calificationArea = ref(effectiveAreaNames.value[0] ?? ANSWER_KEY_AREAS[0])
-  const calificationPonderationArea = ref(effectiveAreaNames.value[0] ?? ANSWER_KEY_AREAS[0])
+  const calificationPlantillaId = ref(null)   // reemplaza calificationPonderationArea
   const calificationError = ref('')
   const calificationSearch = ref('')
 
-  // Valores de calificación persistidos por área
   const calificationConfigStorage = useStorage('calificador-calification-config', {})
 
   function getConfigForArea(area) {
@@ -91,28 +86,23 @@ export function useCalification(
   const calificationCorrectValue = ref(10)
   const calificationIncorrectValue = ref(0)
   const calificationBlankValue = ref(2)
-  const simpleMode = ref(false)
 
   // ═══════════════════════════════════════════════════════════════════════════
   // RESULTADOS REACTIVOS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // Áreas con resultados en el proceso activo
   const processAreas = computed(() => Object.keys(activeProcess.value.areas || {}))
 
-  // Resultados del área actualmente seleccionada (para la tabla)
   const calificationResults = computed(() => {
     const area = calificationDisplayArea.value
     return area ? (activeProcess.value.areas[area]?.results || []) : []
   })
 
-  // Resumen del área actualmente seleccionada
   const calificationSummary = computed(() => {
     const area = calificationDisplayArea.value
     return area ? (activeProcess.value.areas[area]?.summary || null) : null
   })
 
-  // Todos los resultados combinados de todas las áreas (para dashboard)
   const calificationAllResults = computed(() =>
     Object.values(activeProcess.value.areas || {}).flatMap(a => a.results || [])
   )
@@ -132,39 +122,38 @@ export function useCalification(
     )
   })
 
-  const ponderationAreaList = computed(() => {
-    const areas = new Set(effectiveAreaNames.value)
-    ponderationRows.value.forEach((row) => areas.add(normalizeArea(row.area, effectiveAreaNames.value)))
-    return Array.from(areas)
+  // Plantillas disponibles para el área actualmente seleccionada en el modal
+  const availablePlantillas = computed(() => {
+    const area = normalizeArea(calificationArea.value, effectiveAreaNames.value)
+    return ponderationsComposable.getPlantillasForCalification(area)
   })
 
+  const selectedCalificationPlantilla = computed(() =>
+    ponderationsComposable.getPlantillaById(calificationPlantillaId.value)
+  )
+
   const selectedPonderationTotals = computed(() => {
-    const area = normalizeArea(calificationPonderationArea.value, effectiveAreaNames.value)
-    const entry = ponderationTotalsByArea.value.get(area)
+    const plantilla = selectedCalificationPlantilla.value
+    if (!plantilla) return { questions: 0, weight: 0 }
+    const items = plantilla.items || []
     return {
-      questions: entry?.questions ?? 0,
-      weight: entry?.weight ?? 0,
+      questions: plantilla.questionTotal || 0,
+      weight: items.reduce((a, i) => a + Number(i.ponderation) * Number(i.questionCount), 0),
     }
   })
 
-  const selectedPonderationPlan = computed(() => {
-    const area = normalizeArea(calificationPonderationArea.value, effectiveAreaNames.value)
-    return ponderationEntriesByArea.value.get(area) || []
-  })
-
-  const calificationAreaOptions = computed(() => ponderationAreaList.value)
+  const calificationAreaOptions = computed(() => effectiveAreaNames.value)
   const calificationHasResults = computed(() => processAreas.value.length > 0)
-  const selectedPonderationIsReady = computed(() =>
-    selectedPonderationTotals.value.questions === effectiveAnswersLength.value
-  )
+
+  const selectedPonderationIsReady = computed(() => {
+    const plantilla = selectedCalificationPlantilla.value
+    return plantilla?.questionTotal === effectiveAnswersLength.value
+  })
 
   const canCalify = computed(() =>
     responsesRows.value.length > 0 &&
     answerKeyRows.value.length > 0 &&
-    (simpleMode.value || (
-      ponderationRows.value.length > 0 &&
-      selectedPonderationIsReady.value
-    ))
+    ponderationsComposable.plantillas.value.length > 0
   )
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -178,54 +167,53 @@ export function useCalification(
     calificationCorrectValue.value = cfg.correctValue
     calificationIncorrectValue.value = cfg.incorrectValue
     calificationBlankValue.value = cfg.blankValue
-    if (!ponderationEntriesByArea.value.has(calificationPonderationArea.value)) {
-      calificationPonderationArea.value = normalized
+
+    // Si la plantilla seleccionada no aplica al nuevo área, auto-seleccionar una válida
+    const available = ponderationsComposable.getPlantillasForCalification(normalized)
+    const currentStillValid = calificationPlantillaId.value &&
+      available.find(p => p.id === calificationPlantillaId.value)
+    if (!currentStillValid && available.length > 0) {
+      const readyFirst = available.find(p => p.questionTotal === effectiveAnswersLength.value)
+      calificationPlantillaId.value = readyFirst?.id || available[0].id
     }
   })
 
-  // Sync processName with active process
   watch(() => activeProcess.value.name, (name) => {
     processName.value = name || ''
   })
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // MÉTODOS - MODAL
+  // MÉTODOS — MODAL
   // ═══════════════════════════════════════════════════════════════════════════
 
   function openCalificationModal() {
     if (!canCalify.value) {
-      calificationError.value = 'Necesitas cargar respuestas, claves y ponderaciones antes de calificar.'
+      calificationError.value = 'Necesitas cargar respuestas y claves antes de calificar.'
       return
     }
 
-    const areas = calificationAreaOptions.value
-    const readyAreas = areas.filter((areaOption) => {
-      const entry = ponderationTotalsByArea.value.get(areaOption)
-      return entry?.questions === effectiveAnswersLength.value
-    })
+    const area = normalizeArea(calificationArea.value, effectiveAreaNames.value)
+    const available = ponderationsComposable.getPlantillasForCalification(area)
 
-    if (!readyAreas.length) {
-      calificationError.value = `Completa las ${effectiveAnswersLength.value} preguntas para el área antes de calificar.`
+    if (!available.length) {
+      calificationError.value = `No hay plantillas configuradas para el área ${area}.`
       return
     }
 
-    const preferredArea =
-      calificationArea.value && readyAreas.includes(calificationArea.value)
-        ? calificationArea.value
-        : readyAreas[0]
+    const currentStillValid = calificationPlantillaId.value &&
+      available.find(p => p.id === calificationPlantillaId.value)
 
-    calificationArea.value = preferredArea
-    calificationPonderationArea.value = readyAreas.includes(calificationPonderationArea.value)
-      ? calificationPonderationArea.value
-      : preferredArea
+    if (!currentStillValid) {
+      const readyFirst = available.find(p => p.questionTotal === effectiveAnswersLength.value)
+      calificationPlantillaId.value = readyFirst?.id || available[0].id
+    }
 
-    initConfigForArea(preferredArea)
-    const cfg = getConfigForArea(preferredArea)
+    initConfigForArea(area)
+    const cfg = getConfigForArea(area)
     calificationCorrectValue.value = cfg.correctValue
     calificationIncorrectValue.value = cfg.incorrectValue
     calificationBlankValue.value = cfg.blankValue
 
-    // Sugerir nombre si el proceso aún no tiene nombre
     if (!processName.value) {
       processName.value = generateDefaultName()
     }
@@ -239,7 +227,7 @@ export function useCalification(
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // MÉTODOS - PROCESO
+  // MÉTODOS — PROCESO
   // ═══════════════════════════════════════════════════════════════════════════
 
   function startNewProcess() {
@@ -272,7 +260,7 @@ export function useCalification(
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // MÉTODOS - API
+  // MÉTODOS — API
   // ═══════════════════════════════════════════════════════════════════════════
 
   async function saveCalificationConfigToAPI(area, correctValue, incorrectValue, blankValue) {
@@ -290,7 +278,7 @@ export function useCalification(
         }),
       })
     } catch {
-      // No crítico, ya está guardado localmente
+      // No crítico, ya guardado localmente
     }
   }
 
@@ -300,24 +288,20 @@ export function useCalification(
 
   function runCalification() {
     calificationError.value = ''
-    const area = normalizeArea(calificationArea.value, effectiveAreaNames.value)
-    const ponderationArea = normalizeArea(calificationPonderationArea.value, effectiveAreaNames.value)
-    const answersLength = effectiveAnswersLength.value
-    let plan
 
-    if (simpleMode.value) {
-      plan = Array.from({ length: answersLength }, () => ({ weight: 1 }))
-    } else {
-      const entries = ponderationEntriesByArea.value.get(ponderationArea) || []
-      if (!entries.length) {
-        calificationError.value = 'No hay ponderaciones registradas para el área seleccionada.'
-        return
-      }
-      plan = buildQuestionPlan(entries)
-      if (plan.length !== answersLength) {
-        calificationError.value = `Las ponderaciones cubren ${plan.length} preguntas. Deben sumar ${answersLength}.`
-        return
-      }
+    const area = normalizeArea(calificationArea.value, effectiveAreaNames.value)
+    const answersLength = effectiveAnswersLength.value
+
+    const plantilla = ponderationsComposable.getPlantillaById(calificationPlantillaId.value)
+    if (!plantilla) {
+      calificationError.value = 'Selecciona una plantilla de ponderación.'
+      return
+    }
+
+    const plan = buildQuestionPlan(plantilla.items)
+    if (plan.length !== answersLength) {
+      calificationError.value = `La plantilla "${plantilla.name}" cubre ${plan.length} preguntas. Deben sumar ${answersLength}.`
+      return
     }
 
     const totalWeight = plan.reduce((acc, item) => acc + (Number(item.weight) || 0), 0)
@@ -370,11 +354,10 @@ export function useCalification(
 
         const responseChar = answers[index] || ' '
         const correctChar = correctAnswers[index] || ' '
-        let contribution = 0
-
         const isCorrectCharValid = /^[A-E]$/.test(correctChar)
         const isResponseCharValid = /^[A-E]$/.test(responseChar)
 
+        let contribution = 0
         if (isCorrectCharValid && isResponseCharValid && responseChar === correctChar) {
           contribution = correctValue * weight
         } else if (isResponseCharValid) {
@@ -401,7 +384,7 @@ export function useCalification(
       })
     })
 
-    // Rankear dentro de cada programa y asignar isIngresante por cupo
+    // Ranking por programa con cupos
     const byPrograma = new Map()
     processedResults.forEach((r) => {
       const prog = r.programa || ''
@@ -418,13 +401,19 @@ export function useCalification(
       })
     })
 
-    // Orden global por puntaje para la tabla
     processedResults.sort((a, b) => b.score - a.score)
     processedResults.forEach((r, i) => { r.position = i + 1 })
 
     const unlinkedResponses = responsesRows.value.filter(
       (r) => !r.dni || r.dni.trim() === ''
     ).length
+
+    // Snapshot de plantilla para trazabilidad histórica
+    const plantillaSnapshot = (plantilla.items || []).map(i => ({
+      subject: i.subject,
+      questionCount: i.questionCount,
+      ponderation: i.ponderation,
+    }))
 
     const summary = {
       area,
@@ -438,9 +427,11 @@ export function useCalification(
       correctValue,
       incorrectValue,
       blankValue,
+      plantillaId: plantilla.id,
+      plantillaName: plantilla.name,
+      plantillaSnapshot,
     }
 
-    // Crear proceso si no existe
     const currentId = activeProcess.value.id || generateId()
     const currentName = processName.value.trim() || generateDefaultName()
 
@@ -454,8 +445,6 @@ export function useCalification(
     }
 
     calificationDisplayArea.value = area
-
-    // Persistir configuración usada
     calificationConfigStorage.value[area] = { correctValue, incorrectValue, blankValue }
     saveCalificationConfigToAPI(area, correctValue, incorrectValue, blankValue)
 
@@ -465,9 +454,8 @@ export function useCalification(
   return {
     // Modal state
     showCalificationModal,
-    simpleMode,
     calificationArea,
-    calificationPonderationArea,
+    calificationPlantillaId,
     calificationCorrectValue,
     calificationIncorrectValue,
     calificationBlankValue,
@@ -486,11 +474,11 @@ export function useCalification(
     // Computed
     calificationAreaOptions,
     calificationHasResults,
+    availablePlantillas,
+    selectedCalificationPlantilla,
     selectedPonderationTotals,
-    selectedPonderationPlan,
     selectedPonderationIsReady,
     canCalify,
-    ponderationAreaList,
 
     // Methods
     openCalificationModal,

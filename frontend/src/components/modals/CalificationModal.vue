@@ -11,6 +11,11 @@ const emit = defineEmits(['close'])
 
 function close() { emit('close') }
 function runCalification() { props.calification.runCalification() }
+
+function plantillaOptionLabel(p) {
+  const ready = p.questionTotal === (calification.selectedPonderationTotals?.answersLength ?? p.questionTotal)
+  return `${p.name}  (${p.questionTotal} pregs ${p.area ? '' : '· General '}${ready ? '✓' : '✗'})`
+}
 </script>
 
 <template>
@@ -31,36 +36,6 @@ function runCalification() { props.calification.runCalification() }
 
         <form class="modal__body modal-form" @submit.prevent="runCalification">
 
-          <!-- Modo -->
-          <div class="mode-toggle">
-            <button
-              type="button"
-              class="mode-btn"
-              :class="{ 'mode-btn--active': !calification.simpleMode }"
-              @click="calification.simpleMode = false"
-            >
-              <svg viewBox="0 0 20 20" fill="currentColor">
-                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/>
-              </svg>
-              Modo Normal
-            </button>
-            <button
-              type="button"
-              class="mode-btn"
-              :class="{ 'mode-btn--active': calification.simpleMode }"
-              @click="calification.simpleMode = true"
-            >
-              <svg viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.381z" clip-rule="evenodd"/>
-              </svg>
-              Modo Simple
-            </button>
-          </div>
-
-          <div v-if="calification.simpleMode" class="simple-banner">
-            Puntaje directo: <strong>correcta × valor</strong>, sin ponderaciones por asignatura.
-          </div>
-
           <!-- Nombre del proceso -->
           <div class="field">
             <label for="process-name">
@@ -80,13 +55,12 @@ function runCalification() { props.calification.runCalification() }
 
           <div class="field-divider"></div>
 
-          <!-- Área -->
+          <!-- Área a calificar -->
           <div class="field">
             <label for="calification-area">Área a calificar</label>
             <select id="calification-area" v-model="calification.calificationArea" class="input" required>
               <option v-for="area in calification.calificationAreaOptions" :key="area" :value="area">
-                {{ area }}
-                <template v-if="calification.processAreas.includes(area)"> ✓ ya calculada</template>
+                {{ area }}{{ calification.processAreas.includes(area) ? ' ✓ ya calculada' : '' }}
               </option>
             </select>
             <span v-if="calification.processAreas.includes(calification.calificationArea)" class="field__warning">
@@ -94,17 +68,56 @@ function runCalification() { props.calification.runCalification() }
             </span>
           </div>
 
-          <!-- Ponderación (solo Modo Normal) -->
-          <div v-if="!calification.simpleMode" class="field">
-            <label for="calification-set">Ponderación a aplicar</label>
-            <select id="calification-set" v-model="calification.calificationPonderationArea" class="input" required>
-              <option v-for="area in calification.calificationAreaOptions" :key="area" :value="area">
-                {{ area }} ({{ calification.selectedPonderationTotals.questions }} preguntas)
+          <!-- Plantilla de ponderación -->
+          <div class="field">
+            <label for="calification-plantilla">
+              Plantilla de ponderación
+              <span class="field__hint">Receta de pesos por asignatura a aplicar</span>
+            </label>
+            <select
+              id="calification-plantilla"
+              v-model="calification.calificationPlantillaId"
+              class="input"
+              required
+            >
+              <option
+                v-for="p in calification.availablePlantillas"
+                :key="p.id"
+                :value="p.id"
+              >
+                {{ p.name }} ({{ p.questionTotal }} pregs{{ !p.area ? ' · General' : '' }})
               </option>
             </select>
+            <span v-if="!calification.availablePlantillas.length" class="field__warning">
+              No hay plantillas para esta área. Ve al Paso 5 para crearlas.
+            </span>
           </div>
 
-          <!-- Valores -->
+          <!-- Preview de la plantilla seleccionada -->
+          <div
+            v-if="calification.selectedCalificationPlantilla"
+            class="plantilla-preview"
+            :class="calification.selectedPonderationIsReady ? 'preview--ready' : 'preview--incomplete'"
+          >
+            <div class="preview__stat">
+              <span class="preview__label">Preguntas</span>
+              <span class="preview__value">{{ calification.selectedCalificationPlantilla.questionTotal }}</span>
+            </div>
+            <div class="preview__sep">·</div>
+            <div class="preview__stat">
+              <span class="preview__label">Asignaturas</span>
+              <span class="preview__value">{{ (calification.selectedCalificationPlantilla.items || []).length }}</span>
+            </div>
+            <div class="preview__sep">·</div>
+            <span
+              class="preview__badge"
+              :class="calification.selectedPonderationIsReady ? 'badge--ok' : 'badge--warn'"
+            >
+              {{ calification.selectedPonderationIsReady ? '✓ Lista' : '✗ Incompleta' }}
+            </span>
+          </div>
+
+          <!-- Valores de calificación -->
           <div class="scores-row">
             <div class="field">
               <label for="value-correct">Correcta</label>
@@ -120,8 +133,8 @@ function runCalification() { props.calification.runCalification() }
             </div>
           </div>
 
-          <div v-if="!calification.simpleMode && !calification.selectedPonderationIsReady" class="info-banner">
-            ⚠ Las ponderaciones del área no están completas. Ve al Paso 5 para configurarlas.
+          <div v-if="!calification.selectedPonderationIsReady && calification.selectedCalificationPlantilla" class="info-banner">
+            ⚠ La plantilla no está completa. Ve al Paso 5 para terminarla.
           </div>
 
           <div v-if="calification.calificationError" class="alert alert--error">
@@ -133,7 +146,7 @@ function runCalification() { props.calification.runCalification() }
             <button
               type="submit"
               class="btn btn--gold"
-              :disabled="!calification.simpleMode && !calification.selectedPonderationIsReady"
+              :disabled="!calification.selectedPonderationIsReady"
             >
               <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" clip-rule="evenodd"/>
@@ -162,7 +175,7 @@ function runCalification() { props.calification.runCalification() }
 .modal {
   background: white;
   border-radius: var(--radius-xl);
-  width: min(580px, 100%);
+  width: min(560px, 100%);
   display: flex; flex-direction: column;
   box-shadow: var(--shadow-xl);
   animation: scaleIn 0.3s ease-out;
@@ -194,62 +207,53 @@ function runCalification() { props.calification.runCalification() }
 .modal__close:hover { background: rgba(255,255,255,0.2); }
 
 .modal__body { padding: var(--space-6); overflow-y: auto; flex: 1; }
-
 .modal-form { display: flex; flex-direction: column; gap: var(--space-4); }
 
-.mode-toggle {
-  display: flex;
-  gap: var(--space-2);
-  background: var(--slate-100);
-  border-radius: var(--radius-lg);
-  padding: var(--space-1);
-}
-
-.mode-btn {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  background: transparent;
-  color: var(--slate-500);
-}
-
-.mode-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
-
-.mode-btn--active {
-  background: white;
-  color: var(--unap-blue-700);
-  box-shadow: var(--shadow-sm);
-}
-
-.simple-banner {
-  padding: var(--space-3) var(--space-4);
-  background: linear-gradient(135deg, #fefdf0 0%, #fef9e7 100%);
-  border: 1px solid var(--unap-gold-300, #d4af37);
-  border-radius: var(--radius-md);
-  font-size: 0.875rem;
-  color: var(--unap-blue-800);
-}
-
-.field-divider {
-  height: 1px;
-  background: var(--slate-200);
-  margin: var(--space-1) 0;
-}
+.field-divider { height: 1px; background: var(--slate-200); margin: var(--space-1) 0; }
 
 .scores-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--space-3);
 }
+
+.plantilla-preview {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  border: 1px solid;
+}
+
+.preview--ready {
+  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+  border-color: #b8dacc;
+  color: #155724;
+}
+
+.preview--incomplete {
+  background: #fff3cd;
+  border-color: #ffc107;
+  color: #856404;
+}
+
+.preview__stat { display: flex; align-items: baseline; gap: var(--space-1); }
+.preview__label { font-size: 0.75rem; opacity: 0.7; }
+.preview__value { font-weight: 700; font-family: var(--font-mono); }
+.preview__sep { opacity: 0.4; }
+
+.preview__badge {
+  margin-left: auto;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.badge--ok { background: #155724; color: white; }
+.badge--warn { background: #856404; color: white; }
 
 .modal__footer {
   display: flex; justify-content: flex-end;
@@ -273,9 +277,9 @@ function runCalification() { props.calification.runCalification() }
 
 .field__warning {
   font-size: 0.78rem;
-  color: var(--warning-600);
-  background: var(--warning-50);
-  border: 1px solid var(--warning-100);
+  color: #856404;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
 }
@@ -300,10 +304,7 @@ function runCalification() { props.calification.runCalification() }
   font-size: 0.875rem;
 }
 
-.alert {
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md); font-size: 0.875rem;
-}
+.alert { padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); font-size: 0.875rem; }
 .alert--error { background: var(--error-50); color: var(--error-600); border: 1px solid var(--error-100); }
 
 .btn {
