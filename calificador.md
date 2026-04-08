@@ -1,7 +1,7 @@
 # Calificador DAD — Documentación del Sistema
 
-> Última actualización: 2026-03-31
-> Estado: Funcional. Mejoras A+B+C+D+E implementadas.
+> Última actualización: 2026-04-08
+> Estado: Funcional. Multi-usuario con autenticación JWT. Sidebar navigation implementado.
 
 ---
 
@@ -17,7 +17,7 @@ Procesa archivos `.dat` generados por lectores ópticos de hojas de respuestas, 
 2. Las respuestas se leen con un lector óptico → genera archivos `.dat`
 3. Hay **3 áreas** de postulantes: **Biomédicas**, **Sociales**, **Ingeniería** (cada una con su cuadernillo distinto)
 4. Cada asignatura tiene un peso diferente (ponderación) según el área
-5. El puntaje final = suma de (valor_correcta × peso) por pregunta acertada, etc.
+5. El puntaje final = suma de (valor_correcta × peso) por pregunta acertada
 
 ---
 
@@ -25,462 +25,19 @@ Procesa archivos `.dat` generados por lectores ópticos de hojas de respuestas, 
 
 ### Backend
 - **Django 6.0** + **Django REST Framework**
+- **djangorestframework-simplejwt** — autenticación JWT (access 8h, refresh 30d)
 - Base de datos: **SQLite** (desarrollo) — archivo `db.sqlite3` en `/backend/`
 - Servidor: `python manage.py runserver` → `http://localhost:8000`
 - Directorio: `backend/`
+- Apps: `usuarios`, `ponderaciones`, `convocatorias`, `resultados`
 
 ### Frontend
 - **Vue 3** con `<script setup>` (Composition API)
 - **Vite** como bundler
 - **@vueuse/core** para `useStorage` (persistencia en localStorage)
-- Sin router (SPA de una sola pantalla con tabs)
+- Sin router (SPA de una sola pantalla con navegación por estado)
 - Directorio: `frontend/`
 - Dev server: `npm run dev` → `http://localhost:5173`
-
----
-
-## Estructura de directorios
-
-```
-calificadordad/
-├── backend/
-│   ├── config/
-│   │   ├── settings.py          — configuración Django, CORS habilitado
-│   │   ├── api_urls.py          — enruta ponderaciones + convocatorias
-│   │   └── cors_middleware.py   — middleware CORS manual
-│   ├── ponderaciones/
-│   │   ├── models.py            — Ponderacion (legacy) + PlantillaPonderacion + PlantillaItem
-│   │   ├── serializers.py       — PonderacionSerializer + PlantillaItemSerializer + PlantillaPonderacionSerializer
-│   │   ├── views.py             — PonderacionViewSet + PlantillaPonderacionViewSet
-│   │   ├── urls.py              — router: ponderaciones + plantillas
-│   │   └── migrations/
-│   │       ├── 0001_initial.py
-│   │       ├── 0002_...
-│   │       └── 0003_plantillaponderacion_plantillaitem.py
-│   ├── convocatorias/
-│   │   ├── models.py            — Convocatoria, Area, CalificationConfig, DatFormatConfig
-│   │   ├── serializers.py
-│   │   ├── views.py
-│   │   └── urls.py
-│   └── manage.py
-│
-└── frontend/
-    └── src/
-        ├── App.vue                         — raíz: inicializa composables, renderiza tabs
-        ├── constants/index.js              — TAB_KEYS, tabs, STORAGE_KEYS, DEFAULT_PONDERATIONS, DEFAULT_DAT_FORMAT
-        ├── composables/
-        │   ├── useArchives.js              — padrón de postulantes (Excel)
-        │   ├── useIdentifiers.js           — identificadores .dat (litho→DNI)
-        │   ├── useResponses.js             — respuestas .dat (con lookup por DNI)
-        │   ├── useAnswerKeys.js            — claves de respuestas (área+tipo→respuestas)
-        │   ├── usePonderations.js          — sistema de plantillas de ponderación
-        │   ├── useCalification.js          — motor de calificación y resultados
-        │   ├── useTableState.js            — selección/edición de filas (writable computed + localStorage)
-        │   ├── useConvocatoria.js          — convocatoria activa
-        │   ├── useAreas.js                 — áreas desde API
-        │   ├── useDatFormat.js             — configuración de formato .dat
-        │   ├── useBackup.js                — backup/restore de estado
-        │   ├── useExport.js                — exportación de resultados
-        │   ├── useHistory.js               — historial de procesos guardados
-        │   ├── useScoreDashboard.js        — métricas del dashboard
-        │   └── useVacantesPrograma.js      — vacantes por programa de estudios
-        ├── components/
-        │   ├── layout/
-        │   │   ├── AppHeader.vue           — cabecera con logo UNAP
-        │   │   └── StepNav.vue             — navegación de pasos (recibe funciones como props)
-        │   ├── tabs/
-        │   │   ├── ArchivesTab.vue         — Paso 1: padrón Excel
-        │   │   ├── IdentifiersTab.vue      — Paso 2: identificadores .dat
-        │   │   ├── ResponsesTab.vue        — Paso 3: respuestas .dat
-        │   │   ├── AnswerKeysTab.vue       — Paso 4: claves de respuestas
-        │   │   ├── PonderationsTab.vue     — Paso 5: plantillas de ponderación (2 columnas)
-        │   │   └── ScoresTab.vue           — Paso 6: tabla de resultados
-        │   ├── modals/
-        │   │   ├── CalificationModal.vue   — modal para configurar y ejecutar calificación
-        │   │   └── BackupModal.vue         — modal de backup
-        │   ├── panels/
-        │   │   ├── HistoryPanel.vue        — historial de procesos guardados
-        │   │   ├── ConvocatoriaPanel.vue   — gestión de convocatoria activa
-        │   │   ├── DashboardPanel.vue      — estadísticas globales y distribución de puntajes (CSS histogram)
-        │   │   └── ConfigPanel.vue         — vacantes por programa de estudios + configuración formato .dat
-        │   └── shared/
-        │       ├── DataTable.vue           — tabla reutilizable con selección y edición
-        │       ├── StepInfoCard.vue        — tarjeta de información del paso
-        │       ├── SubTabs.vue             — sub-pestañas dentro de un tab
-        │       ├── Toolbar.vue             — barra con búsqueda + acciones
-        │       └── EmptyState.vue          — estado vacío reutilizable
-        └── utils/
-            ├── helpers.js                  — normalize, normalizeArea, buildPonderationKey, buildQuestionPlan, etc.
-            └── parsers.js                  — parsers de archivos .dat y Excel
-```
-
----
-
-## Modelos de base de datos
-
-### `convocatorias` app
-
-```python
-Convocatoria
-  id, name, year, status ('active'|'closed'), created_at, updated_at
-
-Area
-  id, convocatoria_id (FK), name, question_count (default=60), vacantes, order
-  unique_together: (convocatoria, name)
-
-CalificationConfig
-  id, convocatoria_id (FK), area_name, correct_value, incorrect_value, blank_value, updated_at
-  unique_together: (convocatoria, area_name)
-
-DatFormatConfig
-  id, convocatoria_id (OneToOne), header_length, answers_length, litho_offset, litho_length,
-  tipo_offset, tipo_length, dni_offset, dni_length, aula_offset, aula_length, answers_offset
-```
-
-### `ponderaciones` app
-
-```python
-Ponderacion  (legacy — se mantiene para compatibilidad)
-  id, convocatoria_id (FK nullable), area, subject, question_count, ponderation (decimal 10,3),
-  order, created_at, updated_at
-  unique_together: (convocatoria, area, subject)
-  indexes: (area, order), (convocatoria, area)
-
-PlantillaPonderacion
-  id, convocatoria_id (FK nullable), name, area (nullable — null = global), question_total (int, denormalizado),
-  created_at, updated_at
-  — update_question_total(): recalcula question_total sumando los PlantillaItem
-
-PlantillaItem
-  id, plantilla_id (FK → PlantillaPonderacion, CASCADE), subject, question_count, ponderation (decimal 10,3), order
-```
-
-**Lógica de área en PlantillaPonderacion:**
-- `area` específica (ej: "Biomédicas") → aparece solo al calificar esa área
-- `area = null` → plantilla global, aparece en todas las áreas (ej: "Modo Simple")
-
-### API Endpoints
-
-```
-# Ponderaciones legacy
-GET/POST            /api/ponderaciones/
-GET/PUT/DELETE      /api/ponderaciones/{id}/
-GET                 /api/ponderaciones/areas/
-POST                /api/ponderaciones/bulk_create/
-
-# Plantillas (nuevo)
-GET/POST            /api/plantillas/
-GET/PUT/DELETE      /api/plantillas/{id}/
-POST                /api/plantillas/{id}/add_item/
-GET/PUT/DELETE      /api/plantillas/{id}/item_detail/?item_id={n}
-POST                /api/plantillas/{id}/migrate_from_ponderaciones/
-
-GET/POST            /api/convocatorias/
-GET/PUT/DELETE      /api/convocatorias/{id}/
-GET/POST            /api/areas/
-...                 (CalificationConfig, DatFormatConfig, etc.)
-```
-
----
-
-## Flujo de 6 pasos
-
-```
-Paso 1 — Padrón Excel
-  → Carga archivo .xlsx con columnas: DNI, ap. paterno, ap. materno, nombres, observaciones, área, programa
-  → Columna "programa" (programa de estudios) mapea aliases: desprograma, des_programa, carrera, escuela, prog, etc.
-  → Mapeo flexible de columnas con aliases en ARCHIVE_KEY_ALIASES (constants/index.js)
-  → Almacena en localStorage (STORAGE_KEYS.ARCHIVE)
-
-Paso 2 — Identificadores (.dat)
-  → Archivos .dat del lector óptico con formato fijo: litho(6) + tipo(1) + DNI(8) + aula(3) + respuestas(60)
-  → Construye lookup: litho → DNI para el cruce con respuestas
-  → Almacena en localStorage
-
-Paso 3 — Respuestas (.dat)
-  → Mismos archivos .dat o archivos de respuestas separados
-  → Cruza cada fila con los identificadores para asignar el DNI
-  → Almacena en localStorage con responsesByDni (Map<dni, rows[]>)
-
-Paso 4 — Claves de respuestas
-  → Archivo con las respuestas correctas: área + tipo + 60 caracteres A-E
-  → Construye lookup: (área, tipo) → respuestas correctas
-  → Almacena en localStorage
-
-Paso 5 — Plantillas de Ponderación
-  → Define plantillas reutilizables con el peso de cada asignatura
-  → Cada plantilla tiene nombre, área opcional y sus ítems (asignatura, preguntas, ponderación)
-  → "Modo Simple" es una plantilla global (area=null): 1 ítem "General", 60 pregs, peso=1
-  → Al iniciar, si no hay plantillas, se pre-cargan las 3 UNAP + Modo Simple automáticamente
-  → Layout 2 columnas: sidebar con lista agrupada por área + editor de plantilla seleccionada
-  → Almacena en localStorage (STORAGE_KEYS.PLANTILLAS)
-
-Paso 6 — Calificación
-  → Abre modal: selecciona área a calificar + plantilla de ponderación + valores (correcta/incorrecta/blanco)
-  → El dropdown de plantillas filtra por área seleccionada (muestra área específica + globales)
-  → Motor: para cada postulante del área, busca sus respuestas, las compara con la clave, aplica pesos
-  → Snapshot de la plantilla guardado en el summary (auditoría histórica)
-  → Ranking por programa: agrupa postulantes por programa de estudios, ordena por puntaje dentro
-    de cada grupo y marca como ingresante según las vacantes configuradas en ConfigPanel
-  → Cada resultado incluye: position (global), positionInPrograma, isIngresante, programa
-  → Genera tabla de puntajes ordenada de mayor a menor
-  → Columna Estado (INGRESANTE / NO INGRESANTE) visible cuando hay vacantes configuradas
-  → Almacena resultados en localStorage
-```
-
----
-
-## Arquitectura Vue 3 — Patrón crítico
-
-### Problema: refs no se auto-desenvuelven en props
-
-Los composables retornan objetos planos con `Ref`/`ComputedRef` internos. Vue 3 solo auto-desenvuelve refs **top-level** en `<script setup>`. Cuando se pasa como prop a un componente hijo, los refs NO se desenvuelven en el template.
-
-**Síntoma:** `.map()` falla (es un ComputedRef, no un Array). `.hasData` siempre truthy (es un objeto). Resultado: pantalla blanca.
-
-### Solución: `reactive()` wrapper obligatorio
-
-En **cada componente que recibe un composable como prop**, agregar al inicio del `<script setup>`:
-
-```js
-const props = defineProps({ ponderations: { type: Object, required: true } })
-const ponderations = reactive(props.ponderations)  // ← OBLIGATORIO
-```
-
-`reactive()` crea un Proxy que auto-desenvuelve refs anidados en acceso y escritura.
-
-**Reglas de uso con el wrapper:**
-- En templates: `ponderations.selectedPlantilla` (sin `.value`)
-- v-model: `v-model="ponderations.search"` (sin `.value`)
-- Asignación de ref: `(el) => ponderations.inputRef = el` (el proxy setter asigna a `.value` automáticamente)
-- Funciones: `ponderations.createPlantilla()` funciona igual
-
-**Componentes que aplican este patrón:**
-- `ArchivesTab.vue` → `const archives = reactive(props.archives)`
-- `IdentifiersTab.vue` → `const identifiers = reactive(props.identifiers)`
-- `ResponsesTab.vue` → `const responses = reactive(props.responses)`
-- `AnswerKeysTab.vue` → `const answerKeys = reactive(props.answerKeys)`
-- `PonderationsTab.vue` → `const ponderations = reactive(props.ponderations)`
-- `ScoresTab.vue` → `const calification = reactive(props.calification)` + `const ponderations = reactive(props.ponderations)`
-- `CalificationModal.vue` → `const calification = reactive(props.calification)`
-
-### DataTable — ref local, no prop
-
-No pasar un `ref` externo como template ref a `DataTable`. En cambio:
-- `DataTable` tiene `const checkboxRef = ref(null)` internamente
-- Recibe prop `isIndeterminate: Boolean`
-- Usa `watch(() => props.isIndeterminate, val => checkboxRef.value.indeterminate = val)`
-
-### StepNav — props de función
-
-`StepNav` recibe tres funciones en vez de contadores:
-```js
-getStepStatus(key) → '' | 'completed'
-getStepLabel(key)  → string
-getStepDescription(key) → string (ej: '3 plantillas' o 'Sin configurar')
-```
-
----
-
-## Estado de localStorage (claves)
-
-```js
-STORAGE_KEYS = {
-  ARCHIVE:             'calificador-candidatos',
-  IDENTIFIER:          'calificador-identificadores',
-  RESPONSES:           'calificador-respuestas',
-  ANSWER_KEYS:         'calificador-claves',
-  PONDERATION:         'calificador-ponderaciones',      // legacy, ya no se escribe
-  PLANTILLAS:          'calificador-plantillas',          // nuevo — array de PlantillaPonderacion
-  SCORE_RESULTS:       'calificador-calificaciones',
-  ACTIVE_TAB:          'calificador-active-tab',
-  IDENTIFIER_SUBTAB:   'calificador-identificador-subtab',
-  RESPONSES_SUBTAB:    'calificador-respuestas-subtab',
-  ANSWER_KEY_SUBTAB:   'calificador-claves-subtab',
-  IDENTIFIER_SOURCES:  'calificador-identificador-sources',
-  RESPONSES_SOURCES:   'calificador-respuestas-sources',
-  ANSWER_KEY_SOURCES:  'calificador-claves-sources',
-  CONVOCATORIA:        'calificador-convocatoria',
-  DAT_FORMAT:          'calificador-dat-format',
-  VACANTES:            'calificador-vacantes',
-  VACANTES_PROGRAMA:   'calificador-vacantes-programa',
-  HISTORY:             'calificador-historial',
-  ACTIVE_PROCESS:      'calificador-proceso-activo',
-}
-```
-
----
-
-## `usePonderations.js` — Sistema de plantillas
-
-Reescritura completa (2026-03-31). Ya no usa el patrón "defaults + overrides".
-
-### Lo que expone
-
-```js
-// State
-plantillas               // useStorage(PLANTILLAS) — array de objetos PlantillaPonderacion
-selectedPlantillaId      // ref(null) — ID de plantilla en el editor
-selectedPlantilla        // computed — objeto plantilla completo o null
-selectedPlantillaItems   // computed — items[] de la plantilla seleccionada
-selectedPlantillaTotal   // computed — { questions, weight } de la plantilla seleccionada
-sidebarSections          // computed — agrupado por área: [{ area, plantillas[] }]
-editorError              // ref('') — mensaje de error en el editor
-
-// CRUD plantillas
-getPlantillaById(id)
-getPlantillasForCalification(area)  // filtra por área + globales (null)
-selectPlantilla(id)
-createPlantilla({ name, area })
-deletePlantilla(id)
-renamePlantilla(id, name)
-
-// CRUD items
-addItem(plantillaId, { subject, questionCount, ponderation })
-removeItem(plantillaId, itemId)
-toggleEditItem(itemId)
-isEditingItem(itemId)
-
-// Formulario nueva plantilla (en sidebar)
-showNewPlantillaForm
-newPlantillaName
-newPlantillaArea
-openNewPlantillaForm()
-cancelNewPlantillaForm()
-confirmNewPlantilla()
-
-// Nuevo ítem (en editor)
-newItem  // { subject, questionCount, ponderation }
-
-// Init
-initializePonderations()   // alias de initializePlantillas
-initializePlantillas()     // seed si no hay plantillas
-
-// Backwards compat
-ponderationRows            // computed — flatMap de todos los items (para step status en App.vue)
-ponderationCurrentTotals   // alias de selectedPlantillaTotal (para ScoresTab.vue)
-```
-
-### Seed inicial (`_seedDefaultPlantillas`)
-
-Si `plantillas` está vacío al iniciar, se crean 4 plantillas predeterminadas:
-- `"UNAP Biomédicas"` (area: 'Biomédicas') — 18 asignaturas, 60 preguntas, pesos UNAP
-- `"UNAP Sociales"` (area: 'Sociales') — 18 asignaturas, 60 preguntas, pesos UNAP
-- `"UNAP Ingeniería"` (area: 'Ingeniería') — 18 asignaturas, 60 preguntas, pesos UNAP
-- `"Modo Simple"` (area: null = global) — 1 asignatura "General", 60 preguntas, peso=1
-
----
-
-## `useCalification.js` — Firma actual
-
-```js
-useCalification(
-  archiveRows,
-  responsesRows,
-  answerKeyRows,
-  ponderationsComposable,        // ← resultado completo de usePonderations()
-  responsesByDni,
-  answerKeyLookupByAreaTipo,
-  areaNames,
-  activeConvocatoriaId,
-  formatConfig,
-  areaByName,
-  vacantesPrograma
-)
-```
-
-**Expone (relevante a ponderaciones):**
-- `calificationPlantillaId` — ref del ID de plantilla seleccionada en el modal
-- `availablePlantillas` — computed: plantillas filtradas para el área seleccionada
-- `selectedCalificationPlantilla` — computed: objeto plantilla completo
-- `selectedPonderationIsReady` — computed: `questionTotal === answersLength`
-
-**En `runCalification()`:**
-- Obtiene la plantilla por ID → construye el plan desde `plantilla.items`
-- Guarda `plantillaId`, `plantillaName`, `plantillaSnapshot` en el summary (auditoría histórica)
-- `plantillaSnapshot` = `[{ subject, questionCount, ponderation }]`
-
----
-
-## Motor de calificación
-
-```
-Para cada postulante del área seleccionada:
-  1. Busca sus respuestas por DNI (responsesByDni Map)
-  2. Busca la clave correcta para (área, tipo) del postulante
-  3. buildQuestionPlan(plantilla.items) → array de 60 items, cada uno con su peso
-  4. Para cada posición i de 0..59:
-       weight = plan[i].weight
-       si responseChar == correctChar → total += correctValue * weight
-       si responseChar es A-E pero ≠ correctChar → total += incorrectValue * weight
-       si responseChar es blanco/inválido → total += blankValue * weight
-  5. score = round(total, 2)
-  6. Cada resultado incluye campo "programa" (leído del padrón)
-
-Ranking por programa (post-score):
-  - Agrupa resultados por programa de estudios
-  - Dentro de cada grupo: ordena por score desc, asigna positionInPrograma (1, 2, 3...)
-  - isIngresante = positionInPrograma <= vacantesPrograma[programa] (si cupo > 0)
-  - Luego aplana y ordena globalmente por score desc, asigna position global (1, 2, 3...)
-
-Genera summary: área, plantillaId, plantillaName, plantillaSnapshot, timestamp,
-                totalCandidates, missingResponses, missingKeys, unlinkedResponses
-```
-
----
-
-## Bugs conocidos resueltos (historial)
-
-| Bug | Causa | Fix aplicado |
-|---|---|---|
-| Pantalla blanca al cargar | `calification.calificationModalTab.value` no existe en useCalification | Eliminado de App.vue |
-| Paso 5 no renderizaba | PonderationsTab no importado en App.vue | Agregado import + v-else-if |
-| `StepNav is not a function` | StepNav refactorizado a props funcionales, App.vue no actualizado | Agregadas 3 funciones en App.vue |
-| Pantalla blanca (DataTable) | `:ref="(el) => selectAllRef = el"` asigna a prop readonly → TypeError | Reemplazado por `ref` local + prop `isIndeterminate` |
-| `ponderations.ponderationAreaList.map() is not a function` | ComputedRef no se desenvuelve a través de props | `reactive(props.ponderations)` en cada tab |
-| `archives.selection.has() is not a function` | Mismo problema anterior | Mismo fix |
-| v-model en search falla | Con reactive wrapper, `.value` explícito causa double-unwrap | Eliminados `.value` en todos los v-model de búsqueda |
-| Pantalla blanca tras Mejora B | `ScoresTab` accedía a `ponderations.ponderationCurrentTotals` eliminado del composable | Alias `ponderationCurrentTotals: selectedPlantillaTotal` agregado al return de usePonderations |
-
----
-
-## Mejoras implementadas
-
-### A — Gaps funcionales (2026-03-27)
-- Watcher en `App.vue` que re-aplica datos de identificadores a respuestas cuando cualquiera cambia
-- `convocatoria.fetchConvocatorias()` llamado en `onMounted`
-
-### B — Sistema de Plantillas de Ponderación (2026-03-31)
-- **Concepto:** separar la receta de puntaje (plantilla) de los candidatos a calificar
-- **Backend:** nuevos modelos `PlantillaPonderacion` + `PlantillaItem`, ViewSet con CRUD + `add_item` + `item_detail` + `migrate_from_ponderaciones`, migración `0003`
-- **`usePonderations.js`:** reescritura completa — lista de plantillas en localStorage, seed automático, sidebar agrupado por área
-- **`useCalification.js`:** nueva firma con `ponderationsComposable`, `calificationPlantillaId`, snapshot de plantilla en summary
-- **`PonderationsTab.vue`:** rediseño 2 columnas (sidebar sticky + editor completo), confirmaciones inline, sin `browser confirm()`
-- **`CalificationModal.vue`:** eliminado toggle simpleMode, dropdown de plantilla con preview (preguntas/asignaturas/listo)
-- **"Modo Simple":** ya no es un toggle — es una plantilla global predeterminada seleccionable desde el dropdown
-
-### C — UX de resultados mejorada (2026-03-27)
-- Panel de estadísticas con 6 tarjetas (total, ingresantes, no ingresantes, máx, promedio, mín)
-- Filas ingresantes resaltadas en verde, badge de puntaje verde para ingresantes
-- Columna Estado (INGRESANTE / NO INGRESANTE) visible solo cuando hay vacantes configuradas
-- Confirmaciones inline en vez de `confirm()` del browser
-- Botones de exportación Excel y PDF
-- Botón "Estadísticas" que abre DashboardPanel
-
-### D — DashboardPanel (2026-03-27)
-- Panel slide-in desde la derecha (480px)
-- Tarjetas de resumen global: total, ingresantes, no ingresantes, promedio, máx, mín
-- Tabla de comparación por área
-- Histograma de distribución de puntajes en buckets de 10 — implementado con CSS puro (sin librería de charts)
-- Barras con hover interactivo (azul → dorado)
-
-### E — Configuración global (2026-03-30)
-- **ConfigPanel** (nuevo panel): vacantes por programa de estudios + formato del archivo .dat
-- **`useVacantesPrograma`:** persiste `{ [nombrePrograma]: number }` en localStorage
-- **Campo `programa`** agregado al padrón (alias `desprograma`, `carrera`, `escuela`, etc.)
-- **Ranking por programa:** en `useCalification`, post-scoring, agrupa por programa, rankea dentro de cada grupo, asigna `isIngresante` según cupo
-- **Columna Programa** en tabla de resultados entre Nombres y Puntaje
-- **AppHeader:** botón de engranaje que emite `open-config`
 
 ---
 
@@ -489,8 +46,11 @@ Genera summary: área, plantillaId, plantillaName, plantillaSnapshot, timestamp,
 ```bash
 # Backend
 cd backend
-pip install django djangorestframework django-cors-headers
+# Activar venv primero:
+# Windows: venv\Scripts\activate
+pip install django djangorestframework djangorestframework-simplejwt django-cors-headers
 python manage.py migrate
+python manage.py createsuperuser   # para crear el primer usuario
 python manage.py runserver
 
 # Frontend (en otra terminal)
@@ -501,20 +61,453 @@ npm run dev
 
 Acceder a: `http://localhost:5173`
 
-El frontend se comunica con `http://localhost:8000/api` (definido en `frontend/src/constants/index.js` como `API_BASE_URL`).
+El frontend se comunica con `http://localhost:8000/api`.
 
 ---
 
-## Notas de implementación importantes
+## Estructura de directorios
 
-1. **`useStorage` de @vueuse/core** — `plantillas` y otras claves son writable computed refs. Asignar con `xxx.value = [...]` no `xxx = [...]`.
+```
+calificadordad/
+├── backend/
+│   ├── config/
+│   │   ├── settings.py           — Django, JWT, CORS, INSTALLED_APPS
+│   │   ├── api_urls.py           — incluye urls de: usuarios, ponderaciones, convocatorias, resultados
+│   │   └── cors_middleware.py    — middleware CORS manual
+│   ├── usuarios/
+│   │   ├── views.py              — login, refresh_token, me, logout (AllowAny en login/refresh)
+│   │   └── urls.py
+│   ├── ponderaciones/
+│   │   ├── models.py             — Ponderacion (legacy) + PlantillaPonderacion + PlantillaItem
+│   │   ├── serializers.py
+│   │   ├── views.py              — PlantillaPonderacionViewSet con nested items
+│   │   └── urls.py               — router: plantillas + items nested
+│   ├── convocatorias/
+│   │   ├── models.py             — Convocatoria, Area, CalificationConfig, DatFormatConfig
+│   │   ├── serializers.py
+│   │   ├── views.py
+│   │   └── urls.py
+│   ├── resultados/
+│   │   ├── models.py             — ProcesoCalificacion, AreaCalificacion, ResultadoCandidato
+│   │   ├── serializers.py
+│   │   ├── views.py              — ProcesoCalificacionViewSet (upsert por local_id, bulk_create)
+│   │   └── urls.py
+│   └── manage.py
+│
+└── frontend/
+    └── src/
+        ├── App.vue                         — raíz: composables, layout, modales
+        ├── constants/index.js              — TAB_KEYS, tabs (5 pasos sin Ponderaciones), STORAGE_KEYS
+        ├── utils/
+        │   ├── apiFetch.js                 — fetch con Bearer token + refresh automático en 401
+        │   ├── helpers.js                  — normalize, normalizeArea, buildPonderationKey, etc.
+        │   └── parsers.js                  — parsers de archivos .dat y Excel
+        ├── composables/
+        │   ├── useAuth.js                  — singleton: initialize, login, logout, user, isAuthenticated
+        │   ├── useArchives.js              — padrón de postulantes (Excel)
+        │   ├── useIdentifiers.js           — identificadores .dat (litho→DNI)
+        │   ├── useResponses.js             — respuestas .dat (lookup por DNI)
+        │   ├── useAnswerKeys.js            — claves de respuestas (área+tipo→respuestas)
+        │   ├── usePonderations.js          — plantillas API-backed, CRUD completo, export/import JSON
+        │   ├── useCalification.js          — motor de calificación, guarda en API, preflight
+        │   ├── useTableState.js            — selección/edición de filas genérica
+        │   ├── useConvocatoria.js          — CRUD convocatorias, nombre compuesto (tipo+año+sufijo)
+        │   ├── useAreas.js                 — áreas desde API
+        │   ├── useDatFormat.js             — configuración de formato .dat
+        │   ├── useBackup.js                — backup/restore de estado
+        │   ├── useExport.js                — exportación de resultados Excel/PDF
+        │   ├── useHistory.js               — historial API-backed: fetchHistory, saveProcess, deleteProcess
+        │   ├── useScoreDashboard.js        — métricas del dashboard
+        │   └── useVacantesPrograma.js      — vacantes por programa de estudios
+        ├── components/
+        │   ├── auth/
+        │   │   └── LoginPage.vue           — two-panel: branding UNAP + card de login
+        │   ├── layout/
+        │   │   ├── AppHeader.vue           — logo, convocatoria activa (info+gestión), user chip+logout
+        │   │   ├── AppSidebar.vue          — sidebar colapsable: Nuevo proceso, Ponderaciones, Historial, Config, Backup
+        │   │   └── StepNav.vue             — 5 pasos del proceso (sin Ponderaciones), flex-shrink: 0
+        │   ├── tabs/
+        │   │   ├── ArchivesTab.vue         — Paso 1: padrón Excel
+        │   │   ├── IdentifiersTab.vue      — Paso 2: identificadores .dat
+        │   │   ├── ResponsesTab.vue        — Paso 3: respuestas .dat
+        │   │   ├── AnswerKeysTab.vue       — Paso 4: claves de respuestas
+        │   │   ├── PonderationsTab.vue     — herramienta sidebar: plantillas 2 columnas + export/import JSON
+        │   │   └── ScoresTab.vue           — Paso 5: tabla de resultados
+        │   ├── views/                      — vistas centrales del sidebar (sin overlay)
+        │   │   ├── HistoryView.vue         — grid de procesos guardados, cargar/eliminar
+        │   │   └── ConfigView.vue          — 2 columnas: vacantes por programa + formato DAT
+        │   ├── modals/
+        │   │   ├── CalificationModal.vue   — configurar y ejecutar calificación (preflight + vacantes)
+        │   │   ├── BackupModal.vue         — backup de sesión
+        │   │   └── NuevoProcesoModal.vue   — seleccionar/crear convocatoria + limpiar datos + ir al paso 1
+        │   ├── panels/
+        │   │   ├── ConvocatoriaPanel.vue   — gestión de convocatorias (crear/cerrar/reabrir)
+        │   │   └── DashboardPanel.vue      — estadísticas + histograma CSS
+        │   └── shared/
+        │       ├── DataTable.vue
+        │       ├── StepInfoCard.vue
+        │       ├── SubTabs.vue
+        │       ├── Toolbar.vue
+        │       └── EmptyState.vue
+```
 
-2. **`selection` y `editing` en `useTableState`** — writable computed refs respaldados por localStorage como arrays, pero expuestos como Sets. La asignación `selection.value = newSet` convierte el Set a array para localStorage.
+---
 
-3. **`buildQuestionPlan`** — función clave en `utils/helpers.js`. Toma los ítems de una plantilla y expande cada asignatura en N ítems individuales (uno por pregunta), cada uno con su peso normalizado. El plan resultante tiene exactamente `answers_length` ítems.
+## Arquitectura de navegación (Híbrida)
 
-4. **Normalización de área** — `normalizeArea(area, areaList)` en `utils/helpers.js`. Usa aliases para mapear variantes ("biomedica", "biomedicas" → "Biomédicas"). Siempre usar esta función al comparar o guardar áreas.
+```
+┌─────────────────────────────────────────────────────┐
+│  AppHeader — logo + convocatoria activa + usuario   │
+├────────┬────────────────────────────────────────────┤
+│        │  StepNav (solo pasos 1-5, sticky top 0)    │
+│Sidebar │────────────────────────────────────────────│
+│        │  app-main (overflow-y: auto)                │
+│+ Nuevo │    ArchivesTab / IdentifiersTab /           │
+│  proc. │    ResponsesTab / AnswerKeysTab /           │
+│        │    ScoresTab                                │
+│📊 Pond │    PonderationsTab (sin StepNav)            │
+│🕐 Hist │    HistoryView (sin StepNav)                │
+│⚙ Conf  │    ConfigView (sin StepNav)                 │
+│💾 Back │  ← BackupModal (overlay, siempre)          │
+└────────┴────────────────────────────────────────────┘
+```
 
-5. **CORS** — el backend tiene middleware CORS habilitado en `config/settings.py` + `config/cors_middleware.py`. Permite peticiones desde `localhost:5173`.
+### Regla de StepNav
+`showStepNav = computed(() => ['archives','identifiers','responses','answer_keys','results'].includes(activeTab))`
 
-6. **Plantillas globales (`area: null`)** — aparecen en el dropdown de CalificationModal independientemente del área seleccionada. `getPlantillasForCalification(area)` filtra con `Q(area__iexact=area) | Q(area__isnull=True)` en backend y equivalente en frontend.
+StepNav se oculta cuando `activeTab` es `'ponderations'`, `'history'` o `'config'`.
+
+### Sidebar colapsable
+- Estado persistido en localStorage (`calificador-sidebar-expanded`)
+- Expandido: 200px — icono + label
+- Colapsado: 56px — solo icono + tooltip
+- Indicador activo: barra azul izquierda en el item activo
+
+---
+
+## Flujo de Nuevo Proceso
+
+```
+Sidebar [+ Nuevo proceso]
+    ↓
+NuevoProcesoModal:
+  - Carga convocatorias desde API
+  - Lista de convocatorias con radio button (preselecciona la activa)
+  - Formulario inline para crear nueva convocatoria:
+      Tipo [GENERAL    ] Año [2026] Sufijo [I ] (opcional)
+      Vista previa: GENERAL 2026 - I
+  - Advertencia si hay datos cargados actualmente
+  - [Cancelar] [Iniciar proceso →]
+    ↓
+confirmNewProcess(convocatoria):
+  - setActiveConvocatoria(selected)
+  - archives.clearAll()
+  - identifiers.clearAllIdentifiers()
+  - responses.clearAllResponses()
+  - answerKeys.clearAllAnswerKeys()
+  - calification.resetCalificationResults()
+  - activeTab = 'archives'
+```
+
+### Nombre de convocatoria compuesto
+En `useConvocatoria.createConvocatoria()`:
+```js
+const name = suffix ? `${tipo} ${year} - ${suffix}` : `${tipo} ${year}`
+// Ejemplos:
+// GENERAL 2026 - I
+// EXTRAORDINARIO 2026
+// GENERAL 2026 - II
+```
+
+---
+
+## Autenticación JWT
+
+### Backend (`usuarios/views.py`)
+```
+POST /api/auth/login/    — AllowAny — retorna { access, refresh, user }
+POST /api/auth/refresh/  — AllowAny — retorna { access }
+GET  /api/auth/me/       — IsAuthenticated — retorna user actual
+POST /api/auth/logout/   — IsAuthenticated — logout formal
+```
+
+### Frontend (`utils/apiFetch.js`)
+- Agrega `Authorization: Bearer <token>` a cada request
+- En 401: intenta refresh automáticamente, reintenta la request original
+- Si refresh falla: llama `onUnauthorized` (registrado por `useAuth`)
+
+### `useAuth.js` (singleton global)
+```js
+initialize()   // verifica token existente al montar App
+login(user, pass)
+logout()
+isAuthenticated  // ref<boolean>
+user             // ref<{username, first_name, ...}>
+```
+
+---
+
+## Modelos de base de datos
+
+### `usuarios` app
+Usa el `User` nativo de Django. Sin modelos adicionales.
+
+### `ponderaciones` app
+```python
+PlantillaPonderacion
+  id, name, area (nullable), convocatoria (FK nullable)
+  question_total (int, denormalizado — se recalcula en save)
+  created_at, updated_at
+
+PlantillaItem
+  id, plantilla (FK, CASCADE), subject
+  question_count, ponderation (decimal 10,3), order
+```
+
+### `convocatorias` app
+```python
+Convocatoria
+  id, name, year, status ('active'|'closed'), created_at, updated_at
+
+Area
+  id, convocatoria (FK), name, question_count (default=60), vacantes, order
+  unique_together: (convocatoria, name)
+
+DatFormatConfig
+  id, convocatoria (OneToOne), header_length, answers_length,
+  litho_offset, litho_length, tipo_offset, tipo_length,
+  dni_offset, dni_length, aula_offset, aula_length, answers_offset
+```
+
+### `resultados` app
+```python
+ProcesoCalificacion
+  id, local_id (unique), name, convocatoria (FK nullable)
+  created_by (FK User), created_at, updated_at
+
+AreaCalificacion
+  id, proceso (FK), area, timestamp
+  correct_value, incorrect_value, blank_value
+  plantilla_id, plantilla_name, plantilla_snapshot (JSONField)
+  total_candidates, missing_responses, missing_keys, total_weight, answers_length
+  unique_together: (proceso, area)
+
+ResultadoCandidato
+  id, area_result (FK), dni, paterno, materno, nombres, area, programa
+  score (decimal), position, position_in_programa, is_ingresante
+  unique_together: (area_result, dni)
+```
+
+---
+
+## API Endpoints
+
+```
+# Auth
+POST   /api/auth/login/
+POST   /api/auth/refresh/
+GET    /api/auth/me/
+POST   /api/auth/logout/
+
+# Plantillas
+GET/POST       /api/plantillas/
+GET/PATCH/DEL  /api/plantillas/{id}/
+GET/POST       /api/plantillas/{id}/items/
+GET/PUT/DEL    /api/plantillas/{id}/items/{item_id}/
+
+# Convocatorias
+GET/POST       /api/convocatorias/
+GET/PUT/DEL    /api/convocatorias/{id}/
+POST           /api/convocatorias/{id}/close/
+POST           /api/convocatorias/{id}/reopen/
+POST           /api/convocatorias/{id}/init_defaults/
+GET/POST       /api/areas/
+GET/PUT        /api/dat-format/{convocatoria_id}/
+
+# Procesos (historial)
+GET/POST       /api/procesos/          — filtra por created_by=request.user
+GET/DEL        /api/procesos/{id}/
+GET            /api/procesos/{id}/full/ — retorna proceso con areas+resultados completos
+```
+
+---
+
+## Flujo de datos — 5 pasos del proceso
+
+```
+Paso 1 — Padrón Excel
+  → .xlsx: DNI, paterno, materno, nombres, área, programa
+  → Mapeo flexible de columnas (aliases en ARCHIVE_KEY_ALIASES)
+  → localStorage (STORAGE_KEYS.ARCHIVE)
+
+Paso 2 — Identificadores (.dat)
+  → Formato fijo: litho(6) + tipo(1) + DNI(8) + aula(3) + respuestas(60)
+  → Construye lookup: litho → DNI
+  → localStorage
+
+Paso 3 — Respuestas (.dat)
+  → Cruza con identificadores para asignar DNI a cada fila
+  → responsesByDni: Map<dni, rows[]>
+  → localStorage
+
+Paso 4 — Claves de respuestas
+  → área + tipo + 60 chars A-E
+  → answerKeyLookupByAreaTipo: Map<"área|tipo", string>
+  → localStorage
+
+Paso 5 — Calificación (desde sidebar: Ponderaciones configurado previamente)
+  → CalificationModal: área + plantilla + valores correcta/incorrecta/blanco
+  → Preflight check: candidatos sin respuesta, respuestas huérfanas, etc.
+  → Vacantes por programa configurables en el modal
+  → Motor califica → guarda en API (ProcesoCalificacion upsert por local_id)
+  → ScoresTab muestra resultados con ingresantes resaltados
+```
+
+---
+
+## Motor de calificación
+
+```
+Para cada postulante del área seleccionada:
+  1. Busca respuestas por DNI (responsesByDni Map)
+  2. Busca clave correcta para (área, tipo)
+  3. buildQuestionPlan(plantilla.items) → 60 items con su peso normalizado
+  4. Para cada posición i de 0..59:
+       si responseChar == correctChar → total += correctValue * weight
+       si responseChar A-E ≠ correctChar → total += incorrectValue * weight
+       si blanco/inválido → total += blankValue * weight
+  5. score = round(total, 2)
+
+Ranking por programa (post-score):
+  - Agrupa por programa de estudios
+  - Ordena por score desc dentro de cada grupo
+  - isIngresante = positionInPrograma <= vacantesPrograma[programa]
+  - Aplana y ordena globalmente por score desc
+
+Persistencia API:
+  - POST /api/procesos/ con local_id (upsert idempotente)
+  - bulk_create para ResultadoCandidato (reemplaza los anteriores)
+```
+
+---
+
+## Plantillas de ponderación
+
+### Flujo
+- Al iniciar sin plantillas → seed automático: UNAP Biomédicas, Sociales, Ingeniería + Modo Simple
+- CRUD completo con API: crear, renombrar, eliminar, agregar/editar/eliminar ítems
+- Export: descarga JSON `plantillas_YYYY-MM-DD.json`
+- Import: lee JSON, POST por cada plantilla a `/api/plantillas/`
+
+### Formato JSON de export/import
+```json
+[
+  {
+    "name": "UNAP Biomédicas",
+    "area": "Biomédicas",
+    "items": [
+      { "subject": "Biología", "questionCount": 10, "ponderation": 0.5, "order": 1 }
+    ]
+  }
+]
+```
+
+---
+
+## Patrón crítico Vue 3 — reactive(props)
+
+Los composables retornan objetos con `Ref`/`ComputedRef` internos. En componentes hijos:
+
+```js
+// OBLIGATORIO en cada tab/view que recibe composable como prop
+const ponderations = reactive(props.ponderations)
+// Luego en template: ponderations.selectedPlantilla (sin .value)
+```
+
+---
+
+## Historial de implementaciones
+
+### Fase 1 — JWT Auth
+- `djangorestframework-simplejwt`, access 8h, refresh 30d
+- `useAuth.js` singleton, `apiFetch.js` con retry automático
+- `LoginPage.vue` two-panel institucional
+
+### Fase 2 — Plantillas en API
+- `usePonderations.js` reescrito: `ref([])` en lugar de `useStorage`
+- CRUD completo contra `/api/plantillas/` y `/api/plantillas/{id}/items/`
+- Seed automático si no hay plantillas
+- Export/import JSON en `PonderationsTab.vue`
+
+### Fase 3 — Historial en DB
+- Modelos `resultados`: `ProcesoCalificacion`, `AreaCalificacion`, `ResultadoCandidato`
+- `useHistory.js` reescrito: fetchHistory, saveProcess, deleteProcess contra API
+- `useCalification._saveProcesoToApi()` guarda automáticamente tras calificar
+- `HistoryView.vue` — vista central en grid (sin panel flotante)
+
+### Mejoras funcionales
+- **Preflight check** en CalificationModal: diagnóstico antes de calificar
+- **Vacantes por programa** en CalificationModal: inputs por programa con límite de ingresantes
+- **ConfigView.vue** — vacantes + formato DAT como vista central (sin panel flotante)
+
+### Navegación híbrida (sidebar)
+- `AppSidebar.vue` — colapsable, Nuevo proceso + Ponderaciones + Historial + Config + Backup
+- `StepNav` — solo 5 pasos del proceso, se oculta en vistas de herramientas
+- `app-layout`: `height: 100vh; overflow: hidden` → `app-body` flex → `app-content` (overflow hidden) → `app-main` (overflow-y: auto)
+
+### Convocatoria unificada
+- `NuevoProcesoModal.vue` — punto único de entrada: selecciona convocatoria → limpia datos → paso 1
+- Nombre compuesto: `${tipo} ${año}` o `${tipo} ${año} - ${sufijo}`
+- Header: convocatoria es solo informativa + gestión (no punto de inicio de proceso)
+
+---
+
+## PENDIENTES — Próximas implementaciones
+
+### Alta prioridad
+
+#### 1. Nombre editable al guardar proceso
+**Qué es:** Antes de guardar al historial, mostrar un input para que el usuario escriba un nombre descriptivo.  
+**Dónde:** En `ScoresTab.vue`, botón "Guardar en historial" → mini modal o inline input.  
+**Archivos:** `ScoresTab.vue`, `useHistory.saveProcess()`.
+
+#### 2. PDF oficial de ingresantes
+**Qué es:** Documento formal con numeración correlativa, cabecera institucional (logo UNAP, convocatoria, área, fecha), espacio para firma y sello del director.  
+**Herramienta sugerida:** `jsPDF` o `pdfmake`.  
+**Archivos:** `useExport.js`, `ScoresTab.vue`.
+
+#### 3. Notificaciones toast
+**Qué es:** Reemplazar los `alert()` y mensajes inline por un sistema de toasts central (éxito, error, info).  
+**Implementación:** Composable `useToast.js` + componente `ToastContainer.vue` en `App.vue`.  
+**Archivos a modificar:** `App.vue`, `NuevoProcesoModal.vue`, `usePonderations.js`, `useHistory.js`.
+
+### Media prioridad
+
+#### 4. Detalle pregunta por pregunta
+**Qué es:** Para cada candidato en resultados, tabla de 60 filas: qué marcó vs cuál era la correcta, coloreado verde/rojo/gris. Herramienta de revisión e impugnación.  
+**Complejidad:** Alta — requiere guardar las respuestas individuales en `ResultadoCandidato` (nueva columna `answers_raw` en el modelo).  
+**Archivos:** `resultados/models.py`, `useCalification.js`, `ScoresTab.vue`.
+
+#### 5. Gestión de usuarios
+**Qué es:** Crear/desactivar operadores desde la app sin entrar al admin Django.  
+**Archivos:** Nueva vista en sidebar, nuevo endpoint `usuarios/views.py`.
+
+### Infraestructura
+
+#### 6. Deploy
+**Qué es:** Despliegue en servidor para uso multiusuario real.  
+**Stack sugerido:** Nginx + Gunicorn + servidor Linux.  
+**Pendiente por:** decisión del cliente sobre servidor.
+
+---
+
+## Bugs conocidos resueltos
+
+| Bug | Causa | Fix |
+|---|---|---|
+| Pantalla blanca (composables) | Refs no se desenvuelven a través de props | `reactive(props.xxx)` en cada tab |
+| DataTable selectAll ref | `:ref` asigna a prop readonly | Ref local + prop `isIndeterminate` |
+| Modal sin scroll | `max-height` en flex child con overflow | `overflow-y: auto` en `app-main`, `overflow: hidden` en `app-content` |
+| StepNav cubriendo contenido | `position: sticky` conflicto con `overflow-y: auto` en padre | Sticky removido, scroll solo en `app-main` |
+| simplejwt no encontrado | Instalado en Python global, no en venv | Reinstalar en venv con `venv/Scripts/python.exe -m pip install` |
+| Preflight bloqueaba calificación | `hasBlockers` incluía falta de claves | Solo bloquea si `candidates.length === 0` |

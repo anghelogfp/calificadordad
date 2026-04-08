@@ -27,26 +27,49 @@ const emit = defineEmits(['close'])
           <div class="create-section">
             <h3>Nueva convocatoria</h3>
             <form class="create-form" @submit.prevent="convocatoria.createConvocatoria">
-              <div class="field">
-                <label>Nombre</label>
-                <input
-                  v-model="convocatoria.newConvocatoriaForm.value.name"
-                  type="text"
-                  class="input"
-                  placeholder="Ej: Admisión 2026-I"
-                  required
-                />
+              <div class="fields-row">
+                <div class="field field--grow">
+                  <label>Tipo</label>
+                  <input
+                    v-model="convocatoria.newConvocatoriaForm.value.name"
+                    type="text"
+                    class="input"
+                    placeholder="GENERAL"
+                    maxlength="60"
+                    required
+                  />
+                </div>
+                <div class="field field--year">
+                  <label>Año</label>
+                  <input
+                    v-model.number="convocatoria.newConvocatoriaForm.value.year"
+                    type="number"
+                    class="input"
+                    min="2000"
+                    max="2100"
+                    required
+                  />
+                </div>
+                <div class="field field--suffix">
+                  <label>Sufijo <span class="optional">(opc.)</span></label>
+                  <input
+                    v-model="convocatoria.newConvocatoriaForm.value.suffix"
+                    type="text"
+                    class="input"
+                    placeholder="I"
+                    maxlength="10"
+                  />
+                </div>
               </div>
-              <div class="field">
-                <label>Año</label>
-                <input
-                  v-model.number="convocatoria.newConvocatoriaForm.value.year"
-                  type="number"
-                  class="input"
-                  min="2000"
-                  max="2100"
-                  required
-                />
+              <div v-if="convocatoria.newConvocatoriaForm.value.name" class="name-preview">
+                <span>Vista previa: </span>
+                <strong>
+                  {{ convocatoria.newConvocatoriaForm.value.name.trim() }}
+                  {{ convocatoria.newConvocatoriaForm.value.year }}
+                  <template v-if="convocatoria.newConvocatoriaForm.value.suffix?.trim()">
+                    - {{ convocatoria.newConvocatoriaForm.value.suffix.trim() }}
+                  </template>
+                </strong>
               </div>
               <button type="submit" class="btn btn--primary" :disabled="convocatoria.loading.value">
                 {{ convocatoria.loading.value ? 'Creando...' : 'Crear' }}
@@ -186,7 +209,19 @@ h3 { font-size: 0.95rem; font-weight: 700; color: var(--slate-800); margin: 0; }
   align-items: end;
 }
 
+.fields-row { display: flex; gap: var(--space-2); align-items: flex-end; }
 .field { display: flex; flex-direction: column; gap: var(--space-1); }
+.field--grow { flex: 1; min-width: 80px; }
+.field--year { flex: 0 0 74px; }
+.field--suffix { flex: 0 0 60px; }
+.optional { font-size: 0.68rem; font-weight: 400; color: var(--slate-400); }
+.name-preview {
+  font-size: 0.8rem; color: var(--slate-600);
+  padding: var(--space-2) var(--space-3);
+  background: var(--unap-blue-50); border: 1px solid var(--unap-blue-100);
+  border-radius: var(--radius-md);
+}
+.name-preview strong { color: var(--unap-blue-800); }
 .field label { font-size: 0.75rem; font-weight: 600; color: var(--slate-600); text-transform: uppercase; }
 
 .input {

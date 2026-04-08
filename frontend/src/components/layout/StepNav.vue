@@ -70,6 +70,7 @@ function selectTab(key) {
   border-bottom: 1px solid var(--slate-200);
   padding: var(--space-4) var(--space-8);
   overflow-x: auto;
+  flex-shrink: 0;
 }
 
 .step-nav-track {

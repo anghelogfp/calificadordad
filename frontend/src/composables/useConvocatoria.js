@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { API_BASE_URL, STORAGE_KEYS } from '@/constants'
+import { apiFetch } from '@/utils/apiFetch'
 
 /**
  * Composable para gestionar convocatorias (sesiones de examen)
@@ -11,7 +12,7 @@ export function useConvocatoria() {
   const loading = ref(false)
   const error = ref('')
   const showPanel = ref(false)
-  const newConvocatoriaForm = ref({ name: '', year: new Date().getFullYear() })
+  const newConvocatoriaForm = ref({ name: '', year: new Date().getFullYear(), suffix: '' })
   const formError = ref('')
 
   const activeConvocatoriaId = computed(() => activeConvocatoria.value?.id ?? null)
@@ -24,7 +25,7 @@ export function useConvocatoria() {
     try {
       loading.value = true
       error.value = ''
-      const res = await fetch(`${API_BASE_URL}/convocatorias/`)
+      const res = await apiFetch(`/convocatorias/`)
       if (!res.ok) throw new Error(res.statusText)
       const data = await res.json()
       convocatoriaList.value = data
@@ -47,11 +48,12 @@ export function useConvocatoria() {
 
   async function createConvocatoria() {
     formError.value = ''
-    const name = (newConvocatoriaForm.value.name || '').trim()
+    const tipo = (newConvocatoriaForm.value.name || '').trim()
     const year = Number(newConvocatoriaForm.value.year)
+    const suffix = (newConvocatoriaForm.value.suffix || '').trim()
 
-    if (!name) {
-      formError.value = 'Ingresa un nombre para la convocatoria.'
+    if (!tipo) {
+      formError.value = 'Ingresa el tipo de convocatoria (ej: GENERAL, EXTRAORDINARIO).'
       return
     }
     if (!year || year < 2000 || year > 2100) {
@@ -59,9 +61,11 @@ export function useConvocatoria() {
       return
     }
 
+    const name = suffix ? `${tipo} ${year} - ${suffix}` : `${tipo} ${year}`
+
     try {
       loading.value = true
-      const res = await fetch(`${API_BASE_URL}/convocatorias/`, {
+      const res = await apiFetch(`/convocatorias/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, year, status: 'active' }),
@@ -73,7 +77,7 @@ export function useConvocatoria() {
       const created = await res.json()
 
       // Inicializar áreas y formato DAT por defecto
-      await fetch(`${API_BASE_URL}/convocatorias/${created.id}/init_defaults/`, {
+      await apiFetch(`/convocatorias/${created.id}/init_defaults/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -81,7 +85,7 @@ export function useConvocatoria() {
 
       convocatoriaList.value.unshift(created)
       activeConvocatoria.value = created
-      newConvocatoriaForm.value = { name: '', year: new Date().getFullYear() }
+      newConvocatoriaForm.value = { name: '', year: new Date().getFullYear(), suffix: '' }
       showPanel.value = false
     } catch (e) {
       formError.value = `Error al crear: ${e.message}`
@@ -92,7 +96,7 @@ export function useConvocatoria() {
 
   async function closeConvocatoria(id) {
     try {
-      const res = await fetch(`${API_BASE_URL}/convocatorias/${id}/close/`, { method: 'POST' })
+      const res = await apiFetch(`/convocatorias/${id}/close/`, { method: 'POST' })
       if (!res.ok) throw new Error(res.statusText)
       await fetchConvocatorias()
     } catch (e) {
@@ -102,7 +106,7 @@ export function useConvocatoria() {
 
   async function reopenConvocatoria(id) {
     try {
-      const res = await fetch(`${API_BASE_URL}/convocatorias/${id}/reopen/`, { method: 'POST' })
+      const res = await apiFetch(`/convocatorias/${id}/reopen/`, { method: 'POST' })
       if (!res.ok) throw new Error(res.statusText)
       await fetchConvocatorias()
     } catch (e) {

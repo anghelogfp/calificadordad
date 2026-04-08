@@ -1,10 +1,13 @@
 <script setup>
+import { useAuth } from '@/composables/useAuth'
+
+const auth = useAuth()
+
 const props = defineProps({
   convocatoria: { type: Object, default: null },
-  historyCount: { type: Number, default: 0 },
 })
 
-const emit = defineEmits(['openBackup', 'openConvocatoria', 'openHistory', 'openConfig'])
+const emit = defineEmits(['openConvocatoria'])
 </script>
 
 <template>
@@ -32,56 +35,36 @@ const emit = defineEmits(['openBackup', 'openConvocatoria', 'openHistory', 'open
         class="convocatoria-btn"
         :class="{ 'convocatoria-btn--active': convocatoria?.status === 'active' }"
         @click="emit('openConvocatoria')"
-        title="Gestionar convocatoria"
+        title="Administrar convocatorias"
       >
         <svg viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd"/>
         </svg>
-        <span>{{ convocatoria ? convocatoria.name : 'Seleccionar convocatoria' }}</span>
+        <span>{{ convocatoria ? convocatoria.name : 'Sin convocatoria' }}</span>
         <span v-if="convocatoria?.status === 'active'" class="status-dot status-dot--active" />
         <span v-else-if="convocatoria" class="status-dot status-dot--closed" />
       </button>
 
-      <!-- Botón Historial -->
-      <button
-        type="button"
-        class="history-btn"
-        @click="emit('openHistory')"
-        title="Ver historial de procesos"
-      >
-        <svg viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
-        </svg>
-        <span>Historial</span>
-        <span v-if="historyCount > 0" class="history-badge">{{ historyCount }}</span>
-      </button>
-
-      <!-- Botón Configuración -->
-      <button
-        type="button"
-        class="header-icon-btn"
-        @click="emit('openConfig')"
-        title="Configuración"
-      >
-        <svg viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
-        </svg>
-      </button>
-
-      <!-- Botón Backup -->
-      <button
-        type="button"
-        class="header-icon-btn"
-        @click="emit('openBackup')"
-        title="Backup de sesión"
-      >
-        <svg viewBox="0 0 20 20" fill="currentColor">
-          <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
-        </svg>
-      </button>
-
       <div class="header-badge">
         Dirección de Admisión {{ new Date().getFullYear() }}
+      </div>
+
+      <!-- Usuario + logout -->
+      <div class="user-chip">
+        <svg viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/>
+        </svg>
+        <span>{{ auth.user.value?.first_name || auth.user.value?.username }}</span>
+        <button
+          type="button"
+          class="logout-btn"
+          title="Cerrar sesión"
+          @click="auth.logout()"
+        >
+          <svg viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z" clip-rule="evenodd"/>
+          </svg>
+        </button>
       </div>
     </div>
   </header>
@@ -175,42 +158,6 @@ const emit = defineEmits(['openBackup', 'openConvocatoria', 'openHistory', 'open
 .status-dot--active { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
 .status-dot--closed { background: var(--slate-400); }
 
-/* Botón ícono header */
-.header-icon-btn {
-  width: 36px; height: 36px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.08);
-  color: white;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: all var(--transition-fast);
-}
-
-.header-icon-btn svg { width: 18px; height: 18px; opacity: 0.8; }
-.header-icon-btn:hover { background: rgba(255, 255, 255, 0.15); border-color: rgba(255, 255, 255, 0.3); }
-
-/* Historial */
-.history-btn {
-  display: flex; align-items: center; gap: var(--space-2);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-full);
-  color: white; font-size: 0.85rem; font-weight: 500;
-  cursor: pointer; transition: all var(--transition-fast);
-  backdrop-filter: blur(8px);
-}
-.history-btn svg { width: 16px; height: 16px; opacity: 0.8; flex-shrink: 0; }
-.history-btn:hover { background: rgba(255, 255, 255, 0.15); border-color: rgba(255, 255, 255, 0.3); }
-
-.history-badge {
-  background: var(--unap-gold-500); color: var(--unap-blue-900);
-  border-radius: var(--radius-full); font-size: 0.7rem; font-weight: 700;
-  min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
-  padding: 0 var(--space-1);
-}
-
 .header-badge {
   display: flex;
   align-items: center;
@@ -224,6 +171,35 @@ const emit = defineEmits(['openBackup', 'openConvocatoria', 'openHistory', 'open
   font-weight: 500;
   backdrop-filter: blur(8px);
 }
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-full);
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.user-chip svg { width: 14px; height: 14px; opacity: 0.7; flex-shrink: 0; }
+
+.logout-btn {
+  width: 24px; height: 24px;
+  border: none;
+  background: rgba(255,255,255,0.12);
+  border-radius: var(--radius-sm);
+  color: white;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+.logout-btn svg { width: 14px; height: 14px; }
+.logout-btn:hover { background: rgba(239,68,68,0.4); }
 
 @media (max-width: 1024px) {
   .app-header {

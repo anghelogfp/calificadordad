@@ -1,50 +1,59 @@
 import { ref, reactive, computed } from 'vue'
-import { useStorage } from '@vueuse/core'
 import {
-  STORAGE_KEYS,
   DEFAULT_PONDERATIONS,
   DEFAULT_DAT_FORMAT,
   ANSWER_KEY_AREAS,
 } from '@/constants'
-import { generateId, normalizeArea } from '@/utils/helpers'
+import { apiFetch } from '@/utils/apiFetch'
+import { normalizeArea } from '@/utils/helpers'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Estructura de una plantilla en localStorage:
-//   { id, name, area (null=global), convocatoriaId, questionTotal, createdAt, items[] }
-//
-// Estructura de un item:
-//   { id, subject, questionCount, ponderation, order }
+// Normalización API ↔ frontend
+// API usa snake_case; el frontend usa camelCase
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Composable para gestión de plantillas de ponderación.
- *
- * @param {import('vue').Ref} [areaNames]             - Lista reactiva de áreas disponibles
- * @param {import('vue').Ref} [activeConvocatoriaId]  - ID de la convocatoria activa
- */
+function itemFromApi(i) {
+  return {
+    id: i.id,
+    subject: i.subject,
+    questionCount: Number(i.question_count),
+    ponderation: Number(i.ponderation),
+    order: i.order,
+  }
+}
+
+function plantillaFromApi(p) {
+  return {
+    id: p.id,
+    name: p.name,
+    area: p.area || null,
+    convocatoriaId: p.convocatoria || null,
+    questionTotal: p.question_total,
+    items: (p.items || []).map(itemFromApi),
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function usePonderations(areaNames, activeConvocatoriaId) {
   const effectiveAreaNames = computed(() =>
     areaNames?.value?.length ? areaNames.value : ANSWER_KEY_AREAS
   )
 
-  // ──────────────────────────────────────────────
-  // ESTADO PRINCIPAL
-  // ──────────────────────────────────────────────
+  // ── Estado principal ──────────────────────────────────────────────────────
 
-  const plantillas = useStorage(STORAGE_KEYS.PLANTILLAS, [])
+  const plantillas = ref([])
+  const loading = ref(false)
   const selectedPlantillaId = ref(null)
   const editorError = ref('')
   const newItem = reactive({ subject: '', questionCount: 1, ponderation: 1 })
   const editingItems = ref(new Set())
 
-  // Formulario inline "nueva plantilla" del sidebar
   const showNewPlantillaForm = ref(false)
   const newPlantillaName = ref('')
   const newPlantillaArea = ref('')
 
-  // ──────────────────────────────────────────────
-  // COMPUTED
-  // ──────────────────────────────────────────────
+  // ── Computed ──────────────────────────────────────────────────────────────
 
   const selectedPlantilla = computed(() =>
     plantillas.value.find(p => p.id === selectedPlantillaId.value) || null
@@ -64,7 +73,6 @@ export function usePonderations(areaNames, activeConvocatoriaId) {
     }
   })
 
-  // Secciones del sidebar: áreas específicas primero, "General" (null) al final
   const sidebarSections = computed(() => {
     const sections = []
     const areaMap = new Map()
@@ -80,11 +88,9 @@ export function usePonderations(areaNames, activeConvocatoriaId) {
       if (list?.length) sections.push({ area, label: area, plantillas: list })
     })
 
-    // Áreas que no están en el sistema (por si acaso)
     areaMap.forEach((list, key) => {
-      if (key !== '__global__' && !effectiveAreaNames.value.includes(key)) {
+      if (key !== '__global__' && !effectiveAreaNames.value.includes(key))
         sections.push({ area: key, label: key, plantillas: list })
-      }
     })
 
     const globals = areaMap.get('__global__')
@@ -93,35 +99,23 @@ export function usePonderations(areaNames, activeConvocatoriaId) {
     return sections
   })
 
-  // Compatibilidad con App.vue (getStepStatus/Description del Paso 5)
-  const ponderationRows = computed(() =>
-    plantillas.value.flatMap(p => p.items || [])
-  )
+  // Compat con App.vue getStepStatus
+  const ponderationRows = computed(() => plantillas.value.flatMap(p => p.items || []))
 
-  // ──────────────────────────────────────────────
-  // HELPERS INTERNOS
-  // ──────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
-  function _recalcTotal(plantillaId) {
-    plantillas.value = plantillas.value.map(p => {
-      if (p.id !== plantillaId) return p
-      const total = (p.items || []).reduce((a, i) => a + (Number(i.questionCount) || 0), 0)
-      return { ...p, questionTotal: total }
-    })
+  function _updatePlantillaLocal(updated) {
+    const idx = plantillas.value.findIndex(p => p.id === updated.id)
+    if (idx >= 0) plantillas.value[idx] = updated
+    else plantillas.value.push(updated)
   }
 
-  // ──────────────────────────────────────────────
-  // API PÚBLICA — PLANTILLAS
-  // ──────────────────────────────────────────────
+  // ── CRUD Plantillas ───────────────────────────────────────────────────────
 
   function getPlantillaById(id) {
     return plantillas.value.find(p => p.id === id) || null
   }
 
-  /**
-   * Plantillas aplicables para calificar un área:
-   * las específicas de esa área + las globales (area=null).
-   */
   function getPlantillasForCalification(area) {
     const normalized = normalizeArea(area, effectiveAreaNames.value)
     return plantillas.value.filter(p => !p.area || p.area === normalized)
@@ -136,53 +130,63 @@ export function usePonderations(areaNames, activeConvocatoriaId) {
     editingItems.value = new Set()
   }
 
-  function createPlantilla({ name, area = null } = {}) {
+  async function createPlantilla({ name, area = null } = {}) {
     editorError.value = ''
     const trimmed = String(name ?? '').trim()
-    if (!trimmed) {
-      editorError.value = 'El nombre de la plantilla es requerido.'
+    if (!trimmed) { editorError.value = 'El nombre de la plantilla es requerido.'; return null }
+
+    try {
+      const res = await apiFetch('/plantillas/', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: trimmed,
+          area: area || null,
+          convocatoria: activeConvocatoriaId?.value || null,
+        }),
+      })
+      if (!res.ok) { editorError.value = 'Error al crear la plantilla.'; return null }
+      const data = await res.json()
+      const plantilla = plantillaFromApi(data)
+      plantillas.value = [...plantillas.value, plantilla]
+      selectPlantilla(plantilla.id)
+      return plantilla
+    } catch {
+      editorError.value = 'Error de conexión.'
       return null
     }
-    const id = generateId()
-    const plantilla = {
-      id,
-      name: trimmed,
-      area: area || null,
-      convocatoriaId: activeConvocatoriaId?.value || null,
-      questionTotal: 0,
-      createdAt: new Date().toISOString(),
-      items: [],
-    }
-    plantillas.value = [...plantillas.value, plantilla]
-    selectPlantilla(id)
-    return plantilla
   }
 
-  function deletePlantilla(id) {
+  async function deletePlantilla(id) {
+    try {
+      await apiFetch(`/plantillas/${id}/`, { method: 'DELETE' })
+    } catch { /* continuar aunque falle */ }
+
     plantillas.value = plantillas.value.filter(p => p.id !== id)
     if (selectedPlantillaId.value === id) {
       selectedPlantillaId.value = plantillas.value[0]?.id || null
     }
   }
 
-  function renamePlantilla(id, name) {
+  async function renamePlantilla(id, name) {
     const trimmed = String(name ?? '').trim()
     if (!trimmed) return
-    plantillas.value = plantillas.value.map(p =>
-      p.id === id ? { ...p, name: trimmed } : p
-    )
+
+    // Optimista
+    plantillas.value = plantillas.value.map(p => p.id === id ? { ...p, name: trimmed } : p)
+
+    try {
+      await apiFetch(`/plantillas/${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: trimmed }),
+      })
+    } catch { /* ya actualizado localmente */ }
   }
 
-  // ──────────────────────────────────────────────
-  // API PÚBLICA — ITEMS DE LA PLANTILLA SELECCIONADA
-  // ──────────────────────────────────────────────
+  // ── CRUD Items ────────────────────────────────────────────────────────────
 
-  function addItem() {
+  async function addItem() {
     editorError.value = ''
-    if (!selectedPlantilla.value) {
-      editorError.value = 'Selecciona una plantilla primero.'
-      return
-    }
+    if (!selectedPlantilla.value) { editorError.value = 'Selecciona una plantilla primero.'; return }
 
     const subject = String(newItem.subject ?? '').trim()
     const questionCount = Math.max(0, Math.round(Number(newItem.questionCount ?? 0)))
@@ -195,57 +199,91 @@ export function usePonderations(areaNames, activeConvocatoriaId) {
       return
     }
 
-    const id = selectedPlantillaId.value
+    const plantillaId = selectedPlantillaId.value
     const items = selectedPlantilla.value.items || []
     const maxOrder = items.length > 0 ? Math.max(...items.map(i => i.order)) : 0
-    const newItemData = {
-      id: generateId(),
-      subject,
-      questionCount,
-      ponderation,
-      order: maxOrder + 1,
+
+    try {
+      const res = await apiFetch(`/plantillas/${plantillaId}/items/`, {
+        method: 'POST',
+        body: JSON.stringify({ subject, question_count: questionCount, ponderation, order: maxOrder + 1 }),
+      })
+      if (!res.ok) { editorError.value = 'Error al agregar el item.'; return }
+      const data = await res.json()
+      const newItemData = itemFromApi(data)
+
+      plantillas.value = plantillas.value.map(p => {
+        if (p.id !== plantillaId) return p
+        const updatedItems = [...(p.items || []), newItemData]
+        return { ...p, items: updatedItems, questionTotal: updatedItems.reduce((a, i) => a + i.questionCount, 0) }
+      })
+
+      newItem.subject = ''
+      newItem.questionCount = 1
+      newItem.ponderation = 1
+    } catch {
+      editorError.value = 'Error de conexión al agregar item.'
     }
-
-    plantillas.value = plantillas.value.map(p =>
-      p.id === id ? { ...p, items: [...(p.items || []), newItemData] } : p
-    )
-    _recalcTotal(id)
-
-    newItem.subject = ''
-    newItem.questionCount = 1
-    newItem.ponderation = 1
   }
 
-  function removeItem(itemId) {
-    const id = selectedPlantillaId.value
-    if (!id) return
-    plantillas.value = plantillas.value.map(p =>
-      p.id === id ? { ...p, items: (p.items || []).filter(i => i.id !== itemId) } : p
-    )
-    _recalcTotal(id)
+  async function removeItem(itemId) {
+    const plantillaId = selectedPlantillaId.value
+    if (!plantillaId) return
+
+    // Optimista
+    plantillas.value = plantillas.value.map(p => {
+      if (p.id !== plantillaId) return p
+      const updatedItems = (p.items || []).filter(i => i.id !== itemId)
+      return { ...p, items: updatedItems, questionTotal: updatedItems.reduce((a, i) => a + i.questionCount, 0) }
+    })
     const next = new Set(editingItems.value)
     next.delete(itemId)
     editingItems.value = next
+
+    try {
+      await apiFetch(`/plantillas/${plantillaId}/items/${itemId}/`, { method: 'DELETE' })
+    } catch { /* ya eliminado localmente */ }
   }
 
-  function toggleEditItem(itemId) {
+  async function toggleEditItem(itemId) {
     const next = new Set(editingItems.value)
     if (next.has(itemId)) {
+      // Guardando edición — sincronizar con API
       next.delete(itemId)
-      _recalcTotal(selectedPlantillaId.value)
+      editingItems.value = next
+
+      const plantillaId = selectedPlantillaId.value
+      const item = selectedPlantilla.value?.items?.find(i => i.id === itemId)
+      if (!item || !plantillaId) return
+
+      // Recalcular total local
+      plantillas.value = plantillas.value.map(p => {
+        if (p.id !== plantillaId) return p
+        return { ...p, questionTotal: (p.items || []).reduce((a, i) => a + i.questionCount, 0) }
+      })
+
+      try {
+        await apiFetch(`/plantillas/${plantillaId}/items/${itemId}/`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            subject: item.subject,
+            question_count: item.questionCount,
+            ponderation: item.ponderation,
+            order: item.order,
+          }),
+        })
+      } catch { /* ya actualizado localmente */ }
     } else {
       next.add(itemId)
+      editingItems.value = next
     }
-    editingItems.value = next
   }
 
   function isEditingItem(itemId) {
     return editingItems.value.has(itemId)
   }
 
-  // ──────────────────────────────────────────────
-  // FORMULARIO "NUEVA PLANTILLA" EN SIDEBAR
-  // ──────────────────────────────────────────────
+  // ── Formulario nueva plantilla ────────────────────────────────────────────
 
   function openNewPlantillaForm(defaultArea = '') {
     newPlantillaName.value = ''
@@ -260,8 +298,8 @@ export function usePonderations(areaNames, activeConvocatoriaId) {
     newPlantillaArea.value = ''
   }
 
-  function confirmNewPlantilla() {
-    const created = createPlantilla({
+  async function confirmNewPlantilla() {
+    const created = await createPlantilla({
       name: newPlantillaName.value,
       area: newPlantillaArea.value || null,
     })
@@ -272,76 +310,146 @@ export function usePonderations(areaNames, activeConvocatoriaId) {
     }
   }
 
-  // ──────────────────────────────────────────────
-  // INICIALIZACIÓN
-  // ──────────────────────────────────────────────
+  // ── Inicialización y seed ─────────────────────────────────────────────────
 
-  function _seedDefaultPlantillas() {
-    const areas = effectiveAreaNames.value.length > 0 ? effectiveAreaNames.value : ANSWER_KEY_AREAS
-    const defaults = []
+  async function _seedDefaultsToApi() {
+    const areas = effectiveAreaNames.value.length ? effectiveAreaNames.value : ANSWER_KEY_AREAS
+    const convocatoriaId = activeConvocatoriaId?.value || null
+
+    const toCreate = []
 
     areas.forEach(area => {
-      const areaItems = DEFAULT_PONDERATIONS
+      const items = DEFAULT_PONDERATIONS
         .filter(d => d.area === area)
         .map(d => ({
-          id: generateId(),
           subject: d.subject,
-          questionCount: d.questionCount,
-          ponderation: d.ponderation,
+          question_count: d.questionCount,
+          ponderation: String(d.ponderation),
           order: d.order,
         }))
-      if (areaItems.length) {
-        defaults.push({
-          id: generateId(),
-          name: `UNAP — ${area}`,
-          area,
-          convocatoriaId: activeConvocatoriaId?.value || null,
-          questionTotal: areaItems.reduce((a, i) => a + i.questionCount, 0),
-          createdAt: new Date().toISOString(),
-          items: areaItems,
-        })
+      if (items.length) {
+        toCreate.push({ name: `UNAP \u2014 ${area}`, area, convocatoria: convocatoriaId, items })
       }
     })
 
-    // Modo Simple — global (area=null)
-    defaults.push({
-      id: generateId(),
+    // Modo Simple global
+    toCreate.push({
       name: 'Modo Simple',
       area: null,
-      convocatoriaId: null,
-      questionTotal: DEFAULT_DAT_FORMAT.answersLength,
-      createdAt: new Date().toISOString(),
-      items: [{
-        id: generateId(),
-        subject: 'General',
-        questionCount: DEFAULT_DAT_FORMAT.answersLength,
-        ponderation: 1,
-        order: 1,
-      }],
+      convocatoria: null,
+      items: [{ subject: 'General', question_count: DEFAULT_DAT_FORMAT.answersLength, ponderation: '1', order: 1 }],
     })
 
-    return defaults
+    const results = []
+    for (const payload of toCreate) {
+      try {
+        const res = await apiFetch('/plantillas/', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        })
+        if (res.ok) {
+          results.push(plantillaFromApi(await res.json()))
+        } else {
+          console.warn('[seed] Error creando plantilla', payload.name, res.status, await res.text())
+        }
+      } catch (e) {
+        console.warn('[seed] Excepción creando plantilla', payload.name, e)
+      }
+    }
+    return results
   }
 
   async function initializePlantillas() {
-    if (plantillas.value.length === 0) {
-      plantillas.value = _seedDefaultPlantillas()
+    loading.value = true
+    try {
+      const res = await apiFetch('/plantillas/')
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      plantillas.value = data.map(plantillaFromApi)
+
+      if (plantillas.value.length === 0) {
+        const seeded = await _seedDefaultsToApi()
+        plantillas.value = seeded
+      }
+    } catch {
+      // Si la API falla, trabajar con lista vacía
+      plantillas.value = []
+    } finally {
+      loading.value = false
     }
+
     if (!selectedPlantillaId.value || !plantillas.value.find(p => p.id === selectedPlantillaId.value)) {
       selectedPlantillaId.value = plantillas.value[0]?.id || null
     }
   }
 
-  // Alias — App.vue llama initializePonderations()
   const initializePonderations = initializePlantillas
 
-  // ──────────────────────────────────────────────
-  // RETURN
-  // ──────────────────────────────────────────────
+  // ── Export / Import ───────────────────────────────────────────────────────
+
+  function exportPlantillas() {
+    const data = plantillas.value.map(p => ({
+      name: p.name,
+      area: p.area || null,
+      items: (p.items || [])
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map(i => ({ subject: i.subject, questionCount: i.questionCount, ponderation: i.ponderation, order: i.order })),
+    }))
+    const json = JSON.stringify(data, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `plantillas_${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const importError = ref('')
+  const importLoading = ref(false)
+
+  async function importPlantillas(file) {
+    importError.value = ''
+    importLoading.value = true
+    try {
+      const text = await file.text()
+      const parsed = JSON.parse(text)
+      if (!Array.isArray(parsed)) throw new Error('El archivo no contiene una lista de plantillas.')
+
+      let created = 0
+      for (const p of parsed) {
+        if (!p.name) continue
+        const payload = {
+          name: p.name,
+          area: p.area || null,
+          convocatoria: activeConvocatoriaId?.value || null,
+          items: (p.items || []).map((i, idx) => ({
+            subject: i.subject,
+            question_count: i.questionCount,
+            ponderation: String(i.ponderation),
+            order: i.order ?? idx + 1,
+          })),
+        }
+        const res = await apiFetch('/plantillas/', { method: 'POST', body: JSON.stringify(payload) })
+        if (res.ok) {
+          plantillas.value = [...plantillas.value, plantillaFromApi(await res.json())]
+          created++
+        }
+      }
+      if (created === 0) importError.value = 'No se importó ninguna plantilla. Verifica el formato del archivo.'
+    } catch (e) {
+      importError.value = e.message || 'Error al importar el archivo.'
+    } finally {
+      importLoading.value = false
+    }
+  }
+
+  // ── Return ────────────────────────────────────────────────────────────────
 
   return {
-    // State
     plantillas,
+    loading,
     selectedPlantillaId,
     selectedPlantilla,
     selectedPlantillaItems,
@@ -353,27 +461,26 @@ export function usePonderations(areaNames, activeConvocatoriaId) {
     showNewPlantillaForm,
     newPlantillaName,
     newPlantillaArea,
-    // Plantilla CRUD
     getPlantillaById,
     getPlantillasForCalification,
     selectPlantilla,
     createPlantilla,
     deletePlantilla,
     renamePlantilla,
-    // Item CRUD
     addItem,
     removeItem,
     toggleEditItem,
     isEditingItem,
-    // New plantilla form
     openNewPlantillaForm,
     cancelNewPlantillaForm,
     confirmNewPlantilla,
-    // Init
     initializePlantillas,
     initializePonderations,
-    // Backwards compat
     ponderationRows,
     ponderationCurrentTotals: selectedPlantillaTotal,
+    exportPlantillas,
+    importPlantillas,
+    importError,
+    importLoading,
   }
 }

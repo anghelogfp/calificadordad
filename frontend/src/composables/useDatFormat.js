@@ -1,6 +1,7 @@
 import { ref, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { API_BASE_URL, STORAGE_KEYS, DEFAULT_DAT_FORMAT } from '@/constants'
+import { apiFetch } from '@/utils/apiFetch'
 
 /**
  * Composable para configuración del formato de archivos .dat
@@ -17,7 +18,7 @@ export function useDatFormat(activeConvocatoria) {
     try {
       loading.value = true
       error.value = ''
-      const res = await fetch(`${API_BASE_URL}/dat-format-configs/?convocatoria=${convocatoriaId}`)
+      const res = await apiFetch(`/dat-format-configs/?convocatoria=${convocatoriaId}`)
       if (!res.ok) throw new Error(res.statusText)
       const data = await res.json()
       if (data.length > 0) {
@@ -63,13 +64,13 @@ export function useDatFormat(activeConvocatoria) {
     try {
       let res
       if (apiId.value) {
-        res = await fetch(`${API_BASE_URL}/dat-format-configs/${apiId.value}/`, {
+        res = await apiFetch(`/dat-format-configs/${apiId.value}/`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
       } else {
-        res = await fetch(`${API_BASE_URL}/dat-format-configs/`, {
+        res = await apiFetch(`/dat-format-configs/`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

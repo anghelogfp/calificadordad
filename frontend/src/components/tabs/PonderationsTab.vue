@@ -10,6 +10,20 @@ const props = defineProps({
 
 const ponderations = reactive(props.ponderations)
 
+// Export / Import
+const importFileInput = ref(null)
+
+function triggerImport() {
+  importFileInput.value.value = ''
+  importFileInput.value.click()
+}
+
+async function handleImportFile(event) {
+  const file = event.target.files[0]
+  if (!file) return
+  await ponderations.importPlantillas(file)
+}
+
 // Confirmación inline — evitar browser confirm()
 const pendingDeletePlantilla = ref(null)
 const pendingDeleteItem = ref(null)
@@ -111,6 +125,24 @@ function handleRename(event) {
 
         <!-- Footer nueva plantilla -->
         <div class="sidebar__footer">
+          <!-- Export / Import -->
+          <div class="sidebar__io-row">
+            <button type="button" class="btn-io" title="Exportar todas las plantillas como JSON" @click="ponderations.exportPlantillas">
+              <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
+              </svg>
+              Exportar
+            </button>
+            <button type="button" class="btn-io" title="Importar plantillas desde JSON" :disabled="ponderations.importLoading" @click="triggerImport">
+              <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+              </svg>
+              {{ ponderations.importLoading ? 'Importando…' : 'Importar' }}
+            </button>
+            <input ref="importFileInput" type="file" accept=".json" class="sr-only" @change="handleImportFile" />
+          </div>
+          <div v-if="ponderations.importError" class="import-error">{{ ponderations.importError }}</div>
+
           <div v-if="ponderations.showNewPlantillaForm" class="new-plantilla-form">
             <input
               v-model="ponderations.newPlantillaName"
@@ -548,6 +580,31 @@ function handleRename(event) {
   padding: var(--space-3) var(--space-4);
   background: var(--slate-50);
 }
+
+.sidebar__io-row {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.btn-io {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  gap: var(--space-1); padding: var(--space-1) var(--space-2);
+  background: none; border: 1px solid var(--slate-300);
+  border-radius: var(--radius-md); color: var(--slate-500);
+  font-size: 0.75rem; font-weight: 500; cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.btn-io:hover:not(:disabled) { border-color: var(--unap-blue-400); color: var(--unap-blue-600); background: var(--unap-blue-50); }
+.btn-io:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.import-error {
+  font-size: 0.72rem; color: var(--red-600);
+  margin-bottom: var(--space-2); line-height: 1.3;
+}
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 
 .btn-new-plantilla {
   width: 100%;

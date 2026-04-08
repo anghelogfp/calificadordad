@@ -3,6 +3,10 @@ import { onMounted, ref, computed, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { TAB_KEYS, tabs, IDENTIFIER_SUBTABS, RESPONSES_SUBTABS, ANSWER_KEY_SUBTABS } from '@/constants'
 
+// Auth
+import { useAuth } from '@/composables/useAuth'
+import LoginPage from '@/components/auth/LoginPage.vue'
+
 // Composables
 import { useArchives } from '@/composables/useArchives'
 import { useIdentifiers } from '@/composables/useIdentifiers'
@@ -21,6 +25,7 @@ import { useVacantesPrograma } from '@/composables/useVacantesPrograma'
 
 // Layout
 import AppHeader from '@/components/layout/AppHeader.vue'
+import AppSidebar from '@/components/layout/AppSidebar.vue'
 import StepNav from '@/components/layout/StepNav.vue'
 
 // Tabs
@@ -34,19 +39,28 @@ import PonderationsTab from '@/components/tabs/PonderationsTab.vue'
 // Modals & Panels
 import CalificationModal from '@/components/modals/CalificationModal.vue'
 import BackupModal from '@/components/modals/BackupModal.vue'
-import HistoryPanel from '@/components/panels/HistoryPanel.vue'
+import NuevoProcesoModal from '@/components/modals/NuevoProcesoModal.vue'
 import ConvocatoriaPanel from '@/components/panels/ConvocatoriaPanel.vue'
 import DashboardPanel from '@/components/panels/DashboardPanel.vue'
-import ConfigPanel from '@/components/panels/ConfigPanel.vue'
+
+// Views (sidebar)
+import HistoryView from '@/components/views/HistoryView.vue'
+import ConfigView from '@/components/views/ConfigView.vue'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NAVIGATION STATE
 // ═══════════════════════════════════════════════════════════════════════════
 
+const auth = useAuth()
+
 const activeTab = useStorage('calificador-active-tab', TAB_KEYS.ARCHIVES)
 const identifierSubTab = useStorage('calificador-identificador-subtab', IDENTIFIER_SUBTABS.LIST)
 const responsesSubTab = useStorage('calificador-respuestas-subtab', RESPONSES_SUBTABS.LIST)
 const answerKeySubTab = useStorage('calificador-claves-subtab', ANSWER_KEY_SUBTABS.LIST)
+
+// Vistas del sidebar — history y config renderizan en el área central sin StepNav
+const PROCESS_TABS = [TAB_KEYS.ARCHIVES, TAB_KEYS.IDENTIFIERS, TAB_KEYS.RESPONSES, TAB_KEYS.ANSWER_KEYS, TAB_KEYS.RESULTS]
+const showStepNav = computed(() => PROCESS_TABS.includes(activeTab.value))
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMPOSABLES
@@ -84,7 +98,14 @@ const calification = useCalification(
 
 const dashboard = useScoreDashboard(calification.calificationAllResults, areas.areaByName)
 const showDashboardPanel = ref(false)
-const showConfigPanel = ref(false)
+const showNuevoProcesoModal = ref(false)
+
+const hasProcessData = computed(() =>
+  archives.rows.value.length > 0 ||
+  identifiers.rows.value.length > 0 ||
+  responses.rows.value.length > 0 ||
+  answerKeys.rows.value.length > 0
+)
 
 // Programas disponibles agrupados por área, derivados del padrón cargado
 const programasByArea = computed(() => {
@@ -130,7 +151,36 @@ function saveToHistory() {
   }
 }
 
-function handleLoadProcess(process) {
+function navigateToHistory() {
+  activeTab.value = 'history'
+  history.fetchHistory()
+}
+
+function startNewProcess() {
+  showNuevoProcesoModal.value = true
+}
+
+function confirmNewProcess(selectedConvocatoria) {
+  convocatoria.setActiveConvocatoria(selectedConvocatoria)
+  archives.clearAll()
+  identifiers.clearAllIdentifiers()
+  responses.clearAllResponses()
+  answerKeys.clearAllAnswerKeys()
+  calification.resetCalificationResults()
+  showNuevoProcesoModal.value = false
+  activeTab.value = TAB_KEYS.ARCHIVES
+}
+
+async function handleLoadProcess(process) {
+  const hasResults = Object.values(process.areas || {}).some(a => a.results?.length > 0)
+  if (!hasResults && process.dbId) {
+    const full = await history.loadProcessFromApi(process.dbId)
+    if (full) {
+      calification.loadProcess(full)
+      activeTab.value = TAB_KEYS.RESULTS
+      return
+    }
+  }
   calification.loadProcess(process)
   activeTab.value = TAB_KEYS.RESULTS
 }
@@ -189,80 +239,125 @@ function getStepDescription(key) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 onMounted(async () => {
-  await ponderations.initializePonderations()
-  convocatoria.fetchConvocatorias()
+  await auth.initialize()
+  if (auth.isAuthenticated.value) {
+    // Limpiar localStorage legacy (ahora viven en la BD)
+    localStorage.removeItem('calificador-plantillas')
+    localStorage.removeItem('calificador-historial')
+    await ponderations.initializePonderations()
+    convocatoria.fetchConvocatorias()
+  }
 })
 </script>
 
 <template>
-  <div class="app-layout">
+  <LoginPage v-if="!auth.isAuthenticated.value" />
+
+  <div v-else class="app-layout">
     <AppHeader
       :convocatoria="convocatoria.activeConvocatoria.value"
-      :history-count="history.historyList.value.length"
-      @open-backup="backup.showModal.value = true"
       @open-convocatoria="convocatoria.showPanel.value = true"
-      @open-history="history.openHistoryPanel"
-      @open-config="showConfigPanel = true"
     />
 
-    <StepNav
-      :tabs="tabs"
-      :active-tab="activeTab"
-      :get-step-status="getStepStatus"
-      :get-step-label="getStepLabel"
-      :get-step-description="getStepDescription"
-      @update:active-tab="activeTab = $event"
+    <div class="app-body">
+      <AppSidebar
+        :history-count="history.historyList.value.length"
+        :active-tab="activeTab"
+        :active-ponderations="activeTab === TAB_KEYS.PONDERATIONS"
+        :active-history="activeTab === 'history'"
+        :active-config="activeTab === 'config'"
+        @new-process="startNewProcess"
+        @open-ponderations="activeTab = TAB_KEYS.PONDERATIONS"
+        @open-history="navigateToHistory"
+        @open-config="activeTab = 'config'"
+        @open-backup="backup.showModal.value = true"
+      />
+
+      <div class="app-content">
+        <StepNav
+          v-if="showStepNav"
+          :tabs="tabs"
+          :active-tab="activeTab"
+          :get-step-status="getStepStatus"
+          :get-step-label="getStepLabel"
+          :get-step-description="getStepDescription"
+          @update:active-tab="activeTab = $event"
+        />
+
+        <main class="app-main">
+          <ArchivesTab
+            v-if="activeTab === TAB_KEYS.ARCHIVES"
+            :archives="archives"
+          />
+
+          <IdentifiersTab
+            v-else-if="activeTab === TAB_KEYS.IDENTIFIERS"
+            :identifiers="identifiers"
+            :sub-tab="identifierSubTab"
+            @update:sub-tab="identifierSubTab = $event"
+          />
+
+          <ResponsesTab
+            v-else-if="activeTab === TAB_KEYS.RESPONSES"
+            :responses="responses"
+            :sub-tab="responsesSubTab"
+            @update:sub-tab="responsesSubTab = $event"
+          />
+
+          <AnswerKeysTab
+            v-else-if="activeTab === TAB_KEYS.ANSWER_KEYS"
+            :answer-keys="answerKeys"
+            :sub-tab="answerKeySubTab"
+            @update:sub-tab="answerKeySubTab = $event"
+          />
+
+          <PonderationsTab
+            v-else-if="activeTab === TAB_KEYS.PONDERATIONS"
+            :ponderations="ponderations"
+            :answers-length="datFormat.formatConfig.value?.answersLength ?? 60"
+          />
+
+          <ScoresTab
+            v-else-if="activeTab === TAB_KEYS.SCORES"
+            :calification="calification"
+            :ponderations="ponderations"
+            :dashboard="dashboard"
+            :exporter="exporter"
+            :convocatoria-name="convocatoria.activeConvocatoriaName.value"
+            :on-save-to-history="saveToHistory"
+            @open-modal="calification.openCalificationModal"
+            @open-dashboard="showDashboardPanel = true"
+          />
+
+          <HistoryView
+            v-else-if="activeTab === 'history'"
+            :history="history"
+            @load-process="handleLoadProcess"
+          />
+
+          <ConfigView
+            v-else-if="activeTab === 'config'"
+            :programas-by-area="programasByArea"
+            :vacantes-programa="vacantesPrograma"
+            :dat-format="datFormat"
+            :convocatoria-id="convocatoria.activeConvocatoriaId.value"
+          />
+        </main>
+      </div>
+    </div>
+
+    <NuevoProcesoModal
+      :show="showNuevoProcesoModal"
+      :convocatoria="convocatoria"
+      :has-data="hasProcessData"
+      @confirm="confirmNewProcess"
+      @close="showNuevoProcesoModal = false"
     />
-
-    <main class="app-main">
-      <ArchivesTab
-        v-if="activeTab === TAB_KEYS.ARCHIVES"
-        :archives="archives"
-      />
-
-      <IdentifiersTab
-        v-else-if="activeTab === TAB_KEYS.IDENTIFIERS"
-        :identifiers="identifiers"
-        :sub-tab="identifierSubTab"
-        @update:sub-tab="identifierSubTab = $event"
-      />
-
-      <ResponsesTab
-        v-else-if="activeTab === TAB_KEYS.RESPONSES"
-        :responses="responses"
-        :sub-tab="responsesSubTab"
-        @update:sub-tab="responsesSubTab = $event"
-      />
-
-      <AnswerKeysTab
-        v-else-if="activeTab === TAB_KEYS.ANSWER_KEYS"
-        :answer-keys="answerKeys"
-        :sub-tab="answerKeySubTab"
-        @update:sub-tab="answerKeySubTab = $event"
-      />
-
-      <PonderationsTab
-        v-else-if="activeTab === TAB_KEYS.PONDERATIONS"
-        :ponderations="ponderations"
-        :answers-length="datFormat.formatConfig.value?.answersLength ?? 60"
-      />
-
-      <ScoresTab
-        v-else-if="activeTab === TAB_KEYS.SCORES"
-        :calification="calification"
-        :ponderations="ponderations"
-        :dashboard="dashboard"
-        :exporter="exporter"
-        :convocatoria-name="convocatoria.activeConvocatoriaName.value"
-        :on-save-to-history="saveToHistory"
-        @open-modal="calification.openCalificationModal"
-        @open-dashboard="showDashboardPanel = true"
-      />
-    </main>
 
     <CalificationModal
       :show="calification.showCalificationModal.value"
       :calification="calification"
+      :vacantes-programa="vacantesPrograma"
       @close="calification.closeCalificationModal"
     />
 
@@ -270,14 +365,6 @@ onMounted(async () => {
       :show="backup.showModal.value"
       :backup="backup"
       @close="backup.showModal.value = false"
-    />
-
-    <HistoryPanel
-      :show="history.showHistoryPanel.value"
-      :history-list="history.historyList.value"
-      @close="history.closeHistoryPanel"
-      @load-process="handleLoadProcess"
-      @delete-process="history.deleteProcess"
     />
 
     <ConvocatoriaPanel
@@ -291,26 +378,34 @@ onMounted(async () => {
       @close="showDashboardPanel = false"
     />
 
-    <ConfigPanel
-      :show="showConfigPanel"
-      :programas-by-area="programasByArea"
-      :vacantes-programa="vacantesPrograma"
-      :dat-format="datFormat"
-      :convocatoria-id="convocatoria.activeConvocatoriaId.value"
-      @close="showConfigPanel = false"
-    />
   </div>
 </template>
 
 <style scoped>
 .app-layout {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 
+.app-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.app-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .app-main {
   flex: 1;
+  overflow-y: auto;
   padding: var(--space-8);
   max-width: 1400px;
   width: 100%;

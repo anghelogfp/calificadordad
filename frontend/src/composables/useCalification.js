@@ -1,6 +1,7 @@
 import { ref, computed, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { STORAGE_KEYS, ANSWER_KEY_AREAS, API_BASE_URL, DEFAULT_DAT_FORMAT } from '@/constants'
+import { apiFetch } from '@/utils/apiFetch'
 import {
   normalize,
   normalizeArea,
@@ -145,6 +146,98 @@ export function useCalification(
   const calificationAreaOptions = computed(() => effectiveAreaNames.value)
   const calificationHasResults = computed(() => processAreas.value.length > 0)
 
+  // Programas de estudio del área actualmente seleccionada en el modal
+  const programasForCurrentArea = computed(() => {
+    const area = normalizeArea(calificationArea.value, effectiveAreaNames.value)
+    const set = new Set()
+    archiveRows.value.forEach(r => {
+      if (normalizeArea(r.area, effectiveAreaNames.value) === area && r.programa?.trim())
+        set.add(r.programa.trim())
+    })
+    return Array.from(set).sort()
+  })
+
+  // ── Pre-vuelo ─────────────────────────────────────────────────────────────
+  const preflightCheck = computed(() => {
+    const area = normalizeArea(calificationArea.value, effectiveAreaNames.value)
+
+    // 1. Candidatos del padrón en esta área
+    const candidates = archiveRows.value.filter(
+      r => normalizeArea(r.area, effectiveAreaNames.value) === area
+    )
+
+    // 2. Candidatos sin respuesta .dat
+    const withoutResponse = candidates.filter(c => {
+      const dni = stripDigits(c.dni)
+      return !responsesByDni.value.has(dni) || responsesByDni.value.get(dni).length === 0
+    })
+
+    // 3. Respuestas .dat sin candidato en el padrón
+    const allDnisInPadron = new Set(archiveRows.value.map(r => stripDigits(r.dni)))
+    const orphanResponses = [...responsesByDni.value.entries()].filter(([dni]) => !allDnisInPadron.has(dni))
+
+    // 4. Claves de respuesta para el área
+    const hasAnswerKeys = answerKeyRows.value.some(
+      k => normalizeArea(k.area, effectiveAreaNames.value) === area
+    )
+
+    // 5. Respuestas .dat sin DNI vinculado
+    const unlinked = archiveRows.value.length > 0
+      ? (responsesByDni.value.get('') || []).length + (responsesByDni.value.get(undefined) || []).length
+      : 0
+
+    const items = [
+      {
+        key: 'candidates',
+        label: 'Postulantes en el padrón',
+        value: candidates.length,
+        status: candidates.length > 0 ? 'ok' : 'error',
+        detail: candidates.length === 0 ? 'No hay postulantes para esta área en el padrón.' : null,
+      },
+      {
+        key: 'answerKeys',
+        label: 'Claves de respuestas',
+        value: hasAnswerKeys ? 'Disponibles' : 'No encontradas',
+        status: hasAnswerKeys ? 'ok' : 'warn',
+        detail: !hasAnswerKeys ? 'No se encontraron claves para esta área. Las respuestas sin clave no se calificarán.' : null,
+      },
+      {
+        key: 'withoutResponse',
+        label: 'Sin respuesta .dat',
+        value: withoutResponse.length,
+        status: withoutResponse.length === 0 ? 'ok' : 'warn',
+        detail: withoutResponse.length > 0
+          ? `${withoutResponse.length} postulante(s) no tienen respuesta cargada y no se calificarán.`
+          : null,
+      },
+      {
+        key: 'orphan',
+        label: 'Respuestas sin postulante',
+        value: orphanResponses.length,
+        status: orphanResponses.length === 0 ? 'ok' : 'warn',
+        detail: orphanResponses.length > 0
+          ? `${orphanResponses.length} respuesta(s) .dat no coinciden con ningún DNI del padrón.`
+          : null,
+      },
+    ]
+
+    if (unlinked > 0) {
+      items.push({
+        key: 'unlinked',
+        label: 'Respuestas sin DNI',
+        value: unlinked,
+        status: 'warn',
+        detail: `${unlinked} respuesta(s) sin DNI vinculado (no se calificarán).`,
+      })
+    }
+
+    // Solo bloquea si no hay candidatos para el área — lo demás es informativo
+    const hasBlockers = candidates.length === 0
+    const hasWarnings = items.some(i => i.status === 'warn')
+
+    return { items, hasBlockers, hasWarnings }
+  })
+
   const selectedPonderationIsReady = computed(() => {
     const plantilla = selectedCalificationPlantilla.value
     return plantilla?.questionTotal === effectiveAnswersLength.value
@@ -266,7 +359,7 @@ export function useCalification(
   async function saveCalificationConfigToAPI(area, correctValue, incorrectValue, blankValue) {
     if (!activeConvocatoriaId?.value) return
     try {
-      await fetch(`${API_BASE_URL}/calification-configs/upsert/`, {
+      await apiFetch(`/calification-configs/upsert/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -449,6 +542,25 @@ export function useCalification(
     saveCalificationConfigToAPI(area, correctValue, incorrectValue, blankValue)
 
     showCalificationModal.value = false
+
+    // Guardar proceso en la BD automáticamente tras calcular
+    _saveProcesoToApi()
+  }
+
+  async function _saveProcesoToApi() {
+    const proceso = activeProcess.value
+    if (!proceso?.id || !Object.keys(proceso.areas || {}).length) return
+    try {
+      await apiFetch('/procesos/', {
+        method: 'POST',
+        body: JSON.stringify({
+          local_id: proceso.id,
+          name: proceso.name,
+          convocatoria_id: activeConvocatoriaId?.value || null,
+          areas: proceso.areas,
+        }),
+      })
+    } catch { /* no crítico — el proceso ya está en localStorage */ }
   }
 
   return {
@@ -479,6 +591,8 @@ export function useCalification(
     selectedPonderationTotals,
     selectedPonderationIsReady,
     canCalify,
+    preflightCheck,
+    programasForCurrentArea,
 
     // Methods
     openCalificationModal,

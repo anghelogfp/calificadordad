@@ -1,5 +1,6 @@
 import { ref, computed, watch } from 'vue'
 import { API_BASE_URL, ANSWER_KEY_AREAS } from '@/constants'
+import { apiFetch } from '@/utils/apiFetch'
 
 /**
  * Composable para áreas dinámicas desde la API
@@ -40,7 +41,7 @@ export function useAreas(activeConvocatoria) {
     try {
       loading.value = true
       error.value = ''
-      const res = await fetch(`${API_BASE_URL}/areas/?convocatoria=${convocatoriaId}`)
+      const res = await apiFetch(`/areas/?convocatoria=${convocatoriaId}`)
       if (!res.ok) throw new Error(res.statusText)
       const data = await res.json()
       if (data.length > 0) {
@@ -58,7 +59,7 @@ export function useAreas(activeConvocatoria) {
   }
 
   async function createArea(data) {
-    const res = await fetch(`${API_BASE_URL}/areas/`, {
+    const res = await apiFetch(`/areas/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -70,7 +71,7 @@ export function useAreas(activeConvocatoria) {
   }
 
   async function updateArea(id, data) {
-    const res = await fetch(`${API_BASE_URL}/areas/${id}/`, {
+    const res = await apiFetch(`/areas/${id}/`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -91,7 +92,7 @@ export function useAreas(activeConvocatoria) {
       return
     }
     try {
-      const res = await fetch(`${API_BASE_URL}/areas/${area.id}/set_vacantes/`, {
+      const res = await apiFetch(`/areas/${area.id}/set_vacantes/`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ vacantes }),
@@ -108,7 +109,7 @@ export function useAreas(activeConvocatoria) {
   }
 
   async function deleteArea(id) {
-    const res = await fetch(`${API_BASE_URL}/areas/${id}/`, { method: 'DELETE' })
+    const res = await apiFetch(`/areas/${id}/`, { method: 'DELETE' })
     if (!res.ok) throw new Error(res.statusText)
     areas.value = areas.value.filter((a) => a.id !== id)
   }

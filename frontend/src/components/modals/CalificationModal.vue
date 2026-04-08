@@ -1,16 +1,30 @@
 <script setup>
-import { reactive } from 'vue'
+import { reactive, watch } from 'vue'
 
 const props = defineProps({
   show: { type: Boolean, required: true },
   calification: { type: Object, required: true },
+  vacantesPrograma: { type: Object, required: true },
 })
+
+// Bloquear scroll del body cuando el modal está abierto
+watch(() => props.show, (val) => {
+  document.body.style.overflow = val ? 'hidden' : ''
+}, { immediate: true })
 
 const calification = reactive(props.calification)
 const emit = defineEmits(['close'])
 
 function close() { emit('close') }
 function runCalification() { props.calification.runCalification() }
+
+function getVacantes(programa) {
+  return props.vacantesPrograma.vacantesPrograma.value[programa] ?? 0
+}
+
+function setVacantes(programa, val) {
+  props.vacantesPrograma.setVacantes(programa, val)
+}
 
 function plantillaOptionLabel(p) {
   const ready = p.questionTotal === (calification.selectedPonderationTotals?.answersLength ?? p.questionTotal)
@@ -133,8 +147,76 @@ function plantillaOptionLabel(p) {
             </div>
           </div>
 
+          <!-- Vacantes por programa -->
+          <div v-if="calification.programasForCurrentArea.length > 0" class="vacantes-section">
+            <div class="vacantes-header">
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/>
+              </svg>
+              <span>Vacantes por programa</span>
+              <span class="vacantes-hint">0 = sin límite</span>
+            </div>
+            <div class="vacantes-list">
+              <div
+                v-for="programa in calification.programasForCurrentArea"
+                :key="programa"
+                class="vacantes-row"
+              >
+                <span class="vacantes-programa">{{ programa }}</span>
+                <input
+                  type="number"
+                  min="0"
+                  class="vacantes-input"
+                  :value="getVacantes(programa)"
+                  @input="setVacantes(programa, $event.target.value)"
+                />
+              </div>
+            </div>
+          </div>
+
           <div v-if="!calification.selectedPonderationIsReady && calification.selectedCalificationPlantilla" class="info-banner">
             ⚠ La plantilla no está completa. Ve al Paso 5 para terminarla.
+          </div>
+
+          <!-- Pre-vuelo -->
+          <div class="preflight">
+            <div class="preflight__header">
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+              </svg>
+              <span>Diagnóstico del área</span>
+              <span
+                class="preflight__badge"
+                :class="calification.preflightCheck.hasBlockers ? 'badge--error'
+                  : calification.preflightCheck.hasWarnings ? 'badge--warn' : 'badge--ok'"
+              >
+                {{ calification.preflightCheck.hasBlockers ? 'Con errores'
+                  : calification.preflightCheck.hasWarnings ? 'Con advertencias' : 'Todo listo' }}
+              </span>
+            </div>
+            <div class="preflight__items">
+              <div
+                v-for="item in calification.preflightCheck.items"
+                :key="item.key"
+                class="preflight__item"
+                :class="`preflight__item--${item.status}`"
+              >
+                <svg v-if="item.status === 'ok'" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                <svg v-else-if="item.status === 'warn'" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                </svg>
+                <svg v-else viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                </svg>
+                <div class="preflight__item-text">
+                  <span class="preflight__item-label">{{ item.label }}</span>
+                  <span class="preflight__item-value">{{ item.value }}</span>
+                  <span v-if="item.detail" class="preflight__item-detail">{{ item.detail }}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div v-if="calification.calificationError" class="alert alert--error">
@@ -146,7 +228,7 @@ function plantillaOptionLabel(p) {
             <button
               type="submit"
               class="btn btn--gold"
-              :disabled="!calification.selectedPonderationIsReady"
+              :disabled="!calification.selectedPonderationIsReady || calification.preflightCheck.hasBlockers"
             >
               <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" clip-rule="evenodd"/>
@@ -165,8 +247,10 @@ function plantillaOptionLabel(p) {
   position: fixed; inset: 0;
   background: rgba(0, 29, 61, 0.6);
   backdrop-filter: blur(4px);
-  display: flex; align-items: center; justify-content: center;
-  padding: var(--space-8); z-index: 100;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: var(--space-8);
+  overflow-y: auto;
+  z-index: 100;
   animation: fadeIn 0.2s ease-out;
 }
 
@@ -176,6 +260,7 @@ function plantillaOptionLabel(p) {
   background: white;
   border-radius: var(--radius-xl);
   width: min(560px, 100%);
+  margin: auto;
   display: flex; flex-direction: column;
   box-shadow: var(--shadow-xl);
   animation: scaleIn 0.3s ease-out;
@@ -206,7 +291,7 @@ function plantillaOptionLabel(p) {
 .modal__close svg { width: 20px; height: 20px; }
 .modal__close:hover { background: rgba(255,255,255,0.2); }
 
-.modal__body { padding: var(--space-6); overflow-y: auto; flex: 1; }
+.modal__body { padding: var(--space-6); overflow-y: auto; flex: 1; min-height: 0; }
 .modal-form { display: flex; flex-direction: column; gap: var(--space-4); }
 
 .field-divider { height: 1px; background: var(--slate-200); margin: var(--space-1) 0; }
@@ -254,6 +339,150 @@ function plantillaOptionLabel(p) {
 
 .badge--ok { background: #155724; color: white; }
 .badge--warn { background: #856404; color: white; }
+.badge--error { background: var(--error-600); color: white; }
+
+/* ── Vacantes por programa ── */
+.vacantes-section {
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.vacantes-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--slate-50);
+  border-bottom: 1px solid var(--slate-200);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--slate-600);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.vacantes-header svg { width: 14px; height: 14px; color: var(--unap-blue-500); }
+
+.vacantes-hint {
+  margin-left: auto;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--slate-400);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.vacantes-list {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.vacantes-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--slate-100);
+}
+
+.vacantes-row:last-child { border-bottom: none; }
+
+.vacantes-programa {
+  font-size: 0.82rem;
+  color: var(--slate-700);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vacantes-input {
+  width: 64px;
+  padding: var(--space-1) var(--space-2);
+  border: 1.5px solid var(--slate-200);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-align: center;
+  background: white;
+  color: var(--unap-blue-800);
+  transition: border-color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.vacantes-input:focus {
+  outline: none;
+  border-color: var(--unap-blue-400);
+  box-shadow: 0 0 0 2px rgba(0, 64, 128, 0.1);
+}
+
+/* ── Pre-vuelo ── */
+.preflight {
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.preflight__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--slate-50);
+  border-bottom: 1px solid var(--slate-200);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--slate-600);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.preflight__header svg { width: 14px; height: 14px; color: var(--unap-blue-500); }
+
+.preflight__badge {
+  margin-left: auto;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.preflight__items {
+  display: flex;
+  flex-direction: column;
+}
+
+.preflight__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--slate-100);
+  font-size: 0.82rem;
+}
+
+.preflight__item:last-child { border-bottom: none; }
+
+.preflight__item svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 2px; }
+
+.preflight__item--ok svg { color: var(--success-500); }
+.preflight__item--warn svg { color: var(--warning-500); }
+.preflight__item--error { background: var(--error-50); }
+.preflight__item--error svg { color: var(--error-500); }
+
+.preflight__item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+}
+
+.preflight__item-label { color: var(--slate-600); font-weight: 500; }
+.preflight__item-value { color: var(--slate-900); font-weight: 700; font-family: var(--font-mono); font-size: 0.8rem; }
+.preflight__item-detail { color: var(--slate-500); font-size: 0.75rem; }
 
 .modal__footer {
   display: flex; justify-content: flex-end;

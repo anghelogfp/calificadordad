@@ -10,14 +10,13 @@ export const TAB_KEYS = Object.freeze({
   SCORES: 'results',
 })
 
-// Configuración de tabs
+// Configuración de tabs (pasos del proceso — Ponderaciones vive en el sidebar)
 export const tabs = [
   { key: TAB_KEYS.ARCHIVES, label: 'Paso 1 · Padrón Excel' },
   { key: TAB_KEYS.IDENTIFIERS, label: 'Paso 2 · Identificadores (.dat)' },
   { key: TAB_KEYS.RESPONSES, label: 'Paso 3 · Respuestas (.dat)' },
   { key: TAB_KEYS.ANSWER_KEYS, label: 'Paso 4 · Claves de respuestas' },
-  { key: TAB_KEYS.PONDERATIONS, label: 'Paso 5 · Ponderaciones' },
-  { key: TAB_KEYS.RESULTS, label: 'Paso 6 · Calificación' },
+  { key: TAB_KEYS.RESULTS, label: 'Paso 5 · Calificación' },
 ]
 
 // Subtabs
