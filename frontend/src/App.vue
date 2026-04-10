@@ -22,6 +22,7 @@ import { useDatFormat } from '@/composables/useDatFormat'
 import { useScoreDashboard } from '@/composables/useScoreDashboard'
 import { useExport } from '@/composables/useExport'
 import { useVacantesPrograma } from '@/composables/useVacantesPrograma'
+import { useToast } from '@/composables/useToast'
 
 // Layout
 import AppHeader from '@/components/layout/AppHeader.vue'
@@ -46,6 +47,7 @@ import DashboardPanel from '@/components/panels/DashboardPanel.vue'
 // Views (sidebar)
 import HistoryView from '@/components/views/HistoryView.vue'
 import ConfigView from '@/components/views/ConfigView.vue'
+import ToastContainer from '@/components/shared/ToastContainer.vue'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NAVIGATION STATE
@@ -75,6 +77,7 @@ const responses = useResponses(
 const answerKeys = useAnswerKeys(archives.rows)
 const ponderations = usePonderations()
 const history = useHistory()
+const toast = useToast()
 const backup = useBackup()
 const convocatoria = useConvocatoria()
 const areas = useAreas(convocatoria.activeConvocatoria)
@@ -144,10 +147,14 @@ watch(
 // HISTORIAL
 // ═══════════════════════════════════════════════════════════════════════════
 
-function saveToHistory() {
+async function saveToHistory(customName) {
   const process = calification.getActiveProcess()
-  if (process) {
-    history.saveProcess(process)
+  if (!process) return
+  const ok = await history.saveProcess(process, customName)
+  if (ok) {
+    toast.showToast('Proceso guardado en el historial', 'success')
+  } else {
+    toast.showToast('Error al guardar el proceso', 'error')
   }
 }
 
@@ -251,6 +258,7 @@ onMounted(async () => {
 </script>
 
 <template>
+  <ToastContainer />
   <LoginPage v-if="!auth.isAuthenticated.value" />
 
   <div v-else class="app-layout">

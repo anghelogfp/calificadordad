@@ -105,6 +105,124 @@ export function useExport() {
     saveAs(blob, buildFilename('resultados', convocatoriaName, 'todas', 'xlsx'))
   }
 
+  async function _loadLogoBase64() {
+    try {
+      const res = await fetch('/unap.png')
+      const blob = await res.blob()
+      return await new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.readAsDataURL(blob)
+      })
+    } catch {
+      return null
+    }
+  }
+
+  async function exportIngresantesPdf(rankedResults, summary, convocatoriaName = '') {
+    const ingresantes = (rankedResults || []).filter(r => r.isIngresante)
+    if (!ingresantes.length) return
+
+    // Agrupar por área
+    const byArea = new Map()
+    ingresantes.forEach((row) => {
+      if (!byArea.has(row.area)) byArea.set(row.area, [])
+      byArea.get(row.area).push(row)
+    })
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const logoBase64 = await _loadLogoBase64()
+    const totalPages = byArea.size
+    let pageIndex = 0
+
+    byArea.forEach((rows, area) => {
+      if (pageIndex > 0) doc.addPage()
+      pageIndex++
+
+      const date = new Date().toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })
+      const areaStats = summary?.statsByArea?.get(area)
+      const pageW = doc.internal.pageSize.getWidth()
+
+      // ── Logo ────────────────────────────────────────────────────────────────
+      if (logoBase64) {
+        doc.addImage(logoBase64, 'PNG', 8, 6, 18, 18)
+      }
+
+      // ── Cabecera institucional ───────────────────────────────────────────────
+      doc.setFontSize(13)
+      doc.setTextColor(30, 58, 95)
+      doc.setFont(undefined, 'bold')
+      doc.text('UNIVERSIDAD NACIONAL DEL ALTIPLANO', pageW / 2, 11, { align: 'center' })
+      doc.setFontSize(9)
+      doc.setFont(undefined, 'normal')
+      doc.setTextColor(80, 80, 80)
+      doc.text('Dirección de Admisión', pageW / 2, 16, { align: 'center' })
+
+      // ── Título del documento ─────────────────────────────────────────────────
+      doc.setFontSize(11)
+      doc.setTextColor(30, 58, 95)
+      doc.setFont(undefined, 'bold')
+      doc.text('LISTA DE INGRESANTES', pageW / 2, 23, { align: 'center' })
+
+      doc.setFontSize(9)
+      doc.setFont(undefined, 'normal')
+      doc.setTextColor(60, 60, 60)
+      doc.text(`${convocatoriaName}  —  Área: ${area}`, pageW / 2, 28, { align: 'center' })
+      doc.text(`Fecha: ${date}`, pageW / 2, 33, { align: 'center' })
+
+      // Línea separadora
+      doc.setDrawColor(30, 58, 95)
+      doc.setLineWidth(0.5)
+      doc.line(8, 36, pageW - 8, 36)
+
+      // ── Estadísticas del área ────────────────────────────────────────────────
+      if (areaStats) {
+        doc.setFontSize(8)
+        doc.setTextColor(80, 80, 80)
+        doc.text(
+          `Total ingresantes: ${areaStats.ingresantes}   |   Puntaje máx: ${areaStats.max}   |   Puntaje mín: ${areaStats.min}   |   Promedio: ${areaStats.avg}`,
+          pageW / 2, 40, { align: 'center' }
+        )
+      }
+
+      // ── Tabla ────────────────────────────────────────────────────────────────
+      autoTable(doc, {
+        startY: 44,
+        head: [['N°', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Programa de Estudios', 'Puntaje']],
+        body: rows.map((row, i) => [
+          i + 1,
+          row.dni,
+          row.paterno || '',
+          row.materno || '',
+          row.nombres || '',
+          row.programa || '',
+          row.score.toFixed(2),
+        ]),
+        headStyles: { fillColor: [30, 58, 95], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+        bodyStyles: { fontSize: 7.5 },
+        alternateRowStyles: { fillColor: [245, 247, 250] },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 10 },
+          1: { halign: 'center', cellWidth: 18 },
+          6: { halign: 'center', cellWidth: 18 },
+        },
+        margin: { left: 8, right: 8 },
+        didDrawPage: (data) => {
+          // Pie de página con numeración
+          const pg = doc.internal.getCurrentPageInfo().pageNumber
+          doc.setFontSize(7)
+          doc.setTextColor(150, 150, 150)
+          doc.text(`Página ${pg} de ${totalPages}`, pageW / 2, doc.internal.pageSize.getHeight() - 6, { align: 'center' })
+          doc.text(`Generado el ${date}`, pageW - 8, doc.internal.pageSize.getHeight() - 6, { align: 'right' })
+        },
+      })
+    })
+
+    const date = new Date().toISOString().slice(0, 10)
+    const safeName = (convocatoriaName || 'ingresantes').replace(/[^a-z0-9_-]/gi, '_')
+    doc.save(`ingresantes-${safeName}-${date}.pdf`)
+  }
+
   async function exportScoresToPdf(rankedResults, summary, convocatoriaName = '') {
     if (!rankedResults?.length) return
 
@@ -185,5 +303,6 @@ export function useExport() {
   return {
     exportScoresToExcel,
     exportScoresToPdf,
+    exportIngresantesPdf,
   }
 }

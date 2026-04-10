@@ -1,5 +1,8 @@
 <script setup>
 import { ref } from 'vue'
+import { useToast } from '@/composables/useToast'
+
+const { showToast } = useToast()
 
 const props = defineProps({
   show: { type: Boolean, required: true },
@@ -39,19 +42,14 @@ const hasProgramas = (area) => (props.programasByArea.get(area)?.length ?? 0) > 
 // ── Formato DAT ───────────────────────────────────────────────────────────
 
 const datSaving = ref(false)
-const datSuccess = ref(false)
-const datError = ref('')
 
 async function saveDatFormat() {
   datSaving.value = true
-  datSuccess.value = false
-  datError.value = ''
   try {
     await props.datFormat.saveFormatConfig(props.convocatoriaId)
-    datSuccess.value = true
-    setTimeout(() => { datSuccess.value = false }, 2500)
+    showToast('Formato DAT guardado correctamente', 'success')
   } catch {
-    datError.value = 'Error al guardar. Los cambios se mantienen localmente.'
+    showToast('Error al guardar el formato DAT', 'error')
   } finally {
     datSaving.value = false
   }
@@ -59,8 +57,6 @@ async function saveDatFormat() {
 
 function resetDatFormat() {
   props.datFormat.resetToDefault()
-  datSuccess.value = false
-  datError.value = ''
 }
 
 const DAT_FIELDS = [
@@ -186,9 +182,6 @@ const DAT_FIELDS = [
                 />
               </div>
             </div>
-
-            <div v-if="datSuccess" class="alert alert--success">Formato guardado correctamente.</div>
-            <div v-if="datError" class="alert alert--error">{{ datError }}</div>
 
             <div class="dat-actions">
               <button type="button" class="btn btn--ghost btn--sm" @click="resetDatFormat">
@@ -358,10 +351,4 @@ const DAT_FIELDS = [
 
 .icon-sm { width: 14px; height: 14px; }
 
-.alert {
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md); font-size: 0.82rem;
-}
-.alert--success { background: #d4edda; color: #155724; border: 1px solid #b8dacc; }
-.alert--error { background: var(--error-50); color: var(--error-700); border: 1px solid var(--error-200); }
 </style>

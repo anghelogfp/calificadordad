@@ -20,7 +20,25 @@ const ponderations = reactive(props.ponderations)
 const emit = defineEmits(['openModal', 'openDashboard'])
 
 function openModal() { emit('openModal') }
-function handleSaveToHistory() { props.onSaveToHistory?.() }
+
+// ── Guardar con nombre editable ──────────────────────────────────────────────
+
+const savingName = ref(false)
+const saveNameInput = ref('')
+
+function handleSaveToHistory() {
+  saveNameInput.value = props.convocatoriaName || calification.activeProcessName || ''
+  savingName.value = true
+}
+
+function confirmSaveName() {
+  props.onSaveToHistory?.(saveNameInput.value.trim() || saveNameInput.value)
+  savingName.value = false
+}
+
+function cancelSaveName() {
+  savingName.value = false
+}
 
 // ── Confirmación inline ──────────────────────────────────────────────────────
 
@@ -111,6 +129,14 @@ function handleExportPdf() {
     props.convocatoriaName
   )
 }
+
+function handleExportIngresantesPdf() {
+  props.exporter.exportIngresantesPdf(
+    localFilteredResults.value,
+    { statsByArea: props.dashboard.statsByArea.value },
+    props.convocatoriaName
+  )
+}
 </script>
 
 <template>
@@ -176,19 +202,42 @@ function handleExportPdf() {
             </svg>
             PDF
           </button>
+          <button
+            v-if="hasIngresanteData"
+            type="button"
+            class="btn btn--primary"
+            @click="handleExportIngresantesPdf"
+          >
+            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V8z" clip-rule="evenodd"/>
+            </svg>
+            PDF Ingresantes
+          </button>
         </template>
 
-        <button
-          v-if="calification.calificationHasResults && onSaveToHistory"
-          type="button"
-          class="btn btn--primary"
-          @click="handleSaveToHistory"
-        >
-          <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h5a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5v5.586l-1.293-1.293zM9 4a1 1 0 012 0v2H9V4z"/>
-          </svg>
-          Guardar
-        </button>
+        <template v-if="calification.calificationHasResults && onSaveToHistory">
+          <!-- Input inline de nombre -->
+          <template v-if="savingName">
+            <input
+              v-model="saveNameInput"
+              type="text"
+              class="save-name-input"
+              placeholder="Nombre del proceso..."
+              @keyup.enter="confirmSaveName"
+              @keyup.escape="cancelSaveName"
+              autofocus
+            />
+            <button type="button" class="btn btn--primary" @click="confirmSaveName">Confirmar</button>
+            <button type="button" class="btn btn--ghost" @click="cancelSaveName">Cancelar</button>
+          </template>
+          <!-- Botón normal -->
+          <button v-else type="button" class="btn btn--primary" @click="handleSaveToHistory">
+            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h5a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5v5.586l-1.293-1.293zM9 4a1 1 0 012 0v2H9V4z"/>
+            </svg>
+            Guardar
+          </button>
+        </template>
 
         <button
           v-if="calification.calificationHasResults"
@@ -425,6 +474,17 @@ function handleExportPdf() {
 .process-name-bar svg { width: 16px; height: 16px; color: var(--unap-gold-600); flex-shrink: 0; }
 .process-name-bar__label { font-weight: 600; color: var(--unap-gold-600); }
 .process-name-bar__name { color: var(--unap-blue-800); font-weight: 700; }
+
+/* Input nombre al guardar */
+.save-name-input {
+  padding: 0.375rem 0.625rem;
+  border: 1px solid var(--unap-blue-300);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  width: 220px;
+  outline: none;
+}
+.save-name-input:focus { border-color: var(--unap-blue-500); box-shadow: 0 0 0 2px var(--unap-blue-100); }
 
 /* Confirm banner */
 .confirm-banner {

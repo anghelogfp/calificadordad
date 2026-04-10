@@ -28,19 +28,22 @@ export function useHistory() {
     finally { loading.value = false }
   }
 
-  async function saveProcess(process) {
-    if (!process?.id || !Object.keys(process.areas || {}).length) return
+  async function saveProcess(process, customName) {
+    if (!process?.id || !Object.keys(process.areas || {}).length) return false
     try {
       await apiFetch('/procesos/', {
         method: 'POST',
         body: JSON.stringify({
           local_id: process.id,
-          name: process.name,
+          name: customName || process.name,
           areas: process.areas,
         }),
       })
       await fetchHistory()
-    } catch { /* silencioso */ }
+      return true
+    } catch {
+      return false
+    }
   }
 
   async function deleteProcess(id) {
