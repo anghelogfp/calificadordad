@@ -44,7 +44,7 @@ Sin esto los refs no se auto-desenvuelven en el template (pantalla blanca).
 
 ---
 
-## Implementado al 2026-04-10
+## Implementado al 2026-04-14
 
 - Autenticación JWT (`LoginPage.vue` two-panel institucional UNAP)
 - Plantillas de ponderaciones API-backed con seed automático (Biomédicas/Sociales/Ingeniería/Modo Simple)
@@ -57,33 +57,31 @@ Sin esto los refs no se auto-desenvuelven en el template (pantalla blanca).
 - PDF oficial ingresantes — logo UNAP, agrupado por área, pie con paginación
 - Vacantes configurables por área en CalificationModal
 - Preflight check antes de calificar
-
-### Archivos pendientes de commit (2026-04-10)
-
-**Modificados:**
-- `frontend/src/App.vue`
-- `frontend/src/components/panels/ConfigPanel.vue`
-- `frontend/src/components/tabs/ScoresTab.vue`
-- `frontend/src/components/views/ConfigView.vue`
-- `frontend/src/composables/useExport.js`
-- `frontend/src/composables/useHistory.js`
-
-**Nuevos (untracked):**
-- `frontend/src/components/shared/ToastContainer.vue`
-- `frontend/src/composables/useToast.js`
-
-**Mensaje de commit sugerido:**
-```
-feat: add toast notifications, editable save name, and PDF ingresantes export
-```
+- **Detalle pregunta por pregunta** — `CandidateDetailModal.vue` completo:
+  - Botón por candidato en ScoresTab (deshabilitado si no hay `answersRaw`)
+  - Modal con tabla: N° | Curso | Marc. | Corr. | Pond. | Pts | Acum.
+  - Colores: verde correctas, rojo incorrectas, azul columna Correcto, dorado última fila Acum.
+  - Stats bar: correctas / incorrectas / en blanco + valores de ponderación + plantilla
+  - Campos candidato: DNI, Litho, Aula, Tipo, Cor.ID, Área, Posición, Programa
+  - Exportar PDF una sola hoja A4: encabezado UNAP, card candidato con puntaje final en cuadro dorado, dos columnas de preguntas (split dinámico), footer con fecha/hora y usuario
+  - Todos los puntajes con 3 decimales
+  - Nuevos campos en `ResultadoCandidato`: `answers_raw`, `correct_answers_raw`, `aula`, `tipo`, `litho`, `cor_id`
+  - Migración aplicada: `0002_add_detail_fields_to_resultado.py`
 
 ---
 
 ## Pendientes (orden de prioridad)
 
-1. **Detalle pregunta por pregunta** *(alto esfuerzo)*
-   - Nueva columna `answers_raw` en `ResultadoCandidato`
-   - Vista comparativa por candidato en ScoresTab
+1. **Verificador manual de respuestas** *(baja-media)*
+   - Vista central nueva: `VerificadorView.vue` — ítem en sidebar debajo de Backup
+   - Selector de plantilla (dropdown `usePonderations`) → carga columna Correcto automáticamente
+   - Campos opcionales del postulante: DNI, nombre, área, programa
+   - Grid 60 celdas editables (A/B/C/D/E o blanco) con navegación por teclado — al escribir letra avanza celda
+   - Cálculo reactivo en tiempo real: puntaje, correctas/incorrectas/blancos
+   - Tabla comparativa igual a `CandidateDetailModal`: N° | Curso | Marc. | Corr. | Pond. | Pts | Acum.
+   - Export PDF igual al detalle existente
+   - Reutiliza: `buildQuestionPlan()`, lógica de cálculo de `CandidateDetailModal`, `usePonderations`
+   - Uso: verificar 1-3 candidatos puntuales sin necesidad de padrón ni .dat cargados
 
 2. **Gestión de usuarios** *(medio esfuerzo)*
    - Crear/desactivar operadores desde la app

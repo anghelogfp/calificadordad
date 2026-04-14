@@ -91,6 +91,12 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                         position=r.get('position', 0),
                         position_in_programa=r.get('positionInPrograma', 0),
                         is_ingresante=r.get('isIngresante', False),
+                        answers_raw=r.get('answersRaw', ''),
+                        correct_answers_raw=r.get('correctAnswersRaw', ''),
+                        aula=r.get('aula', ''),
+                        tipo=r.get('tipo', ''),
+                        litho=r.get('litho', ''),
+                        cor_id=r.get('corId', ''),
                     )
                     for r in results
                 ])
@@ -133,6 +139,12 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                         'position': r.position,
                         'positionInPrograma': r.position_in_programa,
                         'isIngresante': r.is_ingresante,
+                        'answersRaw': r.answers_raw,
+                        'correctAnswersRaw': r.correct_answers_raw,
+                        'aula': r.aula,
+                        'tipo': r.tipo,
+                        'litho': r.litho,
+                        'corId': r.cor_id,
                     }
                     for r in area_obj.resultados.all()
                 ],

@@ -81,6 +81,7 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
     if (match) {
       row.dni = match.dni
       row.tipo = match.tipo
+      row.aula = match.aula || ''
     } else {
       row.dni = row.dni ? stripDigits(row.dni) : ''
       row.tipo = (row.tipo || '').trim().toUpperCase().slice(0, 1)

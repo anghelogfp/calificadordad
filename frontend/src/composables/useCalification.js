@@ -474,6 +474,12 @@ export function useCalification(
         position: 0,
         positionInPrograma: 0,
         isIngresante: false,
+        answersRaw: answers,
+        correctAnswersRaw: correctAnswers,
+        aula: responseRow.aula || '',
+        tipo: responseRow.tipo || '',
+        litho: responseRow.litho || '',
+        corId: responseRow.examCode || '',
       })
     })
 

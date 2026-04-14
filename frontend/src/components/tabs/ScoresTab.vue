@@ -4,6 +4,7 @@ import { formatTimestamp } from '@/utils/helpers'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import CandidateDetailModal from '@/components/shared/CandidateDetailModal.vue'
 
 const props = defineProps({
   calification: { type: Object, required: true },
@@ -111,6 +112,16 @@ const hasActiveFilters = computed(() => filterPrograma.value || filterEstado.val
 function clearFilters() {
   filterPrograma.value = ''
   filterEstado.value = 'todos'
+}
+
+// ── Detalle candidato ────────────────────────────────────────────────────────
+const detailCandidate = ref(null)
+
+function openDetail(row) {
+  detailCandidate.value = row
+}
+function closeDetail() {
+  detailCandidate.value = null
 }
 
 // ── Export ───────────────────────────────────────────────────────────────────
@@ -326,15 +337,15 @@ function handleExportIngresantesPdf() {
           <span class="stat-card__label">No ingresantes</span>
         </div>
         <div class="stat-card" v-if="currentAreaStats">
-          <span class="stat-card__value mono">{{ currentAreaStats.max.toFixed(2) }}</span>
+          <span class="stat-card__value mono">{{ currentAreaStats.max.toFixed(3) }}</span>
           <span class="stat-card__label">Puntaje máx.</span>
         </div>
         <div class="stat-card" v-if="currentAreaStats">
-          <span class="stat-card__value mono">{{ currentAreaStats.avg.toFixed(2) }}</span>
+          <span class="stat-card__value mono">{{ currentAreaStats.avg.toFixed(3) }}</span>
           <span class="stat-card__label">Promedio</span>
         </div>
         <div class="stat-card" v-if="currentAreaStats">
-          <span class="stat-card__value mono">{{ currentAreaStats.min.toFixed(2) }}</span>
+          <span class="stat-card__value mono">{{ currentAreaStats.min.toFixed(3) }}</span>
           <span class="stat-card__label">Puntaje mín.</span>
         </div>
       </div>
@@ -413,6 +424,7 @@ function handleExportIngresantesPdf() {
             <th>Programa</th>
             <th class="col-score">Puntaje</th>
             <th v-if="hasIngresanteData" class="col-status">Estado</th>
+            <th class="col-detail"></th>
           </tr>
         </thead>
         <tbody>
@@ -429,13 +441,26 @@ function handleExportIngresantesPdf() {
             <td class="col-programa">{{ row.programa || '—' }}</td>
             <td class="col-score">
               <span class="score-badge" :class="{ 'score-badge--ingresante': row.isIngresante }">
-                {{ row.score.toFixed(2) }}
+                {{ row.score.toFixed(3) }}
               </span>
             </td>
             <td v-if="hasIngresanteData" class="col-status">
               <span class="status-chip" :class="row.isIngresante ? 'status-chip--in' : 'status-chip--out'">
                 {{ row.isIngresante ? 'INGRESANTE' : 'NO INGRESANTE' }}
               </span>
+            </td>
+            <td class="col-detail">
+              <button
+                class="btn-detail"
+                title="Ver detalle pregunta por pregunta"
+                :disabled="!row.answersRaw"
+                @click="openDetail(row)"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+                  <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
+                </svg>
+              </button>
             </td>
           </tr>
         </tbody>
@@ -448,7 +473,17 @@ function handleExportIngresantesPdf() {
       description="Haz clic en 'Calcular Puntajes' para ejecutar la calificación con las ponderaciones configuradas."
       icon="time"
     />
+
   </section>
+
+  <!-- Modal detalle candidato -->
+  <CandidateDetailModal
+    v-if="detailCandidate"
+    :candidate="detailCandidate"
+    :summary="calification.calificationSummary"
+    :convocatoria-name="convocatoriaName"
+    @close="closeDetail"
+  />
 </template>
 
 <style scoped>
@@ -734,4 +769,21 @@ tbody tr.row--ingresante:hover { background: #dcfce7; }
   table { min-width: 600px; }
   .stats-grid { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* Columna detalle */
+.col-detail { width: 36px; padding: 0 6px; }
+.btn-detail {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 7px;
+  background: transparent; border: 1px solid var(--slate-200);
+  color: var(--slate-400); cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.btn-detail svg { width: 15px; height: 15px; }
+.btn-detail:hover:not(:disabled) {
+  background: var(--unap-blue-50);
+  border-color: var(--unap-blue-300);
+  color: var(--unap-blue-600);
+}
+.btn-detail:disabled { opacity: 0.3; cursor: not-allowed; }
 </style>

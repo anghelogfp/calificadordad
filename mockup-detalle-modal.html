@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Mockup — Detalle pregunta por pregunta</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #e2e8f0;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 32px 16px;
+  }
+
+  /* ══════════════════════════════════════
+     MODAL SHELL
+  ══════════════════════════════════════ */
+  .modal {
+    background: white;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 880px;
+    max-height: 94vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 32px 72px rgba(0,0,0,0.22);
+    overflow: hidden;
+  }
+
+  /* ══════════════════════════════════════
+     HEADER — AZUL INSTITUCIONAL
+  ══════════════════════════════════════ */
+  .modal-header {
+    background: linear-gradient(160deg, #1e3a8a 0%, #1e40af 55%, #2563eb 100%);
+    color: white;
+    padding: 18px 22px 16px;
+    flex-shrink: 0;
+  }
+
+  /* Franja superior: título + puntaje + cerrar */
+  .header-strip {
+    display: flex; align-items: flex-start; gap: 12px;
+    margin-bottom: 14px;
+  }
+  .header-strip__titles { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .header-strip__title  { font-size: 1rem; font-weight: 700; letter-spacing: 0.01em; }
+  .header-strip__sub    { font-size: 0.72rem; opacity: 0.65; }
+
+  /* Puntaje final — bloque dorado */
+  .score-block {
+    display: flex; flex-direction: column; align-items: flex-end;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 10px;
+    padding: 6px 14px;
+    text-align: right; flex-shrink: 0;
+  }
+  .score-block__label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.65; }
+  .score-block__value { font-size: 1.6rem; font-weight: 900; color: #fde68a; font-family: monospace; line-height: 1.1; }
+
+  /* Botón cerrar */
+  .btn-close {
+    background: rgba(255,255,255,0.12); border: none; color: white;
+    width: 30px; height: 30px; border-radius: 8px;
+    cursor: pointer; font-size: 0.95rem;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; align-self: flex-start;
+    transition: background 0.15s;
+  }
+  .btn-close:hover { background: rgba(255,255,255,0.24); }
+
+  /* ── Tarjeta del candidato ── */
+  .cand-card {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 11px;
+    padding: 12px 14px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+
+  /* Fila principal: nombre grande + badge */
+  .cand-main {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .cand-main__name {
+    font-size: 0.97rem; font-weight: 800;
+    letter-spacing: 0.01em; flex: 1;
+  }
+  .cand-main__prog {
+    font-size: 0.72rem; opacity: 0.7; margin-top: 1px;
+  }
+
+  .badge-ingresante {
+    background: #16a34a; color: white;
+    font-size: 0.62rem; font-weight: 800;
+    padding: 3px 10px; border-radius: 20px;
+    letter-spacing: 0.07em; white-space: nowrap; flex-shrink: 0;
+  }
+  .badge-pos {
+    background: rgba(255,255,255,0.15); color: white;
+    font-size: 0.72rem; font-weight: 700;
+    padding: 3px 9px; border-radius: 8px; flex-shrink: 0;
+  }
+
+  /* Grid de campos técnicos */
+  .cand-fields {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px 10px;
+  }
+  .cfield {
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .cfield__label {
+    font-size: 0.58rem; opacity: 0.55;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .cfield__value {
+    font-size: 0.82rem; font-weight: 700;
+  }
+  .cfield__value.mono { font-family: 'Cascadia Code', Consolas, monospace; }
+  .cfield__value--na { opacity: 0.35; font-style: italic; font-weight: 400; font-size: 0.75rem; }
+
+  /* Divider vertical entre grupos */
+  .cfield-sep {
+    border-left: 1px solid rgba(255,255,255,0.15);
+    align-self: stretch;
+    justify-self: center;
+  }
+
+  /* Franja de consulta — pie de la tarjeta */
+  .cand-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.12);
+    font-size: 0.65rem; opacity: 0.55;
+    gap: 8px;
+  }
+  .cand-footer__item { display: flex; align-items: center; gap: 4px; }
+  .cand-footer__item svg { width: 11px; height: 11px; flex-shrink: 0; }
+
+  /* ══════════════════════════════════════
+     STATS BAR
+  ══════════════════════════════════════ */
+  .stats-bar {
+    display: flex; flex-shrink: 0;
+    border-bottom: 2px solid #e2e8f0;
+    background: #f8fafc;
+  }
+  .stat-pill {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 9px 6px; border-right: 1px solid #e2e8f0;
+  }
+  .stat-pill:last-child { border-right: none; }
+  .stat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .stat-pill--ok   .stat-dot { background: #16a34a; }
+  .stat-pill--ok   .stat-n  { color: #15803d; }
+  .stat-pill--bad  .stat-dot { background: #dc2626; }
+  .stat-pill--bad  .stat-n  { color: #dc2626; }
+  .stat-pill--blk  .stat-dot { background: #94a3b8; }
+  .stat-pill--blk  .stat-n  { color: #64748b; }
+  .stat-n   { font-size: 1.08rem; font-weight: 800; }
+  .stat-lbl { font-size: 0.7rem; font-weight: 500; color: #64748b; }
+
+  /* ══════════════════════════════════════
+     TABLE
+  ══════════════════════════════════════ */
+  .table-scroll { overflow-y: auto; flex: 1; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+
+  thead { position: sticky; top: 0; z-index: 2; background: #f1f5f9; }
+  thead tr th {
+    padding: 8px 10px;
+    font-size: 0.67rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.07em; color: #475569;
+    border-bottom: 2px solid #e2e8f0;
+    text-align: center; white-space: nowrap;
+  }
+  thead th.th-left { text-align: left; }
+
+  tbody tr { border-bottom: 1px solid #f1f5f9; transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #f8fafc !important; }
+  tbody tr.row--ok  { background: #f0fdf4; }
+  tbody tr.row--bad { background: #fff5f5; }
+  tbody tr.row--blk { background: #fafafa; }
+
+  td { padding: 5px 10px; color: #334155; text-align: center; vertical-align: middle; }
+  td.td-left { text-align: left; }
+  td.td-num  { color: #94a3b8; font-size: 0.73rem; font-weight: 600; width: 34px; }
+
+  /* Materia badge */
+  .subj {
+    display: inline-block; font-size: 0.68rem; font-weight: 700;
+    padding: 2px 8px; border-radius: 12px; white-space: nowrap;
+  }
+  .s0 { background: #eff6ff; color: #1e40af; }
+  .s1 { background: #fdf4ff; color: #7e22ce; }
+  .s2 { background: #fff7ed; color: #c2410c; }
+  .s3 { background: #f0fdf4; color: #15803d; }
+
+  /* Respuesta / Clave chips */
+  .ans {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    font-family: monospace; font-size: 0.88rem; font-weight: 800;
+  }
+  .ans--ok  { background: #dcfce7; color: #15803d; }
+  .ans--bad { background: #fee2e2; color: #dc2626; }
+  .ans--blk { background: #f1f5f9; color: #94a3b8; font-size: 0.7rem; }
+  .ans--key { background: #dbeafe; color: #1e40af; }
+
+  /* Ponderado */
+  .pond {
+    display: inline-block; font-size: 0.72rem; font-weight: 700;
+    font-family: monospace; background: #f1f5f9; color: #475569;
+    padding: 2px 7px; border-radius: 6px;
+  }
+
+  /* Puntos */
+  .pts { font-family: monospace; font-weight: 700; font-size: 0.82rem; }
+  .pts--ok  { color: #15803d; }
+  .pts--blk { color: #64748b; }
+  .pts--zero{ color: #94a3b8; }
+
+  /* Acumulado */
+  .acum {
+    display: inline-block; font-family: monospace; font-weight: 800;
+    font-size: 0.83rem; color: #1e40af;
+    background: #eff6ff; padding: 2px 8px; border-radius: 6px;
+    min-width: 64px; text-align: right;
+  }
+  .acum--final { background: #fef9c3; color: #92400e; }
+
+  /* ══════════════════════════════════════
+     FOOTER
+  ══════════════════════════════════════ */
+  .modal-footer {
+    border-top: 1px solid #e2e8f0; background: #f8fafc;
+    padding: 11px 20px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    flex-shrink: 0; flex-wrap: wrap;
+  }
+  .footer-meta { font-size: 0.73rem; color: #94a3b8; line-height: 1.7; }
+  .footer-meta strong { color: #475569; }
+  .footer-actions { display: flex; gap: 8px; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 18px; border-radius: 8px;
+    font-size: 0.82rem; font-weight: 600; cursor: pointer; border: none;
+    transition: all 0.15s;
+  }
+  .btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+  .btn--pdf   { background: linear-gradient(135deg,#dc2626,#b91c1c); color: white; box-shadow: 0 2px 8px rgba(220,38,38,0.3); }
+  .btn--pdf:hover { opacity: 0.92; transform: translateY(-1px); }
+  .btn--ghost { background: white; color: #475569; border: 1px solid #e2e8f0; }
+  .btn--ghost:hover { background: #f1f5f9; }
+</style>
+</head>
+<body>
+
+<div class="modal">
+
+  <!-- ══════════════════════════════════════
+       HEADER
+  ══════════════════════════════════════ -->
+  <div class="modal-header">
+
+    <!-- Franja superior -->
+    <div class="header-strip">
+      <div class="header-strip__titles">
+        <div class="header-strip__title">Detalle de Respuestas por Pregunta</div>
+        <div class="header-strip__sub">Área: Biomédicas &nbsp;·&nbsp; EXAMEN DE ADMISIÓN CEPRUNAP 2025-II</div>
+      </div>
+      <div class="score-block">
+        <span class="score-block__label">Puntaje Final</span>
+        <span class="score-block__value">847.50</span>
+      </div>
+      <button class="btn-close">✕</button>
+    </div>
+
+    <!-- Tarjeta del candidato -->
+    <div class="cand-card">
+
+      <!-- Nombre + badges -->
+      <div class="cand-main">
+        <div>
+          <div class="cand-main__name">MAMANI QUISPE, Carlos Rodrigo</div>
+          <div class="cand-main__prog">Programa: Medicina Humana</div>
+        </div>
+        <span class="badge-pos">#3 general</span>
+        <span class="badge-ingresante">✓ INGRESANTE</span>
+      </div>
+
+      <!-- Grid de campos técnicos: 5 columnas -->
+      <div class="cand-fields">
+
+        <div class="cfield">
+          <span class="cfield__label">DNI</span>
+          <span class="cfield__value mono">74123456</span>
+        </div>
+
+        <div class="cfield">
+          <span class="cfield__label">Litho</span>
+          <span class="cfield__value mono">342013</span>
+        </div>
+
+        <div class="cfield">
+          <span class="cfield__label">Aula</span>
+          <span class="cfield__value mono">101</span>
+        </div>
+
+        <div class="cfield">
+          <span class="cfield__label">Tipo de prueba</span>
+          <span class="cfield__value mono">P</span>
+        </div>
+
+        <div class="cfield">
+          <span class="cfield__label">Cor. ID</span>
+          <span class="cfield__value mono">RP000026</span>
+        </div>
+
+      </div>
+
+      <!-- Pie de tarjeta: metadatos de consulta -->
+      <div class="cand-footer">
+        <div class="cand-footer__item">
+          <svg viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd"/>
+          </svg>
+          Fecha de consulta: <strong style="opacity:0.8">14/04/2026</strong>
+        </div>
+        <div class="cand-footer__item">
+          <svg viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+          </svg>
+          Hora: <strong style="opacity:0.8">10:35 a.m.</strong>
+        </div>
+        <div class="cand-footer__item">
+          <svg viewBox="0 0 20 20" fill="currentColor">
+            <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/>
+          </svg>
+          Plantilla: <strong style="opacity:0.8">Biomédicas 2025</strong>
+        </div>
+        <div class="cand-footer__item">
+          <svg viewBox="0 0 20 20" fill="currentColor">
+            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z"/>
+          </svg>
+          Consultado por: <strong style="opacity:0.8">admin</strong>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       STATS BAR
+  ══════════════════════════════════════ -->
+  <div class="stats-bar">
+    <div class="stat-pill stat-pill--ok">
+      <div class="stat-dot"></div>
+      <span class="stat-n">38</span>
+      <span class="stat-lbl">Correctas</span>
+    </div>
+    <div class="stat-pill stat-pill--bad">
+      <div class="stat-dot"></div>
+      <span class="stat-n">12</span>
+      <span class="stat-lbl">Incorrectas</span>
+    </div>
+    <div class="stat-pill stat-pill--blk">
+      <div class="stat-dot"></div>
+      <span class="stat-n">10</span>
+      <span class="stat-lbl">En blanco</span>
+    </div>
+    <div class="stat-pill">
+      <span class="stat-n" style="color:#1e40af;">847.50</span>
+      <span class="stat-lbl">pts total</span>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       TABLA
+  ══════════════════════════════════════ -->
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>N°</th>
+          <th class="th-left">Materia</th>
+          <th>Marcado</th>
+          <th>Correcto</th>
+          <th>Ponderado</th>
+          <th>Puntos</th>
+          <th>Acumulado</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr class="row--ok">
+          <td class="td-num">1</td>
+          <td class="td-left"><span class="subj s0">Biología</span></td>
+          <td><span class="ans ans--ok">A</span></td>
+          <td><span class="ans ans--key">A</span></td>
+          <td><span class="pond">×1.0</span></td>
+          <td><span class="pts pts--ok">+10.00</span></td>
+          <td><span class="acum">10.00</span></td>
+        </tr>
+
+        <tr class="row--ok">
+          <td class="td-num">2</td>
+          <td class="td-left"><span class="subj s0">Biología</span></td>
+          <td><span class="ans ans--ok">C</span></td>
+          <td><span class="ans ans--key">C</span></td>
+          <td><span class="pond">×1.0</span></td>
+          <td><span class="pts pts--ok">+10.00</span></td>
+          <td><span class="acum">20.00</span></td>
+        </tr>
+
+        <tr class="row--bad">
+          <td class="td-num">3</td>
+          <td class="td-left"><span class="subj s0">Biología</span></td>
+          <td><span class="ans ans--bad">B</span></td>
+          <td><span class="ans ans--key">D</span></td>
+          <td><span class="pond">×1.0</span></td>
+          <td><span class="pts pts--zero">0.00</span></td>
+          <td><span class="acum">20.00</span></td>
+        </tr>
+
+        <tr class="row--ok">
+          <td class="td-num">4</td>
+          <td class="td-left"><span class="subj s0">Biología</span></td>
+          <td><span class="ans ans--ok">E</span></td>
+          <td><span class="ans ans--key">E</span></td>
+          <td><span class="pond">×1.0</span></td>
+          <td><span class="pts pts--ok">+10.00</span></td>
+          <td><span class="acum">30.00</span></td>
+        </tr>
+
+        <tr class="row--blk">
+          <td class="td-num">5</td>
+          <td class="td-left"><span class="subj s0">Biología</span></td>
+          <td><span class="ans ans--blk">—</span></td>
+          <td><span class="ans ans--key">B</span></td>
+          <td><span class="pond">×1.0</span></td>
+          <td><span class="pts pts--blk">+2.00</span></td>
+          <td><span class="acum">32.00</span></td>
+        </tr>
+
+        <tr class="row--ok">
+          <td class="td-num">6</td>
+          <td class="td-left"><span class="subj s0">Biología</span></td>
+          <td><span class="ans ans--ok">D</span></td>
+          <td><span class="ans ans--key">D</span></td>
+          <td><span class="pond">×1.0</span></td>
+          <td><span class="pts pts--ok">+10.00</span></td>
+          <td><span class="acum">42.00</span></td>
+        </tr>
+
+        <tr class="row--bad">
+          <td class="td-num">7</td>
+          <td class="td-left"><span class="subj s0">Biología</span></td>
+          <td><span class="ans ans--bad">A</span></td>
+          <td><span class="ans ans--key">C</span></td>
+          <td><span class="pond">×1.0</span></td>
+          <td><span class="pts pts--zero">0.00</span></td>
+          <td><span class="acum">42.00</span></td>
+        </tr>
+
+        <!-- Química ×1.5 -->
+        <tr class="row--ok">
+          <td class="td-num">21</td>
+          <td class="td-left"><span class="subj s1">Química</span></td>
+          <td><span class="ans ans--ok">D</span></td>
+          <td><span class="ans ans--key">D</span></td>
+          <td><span class="pond">×1.5</span></td>
+          <td><span class="pts pts--ok">+15.00</span></td>
+          <td><span class="acum">352.00</span></td>
+        </tr>
+
+        <tr class="row--bad">
+          <td class="td-num">22</td>
+          <td class="td-left"><span class="subj s1">Química</span></td>
+          <td><span class="ans ans--bad">A</span></td>
+          <td><span class="ans ans--key">C</span></td>
+          <td><span class="pond">×1.5</span></td>
+          <td><span class="pts pts--zero">0.00</span></td>
+          <td><span class="acum">352.00</span></td>
+        </tr>
+
+        <tr class="row--ok">
+          <td class="td-num">23</td>
+          <td class="td-left"><span class="subj s1">Química</span></td>
+          <td><span class="ans ans--ok">B</span></td>
+          <td><span class="ans ans--key">B</span></td>
+          <td><span class="pond">×1.5</span></td>
+          <td><span class="pts pts--ok">+15.00</span></td>
+          <td><span class="acum">367.00</span></td>
+        </tr>
+
+        <!-- Física ×2.0 -->
+        <tr class="row--blk">
+          <td class="td-num">41</td>
+          <td class="td-left"><span class="subj s2">Física</span></td>
+          <td><span class="ans ans--blk">—</span></td>
+          <td><span class="ans ans--key">A</span></td>
+          <td><span class="pond">×2.0</span></td>
+          <td><span class="pts pts--blk">+4.00</span></td>
+          <td><span class="acum">668.00</span></td>
+        </tr>
+
+        <tr class="row--ok">
+          <td class="td-num">42</td>
+          <td class="td-left"><span class="subj s2">Física</span></td>
+          <td><span class="ans ans--ok">C</span></td>
+          <td><span class="ans ans--key">C</span></td>
+          <td><span class="pond">×2.0</span></td>
+          <td><span class="pts pts--ok">+20.00</span></td>
+          <td><span class="acum">688.00</span></td>
+        </tr>
+
+        <!-- Aptitud ×0.5 -->
+        <tr class="row--ok">
+          <td class="td-num">51</td>
+          <td class="td-left"><span class="subj s3">Aptitud</span></td>
+          <td><span class="ans ans--ok">E</span></td>
+          <td><span class="ans ans--key">E</span></td>
+          <td><span class="pond">×0.5</span></td>
+          <td><span class="pts pts--ok">+5.00</span></td>
+          <td><span class="acum">790.00</span></td>
+        </tr>
+
+        <tr class="row--bad">
+          <td class="td-num">52</td>
+          <td class="td-left"><span class="subj s3">Aptitud</span></td>
+          <td><span class="ans ans--bad">D</span></td>
+          <td><span class="ans ans--key">A</span></td>
+          <td><span class="pond">×0.5</span></td>
+          <td><span class="pts pts--zero">0.00</span></td>
+          <td><span class="acum">790.00</span></td>
+        </tr>
+
+        <!-- Fila 60 — acumulado final coincide con puntaje header -->
+        <tr class="row--ok">
+          <td class="td-num">60</td>
+          <td class="td-left"><span class="subj s3">Aptitud</span></td>
+          <td><span class="ans ans--ok">B</span></td>
+          <td><span class="ans ans--key">B</span></td>
+          <td><span class="pond">×0.5</span></td>
+          <td><span class="pts pts--ok">+5.00</span></td>
+          <td><span class="acum acum--final">847.50</span></td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       FOOTER
+  ══════════════════════════════════════ -->
+  <div class="modal-footer">
+    <div class="footer-meta">
+      Plantilla: <strong>Biomédicas 2025</strong> &nbsp;·&nbsp;
+      Correcto <strong>×10</strong> &nbsp;·&nbsp;
+      Incorrecto <strong>×0</strong> &nbsp;·&nbsp;
+      Blanco <strong>×2</strong><br>
+      Convocatoria: <strong>CEPRUNAP 2025-II</strong> &nbsp;·&nbsp; 60 preguntas &nbsp;·&nbsp; Peso total: <strong>1.200</strong>
+    </div>
+    <div class="footer-actions">
+      <button class="btn btn--pdf">
+        <svg viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V8z" clip-rule="evenodd"/>
+        </svg>
+        Exportar PDF
+      </button>
+      <button class="btn btn--ghost">Cerrar</button>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

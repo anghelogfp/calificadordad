@@ -94,6 +94,16 @@ class ResultadoCandidato(models.Model):
     position_in_programa = models.IntegerField(default=0)
     is_ingresante = models.BooleanField(default=False)
 
+    # Respuestas brutas para detalle pregunta por pregunta
+    answers_raw = models.CharField(max_length=300, blank=True, default='')
+    correct_answers_raw = models.CharField(max_length=300, blank=True, default='')
+
+    # Datos del examen físico (del archivo .dat)
+    aula = models.CharField(max_length=20, blank=True, default='')
+    tipo = models.CharField(max_length=10, blank=True, default='')
+    litho = models.CharField(max_length=20, blank=True, default='')
+    cor_id = models.CharField(max_length=50, blank=True, default='')
+
     class Meta:
         db_table = 'resultados_candidatos'
         unique_together = [['area_result', 'dni']]

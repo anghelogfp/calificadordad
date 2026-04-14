@@ -9,6 +9,8 @@ class ResultadoCandidatoSerializer(serializers.ModelSerializer):
             'id', 'dni', 'paterno', 'materno', 'nombres',
             'area', 'programa', 'score',
             'position', 'position_in_programa', 'is_ingresante',
+            'answers_raw', 'correct_answers_raw',
+            'aula', 'tipo', 'litho', 'cor_id',
         ]
 
 
