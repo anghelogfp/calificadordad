@@ -119,9 +119,11 @@ export function useExport() {
     }
   }
 
-  async function exportIngresantesPdf(rankedResults, summary, convocatoriaName = '') {
+  async function exportIngresantesPdf(rankedResults, summary, convocatoriaName = '', processType = 'simulacro') {
     const ingresantes = (rankedResults || []).filter(r => r.isIngresante)
     if (!ingresantes.length) return
+
+    const isReal = processType === 'real'
 
     // Agrupar por área
     const byArea = new Map()
@@ -143,12 +145,10 @@ export function useExport() {
       const areaStats = summary?.statsByArea?.get(area)
       const pageW = doc.internal.pageSize.getWidth()
 
-      // ── Logo ────────────────────────────────────────────────────────────────
-      if (logoBase64) {
-        doc.addImage(logoBase64, 'PNG', 8, 6, 18, 18)
-      }
+      // ── Logo ──────────────────────────────────────────────────────────────
+      if (logoBase64) doc.addImage(logoBase64, 'PNG', 8, 6, 18, 18)
 
-      // ── Cabecera institucional ───────────────────────────────────────────────
+      // ── Cabecera institucional ─────────────────────────────────────────────
       doc.setFontSize(13)
       doc.setTextColor(30, 58, 95)
       doc.setFont(undefined, 'bold')
@@ -158,7 +158,7 @@ export function useExport() {
       doc.setTextColor(80, 80, 80)
       doc.text('Dirección de Admisión', pageW / 2, 16, { align: 'center' })
 
-      // ── Título del documento ─────────────────────────────────────────────────
+      // ── Título ────────────────────────────────────────────────────────────
       doc.setFontSize(11)
       doc.setTextColor(30, 58, 95)
       doc.setFont(undefined, 'bold')
@@ -167,7 +167,8 @@ export function useExport() {
       doc.setFontSize(9)
       doc.setFont(undefined, 'normal')
       doc.setTextColor(60, 60, 60)
-      doc.text(`${convocatoriaName}  —  Área: ${area}`, pageW / 2, 28, { align: 'center' })
+      const modoLabel = isReal ? 'Convocatoria Real' : 'Simulacro'
+      doc.text(`${convocatoriaName}  —  Área: ${area}  —  ${modoLabel}`, pageW / 2, 28, { align: 'center' })
       doc.text(`Fecha: ${date}`, pageW / 2, 33, { align: 'center' })
 
       // Línea separadora
@@ -175,7 +176,7 @@ export function useExport() {
       doc.setLineWidth(0.5)
       doc.line(8, 36, pageW - 8, 36)
 
-      // ── Estadísticas del área ────────────────────────────────────────────────
+      // ── Estadísticas del área ──────────────────────────────────────────────
       if (areaStats) {
         doc.setFontSize(8)
         doc.setTextColor(80, 80, 80)
@@ -185,42 +186,109 @@ export function useExport() {
         )
       }
 
-      // ── Tabla ────────────────────────────────────────────────────────────────
-      autoTable(doc, {
-        startY: 44,
-        head: [['N°', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Programa de Estudios', 'Puntaje']],
-        body: rows.map((row, i) => [
-          i + 1,
-          row.dni,
-          row.paterno || '',
-          row.materno || '',
-          row.nombres || '',
-          row.programa || '',
-          row.score.toFixed(2),
-        ]),
-        headStyles: { fillColor: [30, 58, 95], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
-        bodyStyles: { fontSize: 7.5 },
-        alternateRowStyles: { fillColor: [245, 247, 250] },
-        columnStyles: {
-          0: { halign: 'center', cellWidth: 10 },
-          1: { halign: 'center', cellWidth: 18 },
-          6: { halign: 'center', cellWidth: 18 },
-        },
-        margin: { left: 8, right: 8 },
-        didDrawPage: (data) => {
-          // Pie de página con numeración
-          const pg = doc.internal.getCurrentPageInfo().pageNumber
-          doc.setFontSize(7)
-          doc.setTextColor(150, 150, 150)
-          doc.text(`Página ${pg} de ${totalPages}`, pageW / 2, doc.internal.pageSize.getHeight() - 6, { align: 'center' })
-          doc.text(`Generado el ${date}`, pageW - 8, doc.internal.pageSize.getHeight() - 6, { align: 'right' })
-        },
-      })
+      // ── Tabla ─────────────────────────────────────────────────────────────
+      if (isReal) {
+        // Modo real: body con filas-separador por carrera
+        const byCarrera = new Map()
+        rows.forEach((row) => {
+          const prog = row.programa?.trim() || '(Sin programa)'
+          if (!byCarrera.has(prog)) byCarrera.set(prog, [])
+          byCarrera.get(prog).push(row)
+        })
+
+        // Ordenar carreras alfabéticamente, (Sin programa) al final
+        const sortedCarreras = Array.from(byCarrera.entries()).sort(([a], [b]) => {
+          if (a === '(Sin programa)') return 1
+          if (b === '(Sin programa)') return -1
+          return a.localeCompare(b, 'es')
+        })
+
+        const body = []
+        sortedCarreras.forEach(([carrera, carreraRows]) => {
+          // Fila separadora con nombre de carrera + conteo
+          body.push([{
+            content: `${carrera}  (${carreraRows.length} ingresante${carreraRows.length !== 1 ? 's' : ''})`,
+            colSpan: 6,
+            styles: {
+              fillColor: [30, 58, 95],
+              textColor: [255, 255, 255],
+              fontStyle: 'bold',
+              fontSize: 8,
+              cellPadding: { top: 2.5, bottom: 2.5, left: 4, right: 4 },
+            },
+          }])
+          // Filas de candidatos
+          carreraRows.forEach((row, i) => {
+            body.push([
+              i + 1,
+              row.dni,
+              row.paterno || '',
+              row.materno || '',
+              row.nombres || '',
+              row.score.toFixed(3),
+            ])
+          })
+        })
+
+        autoTable(doc, {
+          startY: 44,
+          head: [['N°', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Puntaje']],
+          body,
+          headStyles: { fillColor: [10, 36, 70], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+          bodyStyles: { fontSize: 7.5 },
+          alternateRowStyles: { fillColor: [245, 247, 250] },
+          columnStyles: {
+            0: { halign: 'center', cellWidth: 10 },
+            1: { halign: 'center', cellWidth: 20 },
+            5: { halign: 'center', cellWidth: 20, fontStyle: 'bold' },
+          },
+          margin: { left: 8, right: 8 },
+          didDrawPage: (data) => {
+            const pg = doc.internal.getCurrentPageInfo().pageNumber
+            doc.setFontSize(7)
+            doc.setTextColor(150, 150, 150)
+            doc.text(`Página ${pg}`, pageW / 2, doc.internal.pageSize.getHeight() - 6, { align: 'center' })
+            doc.text(`Generado el ${date}`, pageW - 8, doc.internal.pageSize.getHeight() - 6, { align: 'right' })
+          },
+        })
+      } else {
+        // Modo simulacro: tabla plana con columna Programa
+        autoTable(doc, {
+          startY: 44,
+          head: [['N°', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Programa de Estudios', 'Puntaje']],
+          body: rows.map((row, i) => [
+            i + 1,
+            row.dni,
+            row.paterno || '',
+            row.materno || '',
+            row.nombres || '',
+            row.programa || '',
+            row.score.toFixed(3),
+          ]),
+          headStyles: { fillColor: [30, 58, 95], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+          bodyStyles: { fontSize: 7.5 },
+          alternateRowStyles: { fillColor: [245, 247, 250] },
+          columnStyles: {
+            0: { halign: 'center', cellWidth: 10 },
+            1: { halign: 'center', cellWidth: 18 },
+            6: { halign: 'center', cellWidth: 18, fontStyle: 'bold' },
+          },
+          margin: { left: 8, right: 8 },
+          didDrawPage: (data) => {
+            const pg = doc.internal.getCurrentPageInfo().pageNumber
+            doc.setFontSize(7)
+            doc.setTextColor(150, 150, 150)
+            doc.text(`Página ${pg} de ${totalPages}`, pageW / 2, doc.internal.pageSize.getHeight() - 6, { align: 'center' })
+            doc.text(`Generado el ${date}`, pageW - 8, doc.internal.pageSize.getHeight() - 6, { align: 'right' })
+          },
+        })
+      }
     })
 
     const date = new Date().toISOString().slice(0, 10)
     const safeName = (convocatoriaName || 'ingresantes').replace(/[^a-z0-9_-]/gi, '_')
-    doc.save(`ingresantes-${safeName}-${date}.pdf`)
+    const modoSuffix = isReal ? '-real' : ''
+    doc.save(`ingresantes${modoSuffix}-${safeName}-${date}.pdf`)
   }
 
   async function exportScoresToPdf(rankedResults, summary, convocatoriaName = '') {

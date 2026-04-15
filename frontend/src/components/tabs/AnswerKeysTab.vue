@@ -202,16 +202,18 @@ function getRowClass(row) {
       <DataTable
         v-if="answerKeys.answerKeyHasData"
         :columns="tableColumns.map(col => col.key === 'area' ? { ...col, options: answerKeys.answerKeyAreaOptions } : col)"
-        :rows="answerKeys.filteredRows"
+        :rows="answerKeys.pagedRows"
         :selection="answerKeys.selection"
         :editing="answerKeys.editing"
         :is-all-selected="answerKeys.isAllVisibleSelected"
         :is-indeterminate="answerKeys.isSomeVisibleSelected"
         :row-class="getRowClass"
+        :pagination="answerKeys.pagination"
         @toggle-selection="answerKeys.toggleSelection"
         @toggle-select-all="answerKeys.toggleSelectAll"
         @toggle-edit="answerKeys.toggleEdit"
         @remove-row="answerKeys.removeRow"
+        @change-page="answerKeys.goToPage"
       />
 
       <EmptyState

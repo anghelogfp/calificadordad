@@ -48,10 +48,12 @@ export function useCalification(
   const activeProcess = useStorage(STORAGE_KEYS.ACTIVE_PROCESS, {
     id: null,
     name: '',
+    type: 'simulacro',
     areas: {},
   })
 
   const processName = ref(activeProcess.value.name || '')
+  const processType = ref(activeProcess.value.type || 'simulacro')
 
   const calificationDisplayArea = ref(
     Object.keys(activeProcess.value.areas || {})[0] || null
@@ -231,6 +233,22 @@ export function useCalification(
       })
     }
 
+    // Modo Real: advertir si ningún candidato tiene programa asignado
+    if (processType.value === 'real') {
+      const sinPrograma = candidates.filter(c => !c.programa?.trim()).length
+      if (sinPrograma > 0) {
+        items.push({
+          key: 'sinPrograma',
+          label: 'Sin programa de estudios',
+          value: sinPrograma,
+          status: sinPrograma === candidates.length ? 'warn' : 'warn',
+          detail: sinPrograma === candidates.length
+            ? 'Ningún postulante tiene programa asignado. El ranking será global.'
+            : `${sinPrograma} postulante(s) sin programa. Se agruparán en "(Sin programa)".`,
+        })
+      }
+    }
+
     // Solo bloquea si no hay candidatos para el área — lo demás es informativo
     const hasBlockers = candidates.length === 0
     const hasWarnings = items.some(i => i.status === 'warn')
@@ -324,9 +342,10 @@ export function useCalification(
   // ═══════════════════════════════════════════════════════════════════════════
 
   function startNewProcess() {
-    activeProcess.value = { id: null, name: '', areas: {} }
+    activeProcess.value = { id: null, name: '', type: 'simulacro', areas: {} }
     calificationDisplayArea.value = null
     processName.value = ''
+    processType.value = 'simulacro'
     calificationSearch.value = ''
   }
 
@@ -343,6 +362,7 @@ export function useCalification(
   function loadProcess(process) {
     activeProcess.value = { ...process }
     processName.value = process.name || ''
+    processType.value = process.type || 'simulacro'
     const areas = Object.keys(process.areas || {})
     calificationDisplayArea.value = areas[0] || null
     calificationSearch.value = ''
@@ -537,6 +557,7 @@ export function useCalification(
     activeProcess.value = {
       id: currentId,
       name: currentName,
+      type: processType.value,
       areas: {
         ...activeProcess.value.areas,
         [area]: { results: processedResults, summary },
@@ -580,6 +601,7 @@ export function useCalification(
     calificationError,
     calificationSearch,
     processName,
+    processType,
 
     // Results
     calificationResults,

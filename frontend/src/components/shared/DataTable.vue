@@ -15,6 +15,8 @@ const props = defineProps({
   showActions: { type: Boolean, default: true },
   rowClass: { type: Function, default: () => ({}) },
   selectedCount: { type: Number, default: 0 },
+  // Paginación — pasar el objeto `pagination` de useTableState
+  pagination: { type: Object, default: null },
 })
 
 const emit = defineEmits([
@@ -23,6 +25,7 @@ const emit = defineEmits([
   'toggleEdit',
   'cancelEdit',
   'removeRow',
+  'changePage',
 ])
 
 // Snapshot de valores originales para cancel
@@ -72,6 +75,21 @@ function getRowClasses(row) {
 watch(() => props.isIndeterminate, (val) => {
   if (checkboxRef.value) checkboxRef.value.indeterminate = val
 }, { immediate: true })
+
+// Genera la secuencia de páginas con elipsis: [1, '...', 4, 5, 6, '...', 20]
+function visiblePages(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages = []
+  const addPage = (p) => { if (!pages.includes(p) && p >= 1 && p <= total) pages.push(p) }
+
+  addPage(1)
+  if (current > 3) pages.push('...')
+  for (let p = current - 1; p <= current + 1; p++) addPage(p)
+  if (current < total - 2) pages.push('...')
+  addPage(total)
+
+  return pages
+}
 </script>
 
 <template>
@@ -110,7 +128,9 @@ watch(() => props.isIndeterminate, (val) => {
             :key="row.id"
             :class="getRowClasses(row)"
           >
-            <td v-if="showIndex" class="col-index">{{ index + 1 }}</td>
+            <td v-if="showIndex" class="col-index">
+              {{ pagination ? (pagination.current - 1) * pagination.pageSize + index + 1 : index + 1 }}
+            </td>
             <td v-if="showCheckbox" class="col-check">
               <label class="checkbox">
                 <input type="checkbox" :checked="isSelected(row.id)" @change="() => onToggleSelection(row.id)" />
@@ -210,6 +230,52 @@ watch(() => props.isIndeterminate, (val) => {
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- Paginación -->
+    <div v-if="pagination && pagination.total > 1" class="pagination-bar">
+      <span class="pagination-info">
+        Mostrando
+        <strong>{{ (pagination.current - 1) * pagination.pageSize + 1 }}–{{ Math.min(pagination.current * pagination.pageSize, pagination.totalFiltered) }}</strong>
+        de <strong>{{ pagination.totalFiltered }}</strong> registros
+      </span>
+      <div class="pagination-controls">
+        <button
+          class="page-btn"
+          :disabled="pagination.current === 1"
+          @click="emit('changePage', 1)"
+          title="Primera página"
+        >«</button>
+        <button
+          class="page-btn"
+          :disabled="pagination.current === 1"
+          @click="emit('changePage', pagination.current - 1)"
+          title="Anterior"
+        >‹</button>
+
+        <template v-for="p in visiblePages(pagination.current, pagination.total)" :key="p">
+          <span v-if="p === '...'" class="page-ellipsis">…</span>
+          <button
+            v-else
+            class="page-btn"
+            :class="{ 'page-btn--active': p === pagination.current }"
+            @click="emit('changePage', p)"
+          >{{ p }}</button>
+        </template>
+
+        <button
+          class="page-btn"
+          :disabled="pagination.current === pagination.total"
+          @click="emit('changePage', pagination.current + 1)"
+          title="Siguiente"
+        >›</button>
+        <button
+          class="page-btn"
+          :disabled="pagination.current === pagination.total"
+          @click="emit('changePage', pagination.total)"
+          title="Última página"
+        >»</button>
+      </div>
     </div>
   </section>
 </template>
@@ -344,5 +410,48 @@ watch(() => props.isIndeterminate, (val) => {
 @media (max-width: 768px) {
   .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .data-table { min-width: 800px; }
+}
+
+/* ── Paginación ─────────────────────────────────────────────────────────── */
+.pagination-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--slate-200);
+  background: var(--slate-50);
+  flex-wrap: wrap; gap: var(--space-2);
+}
+
+.pagination-info {
+  font-size: 0.82rem; color: var(--slate-500);
+}
+.pagination-info strong { color: var(--slate-700); }
+
+.pagination-controls {
+  display: flex; align-items: center; gap: var(--space-1);
+}
+
+.page-btn {
+  min-width: 32px; height: 32px; padding: 0 var(--space-2);
+  border: 1px solid var(--slate-200); border-radius: var(--radius-md);
+  background: white; color: var(--slate-600);
+  font-size: 0.82rem; font-weight: 500; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition-fast);
+}
+.page-btn:hover:not(:disabled) {
+  border-color: var(--unap-blue-400); color: var(--unap-blue-700);
+  background: var(--unap-blue-50);
+}
+.page-btn:disabled {
+  opacity: 0.35; cursor: not-allowed;
+}
+.page-btn--active {
+  background: var(--unap-blue-700); border-color: var(--unap-blue-700);
+  color: white; font-weight: 700;
+}
+.page-btn--active:hover { background: var(--unap-blue-800); border-color: var(--unap-blue-800); color: white; }
+
+.page-ellipsis {
+  min-width: 24px; text-align: center; color: var(--slate-400); font-size: 0.9rem;
 }
 </style>

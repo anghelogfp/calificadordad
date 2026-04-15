@@ -123,19 +123,37 @@ Sin esto los refs no se auto-desenvuelven en el template (pantalla blanca).
   - Eliminados: `ConfigPanel.vue`, `HistoryPanel.vue` (reemplazados por sus respectivas Views)
   - `useHistory.js`: eliminados `showHistoryPanel`, `openHistoryPanel`, `closeHistoryPanel` (sin uso)
 
+## Implementado (sesión actual)
+
+- **Paginación en tablas** (`useTableState.js` + `DataTable.vue`)
+  - `useTableState` expone `pagedRows`, `pagination`, `goToPage` — solo renderiza 100 filas por página
+  - `DataTable` muestra footer con controles `«  ‹  1 … n  ›  »` y texto "Mostrando X–Y de Z registros"
+  - Aplicado en ArchivesTab, IdentifiersTab, ResponsesTab, AnswerKeysTab
+  - Búsqueda y cambio de datos resetean a página 1 automáticamente
+
+- **Debounce de localStorage** (`useTableState.js`)
+  - Reemplazado `useStorage` en el array de filas por `ref` + `watchDebounced` (400 ms)
+  - Elimina el stringify de 10k filas en cada cambio individual
+  - Compatible con el sistema de backup (usa `window.location.reload()` tras restaurar)
+
+- **Convocatoria Real / Simulacro** (`useCalification.js`, `CalificationModal.vue`, `ScoresTab.vue`, `useExport.js`)
+  - Toggle **Simulacro | Convocatoria Real** en `CalificationModal` — guarda `activeProcess.type`
+  - `processType` persiste en `activeProcess`, se restaura al cargar historial
+  - Preflight: advertencia si modo real y postulantes sin `programa` asignado
+  - `ScoresTab` modo simulacro → tabla plana (comportamiento anterior)
+  - `ScoresTab` modo real → secciones por carrera con encabezado azul (postulantes / vacantes / ingresantes), posición dentro de carrera (`positionInPrograma`)
+  - `exportIngresantesPdf` modo simulacro → tabla plana con columna Programa
+  - `exportIngresantesPdf` modo real → filas separadoras por carrera con nombre + conteo, sin columna Programa; archivo `ingresantes-real-*.pdf`
+
 ---
 
 ## Pendientes (orden de prioridad)
 
-1. **Programa de estudios / Convocatoria Real** *(prioridad media-alta)*
-   - Agregar `programa de estudios` a `ARCHIVE_COLUMNS` y `ARCHIVE_KEY_ALIASES`
-   - Selector **Simulacro | Convocatoria Real** en `CalificationModal` → se guarda en `activeProcess.type`
-   - `runCalification` captura `carrera` del candidato si `type === 'real'`
-   - `ScoresTab`: vista plana (simulacro) vs. agrupada por carrera (real)
-   - Ranking e ingresantes por carrera; vacantes por carrera (pendiente si auto o manual)
-   - Si `type === 'real'` y el padrón no tiene carrera → advertencia al calificar
+1. **Gestión de usuarios** *(medio esfuerzo)*
+   - Backend: endpoints `GET/POST /api/usuarios/`, `PATCH /api/usuarios/:id/`, `POST /api/usuarios/:id/set-password/`
+   - Frontend: sección en `ConfigView` o vista nueva — tabla de operadores, crear/desactivar
+   - Solo visible para `is_staff = true`
 
-2. **Gestión de usuarios** *(medio esfuerzo)*
-   - Crear/desactivar operadores desde la app
-
-3. **Deploy** — pendiente decisión de servidor
+2. **Deploy** — pendiente decisión de servidor
+   - Opción A: local en red (nginx + whitenoise, una sola máquina)
+   - Opción B: VPS (Dockerfile + PostgreSQL)

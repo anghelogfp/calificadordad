@@ -124,18 +124,20 @@ function confirmClearAll() {
     <DataTable
       v-if="archives.hasData"
       :columns="tableColumns"
-      :rows="archives.filteredRows"
+      :rows="archives.pagedRows"
       :selection="archives.selection"
       :editing="archives.editing"
       :is-all-selected="archives.isAllVisibleSelected"
       :is-indeterminate="archives.isSomeVisibleSelected"
       :selected-count="archives.totalSelected"
       :row-class="getRowClass"
+      :pagination="archives.pagination"
       @toggle-selection="archives.toggleSelection"
       @toggle-select-all="archives.toggleSelectAll"
       @toggle-edit="archives.toggleEdit"
       @cancel-edit="archives.toggleEdit"
       @remove-row="archives.removeRow"
+      @change-page="archives.goToPage"
     />
 
     <EmptyState

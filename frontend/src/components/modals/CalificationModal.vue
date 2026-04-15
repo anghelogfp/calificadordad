@@ -69,6 +69,39 @@ function plantillaOptionLabel(p) {
 
           <div class="field-divider"></div>
 
+          <!-- Tipo de proceso -->
+          <div class="field">
+            <label>Tipo de proceso</label>
+            <div class="process-type-toggle">
+              <button
+                type="button"
+                class="type-btn"
+                :class="{ 'type-btn--active': calification.processType === 'simulacro' }"
+                @click="calification.processType = 'simulacro'"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v10A7.969 7.969 0 015.5 14c1.669 0 3.218.51 4.5 1.385A7.962 7.962 0 0114.5 14c1.255 0 2.443.29 3.5.804v-10A7.968 7.968 0 0014.5 4c-1.255 0-2.443.29-3.5.804V12a1 1 0 11-2 0V4.804z"/>
+                </svg>
+                Simulacro
+                <span class="type-hint">Ranking general</span>
+              </button>
+              <button
+                type="button"
+                class="type-btn type-btn--real"
+                :class="{ 'type-btn--active': calification.processType === 'real' }"
+                @click="calification.processType = 'real'"
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v6a1 1 0 102 0V8z" clip-rule="evenodd"/>
+                </svg>
+                Convocatoria Real
+                <span class="type-hint">Por carrera + vacantes</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="field-divider"></div>
+
           <!-- Área a calificar -->
           <div class="field">
             <label for="calification-area">Área a calificar</label>
@@ -560,4 +593,55 @@ function plantillaOptionLabel(p) {
   background: transparent; color: var(--slate-600); border: 1px solid var(--slate-200);
 }
 .btn--ghost:hover:not(:disabled) { background: var(--slate-50); border-color: var(--slate-300); }
+
+/* ── Tipo de proceso ── */
+.process-type-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-2);
+  border: 2px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  background: var(--slate-50);
+  color: var(--slate-500);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+}
+
+.type-btn svg { width: 20px; height: 20px; }
+
+.type-btn:hover {
+  border-color: var(--unap-blue-300);
+  color: var(--unap-blue-700);
+  background: var(--unap-blue-50);
+}
+
+.type-btn--active {
+  border-color: var(--unap-blue-600);
+  background: var(--unap-blue-700);
+  color: white;
+  box-shadow: 0 2px 8px rgba(0, 64, 128, 0.25);
+}
+
+.type-btn--active.type-btn--real {
+  border-color: var(--unap-gold-600);
+  background: linear-gradient(135deg, var(--unap-gold-500) 0%, var(--unap-gold-600) 100%);
+  color: var(--unap-blue-900);
+  box-shadow: var(--shadow-gold);
+}
+
+.type-hint {
+  font-size: 0.68rem;
+  font-weight: 400;
+  opacity: 0.8;
+}
 </style>

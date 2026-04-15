@@ -13,6 +13,7 @@ const props = defineProps({
   exporter: { type: Object, required: true },
   convocatoriaName: { type: String, default: '' },
   onSaveToHistory: { type: Function, default: null },
+  vacantesPrograma: { type: Object, default: null },
 })
 
 const calification = reactive(props.calification)
@@ -114,6 +115,31 @@ function clearFilters() {
   filterEstado.value = 'todos'
 }
 
+// ── Modo Real: vista agrupada por carrera ────────────────────────────────────
+
+const isRealMode = computed(() => calification.activeProcess?.type === 'real')
+
+const groupedResults = computed(() => {
+  if (!isRealMode.value) return []
+  const map = new Map()
+  localFilteredResults.value.forEach((r) => {
+    const prog = r.programa?.trim() || '(Sin programa)'
+    if (!map.has(prog)) map.set(prog, [])
+    map.get(prog).push(r)
+  })
+  return Array.from(map.entries())
+    .sort(([a], [b]) => {
+      if (a === '(Sin programa)') return 1
+      if (b === '(Sin programa)') return -1
+      return a.localeCompare(b, 'es')
+    })
+    .map(([programa, results]) => {
+      const vacantes = props.vacantesPrograma?.vacantesPrograma?.value?.[programa] ?? 0
+      const ingresantes = results.filter((r) => r.isIngresante).length
+      return { programa, results, vacantes, ingresantes }
+    })
+})
+
 // ── Detalle candidato ────────────────────────────────────────────────────────
 const detailCandidate = ref(null)
 
@@ -145,7 +171,8 @@ function handleExportIngresantesPdf() {
   props.exporter.exportIngresantesPdf(
     localFilteredResults.value,
     { statsByArea: props.dashboard.statsByArea.value },
-    props.convocatoriaName
+    props.convocatoriaName,
+    calification.activeProcess?.type ?? 'simulacro'
   )
 }
 </script>
@@ -411,8 +438,16 @@ function handleExportIngresantesPdf() {
       </div>
     </div>
 
-    <!-- Tabla de resultados -->
-    <section class="table-wrapper" v-if="calification.calificationHasResults">
+    <!-- Badge modo real -->
+    <div v-if="isRealMode && calification.calificationHasResults" class="mode-badge">
+      <svg viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v6a1 1 0 102 0V8z" clip-rule="evenodd"/>
+      </svg>
+      Convocatoria Real — resultados agrupados por carrera
+    </div>
+
+    <!-- ── Tabla PLANA (Simulacro) ──────────────────────────────────────────── -->
+    <section class="table-wrapper" v-if="calification.calificationHasResults && !isRealMode">
       <table>
         <thead>
           <tr>
@@ -466,6 +501,91 @@ function handleExportIngresantesPdf() {
         </tbody>
       </table>
     </section>
+
+    <!-- ── Tabla AGRUPADA por carrera (Convocatoria Real) ──────────────────── -->
+    <template v-if="calification.calificationHasResults && isRealMode">
+      <div
+        v-for="group in groupedResults"
+        :key="group.programa"
+        class="carrera-section"
+      >
+        <!-- Encabezado de carrera -->
+        <div class="carrera-header">
+          <div class="carrera-header__left">
+            <svg viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z"/>
+            </svg>
+            <span class="carrera-header__name">{{ group.programa }}</span>
+          </div>
+          <div class="carrera-header__stats">
+            <span class="carrera-stat">
+              <strong>{{ group.results.length }}</strong> postulantes
+            </span>
+            <span v-if="group.vacantes > 0" class="carrera-stat carrera-stat--vacantes">
+              <strong>{{ group.vacantes }}</strong> vacantes
+            </span>
+            <span class="carrera-stat carrera-stat--in">
+              <strong>{{ group.ingresantes }}</strong> ingresantes
+            </span>
+            <span class="carrera-stat carrera-stat--out">
+              <strong>{{ group.results.length - group.ingresantes }}</strong> no ingresantes
+            </span>
+          </div>
+        </div>
+
+        <!-- Tabla de la carrera -->
+        <table class="carrera-table">
+          <thead>
+            <tr>
+              <th class="col-number">#</th>
+              <th>DNI</th>
+              <th>Ap. Paterno</th>
+              <th>Ap. Materno</th>
+              <th>Nombres</th>
+              <th class="col-score">Puntaje</th>
+              <th class="col-status">Estado</th>
+              <th class="col-detail"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="row in group.results"
+              :key="row.id"
+              :class="{ 'row--ingresante': row.isIngresante }"
+            >
+              <td class="col-number">{{ row.positionInPrograma }}</td>
+              <td class="mono">{{ row.dni }}</td>
+              <td>{{ row.paterno || '—' }}</td>
+              <td>{{ row.materno || '—' }}</td>
+              <td>{{ row.nombres || '—' }}</td>
+              <td class="col-score">
+                <span class="score-badge" :class="{ 'score-badge--ingresante': row.isIngresante }">
+                  {{ row.score.toFixed(3) }}
+                </span>
+              </td>
+              <td class="col-status">
+                <span class="status-chip" :class="row.isIngresante ? 'status-chip--in' : 'status-chip--out'">
+                  {{ row.isIngresante ? 'INGRESANTE' : 'NO INGRESANTE' }}
+                </span>
+              </td>
+              <td class="col-detail">
+                <button
+                  class="btn-detail"
+                  title="Ver detalle pregunta por pregunta"
+                  :disabled="!row.answersRaw"
+                  @click="openDetail(row)"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+                    <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
+                  </svg>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
 
     <EmptyState
       v-else
@@ -786,4 +906,88 @@ tbody tr.row--ingresante:hover { background: #dcfce7; }
   color: var(--unap-blue-600);
 }
 .btn-detail:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ── Badge modo real ── */
+.mode-badge {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: linear-gradient(135deg, var(--unap-gold-50) 0%, #fffbeb 100%);
+  border: 1px solid var(--unap-gold-300);
+  border-radius: var(--radius-lg);
+  font-size: 0.82rem; font-weight: 600; color: var(--unap-blue-800);
+}
+.mode-badge svg { width: 15px; height: 15px; color: var(--unap-gold-600); flex-shrink: 0; }
+
+/* ── Secciones por carrera (modo real) ── */
+.carrera-section {
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.carrera-header {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: linear-gradient(135deg, var(--unap-blue-700) 0%, var(--unap-blue-800) 100%);
+  color: white;
+}
+
+.carrera-header__left {
+  display: flex; align-items: center; gap: var(--space-2);
+}
+
+.carrera-header__left svg { width: 18px; height: 18px; opacity: 0.8; flex-shrink: 0; }
+.carrera-header__name { font-size: 0.95rem; font-weight: 700; }
+
+.carrera-header__stats {
+  display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+}
+
+.carrera-stat {
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: 0.75rem; font-weight: 500;
+  background: rgba(255,255,255,0.15);
+  color: white;
+}
+.carrera-stat strong { font-weight: 700; }
+
+.carrera-stat--vacantes {
+  background: rgba(255, 255, 255, 0.2);
+}
+.carrera-stat--in {
+  background: rgba(34, 197, 94, 0.3);
+  color: #bbf7d0;
+}
+.carrera-stat--out {
+  background: rgba(239, 68, 68, 0.25);
+  color: #fecaca;
+}
+
+.carrera-table {
+  width: 100%; border-collapse: collapse; font-size: 0.9rem;
+}
+.carrera-table thead {
+  background: var(--slate-100);
+}
+.carrera-table th {
+  padding: var(--space-2) var(--space-4);
+  text-align: left; font-size: 0.75rem; font-weight: 700;
+  color: var(--slate-600); text-transform: uppercase; letter-spacing: 0.04em;
+  white-space: nowrap; border-bottom: 1px solid var(--slate-200);
+}
+.carrera-table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--slate-100);
+  vertical-align: middle;
+}
+.carrera-table tbody tr:last-child td { border-bottom: none; }
+.carrera-table tbody tr:nth-child(even) { background: var(--slate-50); }
+.carrera-table tbody tr:hover { background: var(--unap-blue-50); }
+.carrera-table tbody tr.row--ingresante {
+  background: linear-gradient(90deg, #f0fdf4 0%, white 100%);
+}
+.carrera-table tbody tr.row--ingresante:hover { background: #dcfce7; }
 </style>

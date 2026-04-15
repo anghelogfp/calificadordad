@@ -152,18 +152,20 @@ function getRowClass(row) {
       <DataTable
         v-if="responses.responsesHasData"
         :columns="tableColumns"
-        :rows="responses.filteredRows"
+        :rows="responses.pagedRows"
         :selection="responses.selection"
         :editing="responses.editing"
         :is-all-selected="responses.isAllVisibleSelected"
         :is-indeterminate="responses.isSomeVisibleSelected"
         :selected-count="responses.totalSelected"
         :row-class="getRowClass"
+        :pagination="responses.pagination"
         @toggle-selection="responses.toggleSelection"
         @toggle-select-all="responses.toggleSelectAll"
         @toggle-edit="responses.toggleEdit"
         @cancel-edit="responses.toggleEdit"
         @remove-row="responses.removeRow"
+        @change-page="responses.goToPage"
       />
 
       <EmptyState
