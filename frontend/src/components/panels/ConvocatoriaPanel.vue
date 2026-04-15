@@ -71,9 +71,11 @@ const emit = defineEmits(['close'])
                   </template>
                 </strong>
               </div>
-              <button type="submit" class="btn btn--primary" :disabled="convocatoria.loading.value">
-                {{ convocatoria.loading.value ? 'Creando...' : 'Crear' }}
-              </button>
+              <div class="form-footer">
+                <button type="submit" class="btn btn--primary btn--full" :disabled="convocatoria.loading.value">
+                  {{ convocatoria.loading.value ? 'Creando...' : 'Crear convocatoria' }}
+                </button>
+              </div>
             </form>
             <div v-if="convocatoria.formError.value" class="alert alert--error">
               {{ convocatoria.formError.value }}
@@ -147,27 +149,29 @@ const emit = defineEmits(['close'])
   position: fixed; inset: 0;
   background: rgba(0, 29, 61, 0.5);
   backdrop-filter: blur(4px);
-  display: flex; align-items: flex-start; justify-content: flex-end;
+  display: flex; align-items: center; justify-content: center;
   z-index: 150;
+  padding: var(--space-4);
   animation: fadeIn 0.2s ease-out;
 }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .panel {
-  width: min(420px, 100%);
-  height: 100vh;
+  width: min(520px, 100%);
+  max-height: 90vh;
   background: white;
   display: flex;
   flex-direction: column;
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xl);
-  animation: slideInRight 0.3s ease-out;
+  animation: scaleIn 0.2s ease-out;
   overflow: hidden;
 }
 
-@keyframes slideInRight {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+@keyframes scaleIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 
 .panel__header {
@@ -192,28 +196,29 @@ const emit = defineEmits(['close'])
 
 .panel__body {
   flex: 1; overflow-y: auto;
-  padding: var(--space-5);
-  display: flex; flex-direction: column; gap: var(--space-5);
+  padding: var(--space-6);
+  display: flex; flex-direction: column; gap: var(--space-6);
 }
 
 .create-section, .list-section {
-  display: flex; flex-direction: column; gap: var(--space-3);
+  display: flex; flex-direction: column; gap: var(--space-4);
 }
 
 h3 { font-size: 0.95rem; font-weight: 700; color: var(--slate-800); margin: 0; }
 
 .create-form {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: var(--space-3);
-  align-items: end;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
-.fields-row { display: flex; gap: var(--space-2); align-items: flex-end; }
+.fields-row { display: flex; gap: var(--space-3); align-items: flex-end; }
 .field { display: flex; flex-direction: column; gap: var(--space-1); }
-.field--grow { flex: 1; min-width: 80px; }
-.field--year { flex: 0 0 74px; }
-.field--suffix { flex: 0 0 60px; }
+.field--grow { flex: 1; min-width: 100px; }
+.field--year { flex: 0 0 88px; }
+.field--suffix { flex: 0 0 72px; }
+
+.form-footer { display: flex; justify-content: flex-end; }
 .optional { font-size: 0.68rem; font-weight: 400; color: var(--slate-400); }
 .name-preview {
   font-size: 0.8rem; color: var(--slate-600);
@@ -230,16 +235,18 @@ h3 { font-size: 0.95rem; font-weight: 700; color: var(--slate-800); margin: 0; }
   border-radius: var(--radius-md);
   font-size: 0.9rem;
   background: var(--slate-50);
+  width: 100%;
+  box-sizing: border-box;
 }
 .input:focus { outline: none; border-color: var(--unap-blue-400); background: white; }
 
 .divider { height: 1px; background: var(--slate-100); }
 
-.conv-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.conv-list { display: flex; flex-direction: column; gap: var(--space-3); }
 
 .conv-item {
   display: flex; align-items: center; justify-content: space-between;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-5);
   border: 2px solid var(--slate-100);
   border-radius: var(--radius-lg);
   cursor: pointer;
@@ -270,10 +277,11 @@ h3 { font-size: 0.95rem; font-weight: 700; color: var(--slate-800); margin: 0; }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center;
-  gap: var(--space-2); padding: var(--space-2) var(--space-4);
+  gap: var(--space-2); padding: var(--space-2) var(--space-5);
   border: none; border-radius: var(--radius-md);
   font-size: 0.875rem; font-weight: 600; cursor: pointer;
   transition: all var(--transition-fast); white-space: nowrap;
+  min-height: 40px;
 }
 
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -282,6 +290,11 @@ h3 { font-size: 0.95rem; font-weight: 700; color: var(--slate-800); margin: 0; }
   background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
   color: white;
 }
+.btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%);
+}
+
+.btn--full { width: 100%; }
 
 .icon-btn {
   width: 30px; height: 30px;

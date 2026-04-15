@@ -4,8 +4,8 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import AreaCalificacion, ProcesoCalificacion, ResultadoCandidato
-from .serializers import ProcesoDetailSerializer, ProcesoListSerializer
+from .models import AreaCalificacion, ProcesoCalificacion, ResultadoCandidato, VerificadorSesion
+from .serializers import ProcesoDetailSerializer, ProcesoListSerializer, VerificadorSesionSerializer
 
 
 class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
@@ -157,3 +157,25 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
             'savedAt': proceso.updated_at.isoformat(),
             'areas': areas,
         })
+
+
+class VerificadorSesionViewSet(viewsets.ModelViewSet):
+    """
+    CRUD de sesiones del verificador manual de respuestas.
+
+    GET    /api/verificador/        → listado del usuario actual
+    POST   /api/verificador/        → crear sesión
+    GET    /api/verificador/{id}/   → detalle
+    PUT    /api/verificador/{id}/   → actualizar
+    DELETE /api/verificador/{id}/   → eliminar
+    """
+    serializer_class = VerificadorSesionSerializer
+
+    def get_queryset(self):
+        return VerificadorSesion.objects.filter(created_by=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save()

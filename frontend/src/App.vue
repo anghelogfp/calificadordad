@@ -45,8 +45,10 @@ import ConvocatoriaPanel from '@/components/panels/ConvocatoriaPanel.vue'
 import DashboardPanel from '@/components/panels/DashboardPanel.vue'
 
 // Views (sidebar)
+import DashboardHomeView from '@/components/views/DashboardHomeView.vue'
 import HistoryView from '@/components/views/HistoryView.vue'
 import ConfigView from '@/components/views/ConfigView.vue'
+import VerificadorView from '@/components/views/VerificadorView.vue'
 import ToastContainer from '@/components/shared/ToastContainer.vue'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -55,7 +57,7 @@ import ToastContainer from '@/components/shared/ToastContainer.vue'
 
 const auth = useAuth()
 
-const activeTab = useStorage('calificador-active-tab', TAB_KEYS.ARCHIVES)
+const activeTab = useStorage('calificador-active-tab', 'dashboard')
 const identifierSubTab = useStorage('calificador-identificador-subtab', IDENTIFIER_SUBTABS.LIST)
 const responsesSubTab = useStorage('calificador-respuestas-subtab', RESPONSES_SUBTABS.LIST)
 const answerKeySubTab = useStorage('calificador-claves-subtab', ANSWER_KEY_SUBTABS.LIST)
@@ -264,21 +266,25 @@ onMounted(async () => {
   <div v-else class="app-layout">
     <AppHeader
       :convocatoria="convocatoria.activeConvocatoria.value"
-      @open-convocatoria="convocatoria.showPanel.value = true"
+      @go-home="activeTab = 'dashboard'"
     />
 
     <div class="app-body">
       <AppSidebar
         :history-count="history.historyList.value.length"
         :active-tab="activeTab"
+        :active-dashboard="activeTab === 'dashboard'"
         :active-ponderations="activeTab === TAB_KEYS.PONDERATIONS"
         :active-history="activeTab === 'history'"
         :active-config="activeTab === 'config'"
+        :active-verificador="activeTab === 'verificador'"
         @new-process="startNewProcess"
+        @open-dashboard="activeTab = 'dashboard'"
         @open-ponderations="activeTab = TAB_KEYS.PONDERATIONS"
         @open-history="navigateToHistory"
         @open-config="activeTab = 'config'"
         @open-backup="backup.showModal.value = true"
+        @open-verificador="activeTab = 'verificador'"
       />
 
       <div class="app-content">
@@ -293,8 +299,43 @@ onMounted(async () => {
         />
 
         <main class="app-main">
+
+          <!-- Breadcrumb — aparece en todas las vistas excepto dashboard -->
+          <nav v-if="activeTab !== 'dashboard'" class="breadcrumb">
+            <button type="button" class="breadcrumb__back" @click="activeTab = 'dashboard'">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M19 12H5M12 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Inicio
+            </button>
+            <span class="breadcrumb__sep">/</span>
+            <span class="breadcrumb__current">{{
+              activeTab === TAB_KEYS.ARCHIVES    ? 'Padrón de postulantes' :
+              activeTab === TAB_KEYS.IDENTIFIERS ? 'Identificadores' :
+              activeTab === TAB_KEYS.RESPONSES   ? 'Respuestas' :
+              activeTab === TAB_KEYS.ANSWER_KEYS ? 'Claves de respuestas' :
+              activeTab === TAB_KEYS.SCORES      ? 'Resultados' :
+              activeTab === TAB_KEYS.PONDERATIONS ? 'Ponderaciones' :
+              activeTab === 'history'    ? 'Historial de procesos' :
+              activeTab === 'config'     ? 'Configuración' :
+              activeTab === 'verificador' ? 'Verificador' : activeTab
+            }}</span>
+          </nav>
+
+          <DashboardHomeView
+            v-if="activeTab === 'dashboard'"
+            :history="history"
+            :convocatoria="convocatoria"
+            :areas="areas"
+            :current-user="auth.user.value?.username ?? ''"
+            @load-process="handleLoadProcess"
+            @new-process="startNewProcess"
+            @open-verificador="activeTab = 'verificador'"
+            @open-history="navigateToHistory"
+          />
+
           <ArchivesTab
-            v-if="activeTab === TAB_KEYS.ARCHIVES"
+            v-else-if="activeTab === TAB_KEYS.ARCHIVES"
             :archives="archives"
           />
 
@@ -349,6 +390,14 @@ onMounted(async () => {
             :vacantes-programa="vacantesPrograma"
             :dat-format="datFormat"
             :convocatoria-id="convocatoria.activeConvocatoriaId.value"
+            :convocatoria="convocatoria.activeConvocatoria.value"
+            @open-convocatoria="convocatoria.showPanel.value = true"
+          />
+
+          <VerificadorView
+            v-else-if="activeTab === 'verificador'"
+            :ponderations="ponderations"
+            :current-user="auth.user.value?.username ?? ''"
           />
         </main>
       </div>
@@ -418,6 +467,49 @@ onMounted(async () => {
   max-width: 1400px;
   width: 100%;
   margin: 0 auto;
+}
+
+/* Breadcrumb */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.breadcrumb__back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-full);
+  background: var(--unap-blue-50);
+  color: var(--unap-blue-700);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.breadcrumb__back svg {
+  width: 14px;
+  height: 14px;
+}
+.breadcrumb__back:hover {
+  background: var(--unap-blue-100);
+  color: var(--unap-blue-800);
+}
+
+.breadcrumb__sep {
+  color: var(--slate-300);
+  font-size: 0.85rem;
+  user-select: none;
+}
+
+.breadcrumb__current {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--slate-500);
 }
 
 @media (max-width: 1024px) {

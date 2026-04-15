@@ -6,11 +6,14 @@ import { useToast } from '@/composables/useToast'
 const { showToast } = useToast()
 
 const props = defineProps({
-  programasByArea: { type: Map, required: true },
+  programasByArea:  { type: Map, required: true },
   vacantesPrograma: { type: Object, required: true },
-  datFormat: { type: Object, required: true },
-  convocatoriaId: { type: [Number, String], default: null },
+  datFormat:        { type: Object, required: true },
+  convocatoriaId:   { type: [Number, String], default: null },
+  convocatoria:     { type: Object, default: null },
 })
+
+const emit = defineEmits(['openConvocatoria'])
 
 // ── Vacantes ──────────────────────────────────────────────────────────────
 
@@ -83,6 +86,32 @@ const DAT_FIELDS = [
         </svg>
       </template>
     </StepInfoCard>
+
+    <!-- ── Convocatoria ──────────────────────────────────────────────────── -->
+    <div class="conv-section">
+      <div class="conv-section__info">
+        <div class="conv-section__label">Convocatoria activa</div>
+        <div class="conv-section__name">
+          <template v-if="convocatoria">
+            <span
+              class="conv-status-dot"
+              :class="convocatoria.status === 'active' ? 'conv-status-dot--active' : 'conv-status-dot--closed'"
+            />
+            {{ convocatoria.name }}
+            <span class="conv-status-badge" :class="convocatoria.status === 'active' ? 'badge--active' : 'badge--closed'">
+              {{ convocatoria.status === 'active' ? 'Activa' : 'Cerrada' }}
+            </span>
+          </template>
+          <span v-else class="conv-none">Sin convocatoria configurada</span>
+        </div>
+      </div>
+      <button type="button" class="conv-btn" @click="emit('openConvocatoria')">
+        <svg viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd"/>
+        </svg>
+        Gestionar convocatoria
+      </button>
+    </div>
 
     <div class="config-grid">
 
@@ -272,4 +301,71 @@ const DAT_FIELDS = [
 .btn--ghost { background: transparent; color: var(--slate-600); border: 1px solid var(--slate-200); }
 .btn--ghost:hover { background: var(--slate-50); border-color: var(--slate-300); }
 
+/* ── Convocatoria ──────────────────────────────────────────────────────────── */
+.conv-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-lg);
+  flex-wrap: wrap;
+}
+
+.conv-section__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--slate-400);
+  margin-bottom: 4px;
+}
+
+.conv-section__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--slate-800);
+}
+
+.conv-none { color: var(--slate-400); font-weight: 400; font-size: 0.85rem; }
+
+.conv-status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.conv-status-dot--active { background: #4ade80; box-shadow: 0 0 5px #4ade80; }
+.conv-status-dot--closed { background: var(--slate-300); }
+
+.conv-status-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+}
+.badge--active { background: #dcfce7; color: #15803d; }
+.badge--closed { background: var(--slate-100); color: var(--slate-500); }
+
+.conv-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--slate-200);
+  background: white;
+  color: var(--slate-700);
+  font-size: 0.83rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.conv-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+.conv-btn:hover { background: var(--unap-blue-50); border-color: var(--unap-blue-300); color: var(--unap-blue-700); }
 </style>

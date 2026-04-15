@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AreaCalificacion, ProcesoCalificacion, ResultadoCandidato
+from .models import AreaCalificacion, ProcesoCalificacion, ResultadoCandidato, VerificadorSesion
 
 
 class ResultadoCandidatoSerializer(serializers.ModelSerializer):
@@ -56,3 +56,20 @@ class ProcesoDetailSerializer(serializers.ModelSerializer):
             'areas_data', 'created_by_username',
             'created_at', 'updated_at',
         ]
+
+
+class VerificadorSesionSerializer(serializers.ModelSerializer):
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+
+    class Meta:
+        model = VerificadorSesion
+        fields = [
+            'id',
+            'plantilla_id', 'plantilla_name', 'plantilla_snapshot',
+            'proceso', 'dni', 'nombre', 'area', 'programa', 'aula', 'posicion', 'tipo_prueba',
+            'answers', 'correct_answers',
+            'correct_value', 'incorrect_value', 'blank_value',
+            'score',
+            'created_by_username', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['created_by', 'created_at', 'updated_at']

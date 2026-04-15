@@ -3,7 +3,6 @@ import { apiFetch } from '@/utils/apiFetch'
 
 export function useHistory() {
   const historyList = ref([])
-  const showHistoryPanel = ref(false)
   const loading = ref(false)
 
   async function fetchHistory() {
@@ -67,24 +66,12 @@ export function useHistory() {
     } catch { return null }
   }
 
-  function openHistoryPanel() {
-    showHistoryPanel.value = true
-    fetchHistory()
-  }
-
-  function closeHistoryPanel() {
-    showHistoryPanel.value = false
-  }
-
   return {
     historyList,
-    showHistoryPanel,
     loading,
     fetchHistory,
     saveProcess,
     deleteProcess,
     loadProcessFromApi,
-    openHistoryPanel,
-    closeHistoryPanel,
   }
 }

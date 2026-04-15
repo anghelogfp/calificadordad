@@ -2,6 +2,52 @@ from django.contrib.auth.models import User
 from django.db import models
 
 
+class VerificadorSesion(models.Model):
+    """Verificación manual de respuestas de un candidato puntual."""
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='verificador_sesiones',
+    )
+    # Plantilla usada (snapshot para trazabilidad)
+    plantilla_id = models.IntegerField(null=True, blank=True)
+    plantilla_name = models.CharField(max_length=200, blank=True)
+    plantilla_snapshot = models.JSONField(default=list)
+
+    # Datos opcionales del candidato
+    proceso     = models.CharField(max_length=200, blank=True)
+    dni         = models.CharField(max_length=20,  blank=True)
+    nombre      = models.CharField(max_length=200, blank=True)
+    area        = models.CharField(max_length=100, blank=True)
+    programa    = models.CharField(max_length=200, blank=True)
+    aula        = models.CharField(max_length=50,  blank=True)
+    posicion    = models.CharField(max_length=20,  blank=True)
+    tipo_prueba = models.CharField(max_length=20,  blank=True)
+
+    # Respuestas (strings de hasta 60 caracteres A-E)
+    answers = models.CharField(max_length=300, blank=True, default='')
+    correct_answers = models.CharField(max_length=300, blank=True, default='')
+
+    # Valores de puntuación
+    correct_value = models.DecimalField(max_digits=8, decimal_places=3, default=10)
+    incorrect_value = models.DecimalField(max_digits=8, decimal_places=3, default=0)
+    blank_value = models.DecimalField(max_digits=8, decimal_places=3, default=2)
+
+    # Score calculado al momento de guardar
+    score = models.DecimalField(max_digits=10, decimal_places=3, default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'verificador_sesiones'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        label = self.nombre or self.dni or 'Anónimo'
+        return f'Verificador: {label} ({self.plantilla_name})'
+
+
 class ProcesoCalificacion(models.Model):
     """
     Un proceso agrupa los resultados de una o más áreas calificadas en un mismo

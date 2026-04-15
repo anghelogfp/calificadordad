@@ -5,12 +5,14 @@ import { useStorage } from '@vueuse/core'
 const props = defineProps({
   historyCount: { type: Number, default: 0 },
   activeTab: { type: String, default: '' },
+  activeDashboard: { type: Boolean, default: false },
   activePonderations: { type: Boolean, default: false },
   activeHistory: { type: Boolean, default: false },
   activeConfig: { type: Boolean, default: false },
+  activeVerificador: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['newProcess', 'openPonderations', 'openHistory', 'openConfig', 'openBackup'])
+const emit = defineEmits(['newProcess', 'openDashboard', 'openPonderations', 'openHistory', 'openConfig', 'openBackup', 'openVerificador'])
 
 // El proceso está activo cuando el tab es uno de los 5 pasos
 const PROCESS_TABS = ['archives', 'identifiers', 'responses', 'answer_keys', 'results']
@@ -52,6 +54,24 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
     </div>
 
     <nav class="sidebar-nav">
+
+      <!-- Dashboard / Inicio -->
+      <button
+        type="button"
+        class="sidebar-item"
+        :class="{ 'sidebar-item--active': activeDashboard }"
+        :title="!expanded ? 'Inicio' : undefined"
+        @click="emit('openDashboard')"
+      >
+        <span class="sidebar-item__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="9 22 9 12 15 12 15 22" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span v-if="expanded" class="sidebar-item__label">Inicio</span>
+      </button>
+
       <!-- Ponderaciones -->
       <button
         type="button"
@@ -106,6 +126,23 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
           </svg>
         </span>
         <span v-if="expanded" class="sidebar-item__label">Configuración</span>
+      </button>
+
+      <!-- Verificador -->
+      <button
+        type="button"
+        class="sidebar-item"
+        :class="{ 'sidebar-item--active': activeVerificador }"
+        :title="!expanded ? 'Verificador de respuestas' : undefined"
+        @click="emit('openVerificador')"
+      >
+        <span class="sidebar-item__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 11l3 3L22 4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span v-if="expanded" class="sidebar-item__label">Verificador</span>
       </button>
 
       <!-- Backup -->
@@ -215,6 +252,7 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
   margin: var(--space-2) var(--space-3);
 }
 
+
 /* Items */
 .sidebar-item {
   position: relative;
@@ -305,6 +343,17 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
   align-items: center;
   gap: var(--space-2);
   overflow: hidden;
+  flex: 1;
+}
+
+/* Flechita derecha en item activo */
+.sidebar-item--active .sidebar-item__label::after {
+  content: '›';
+  margin-left: auto;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--unap-blue-400);
+  opacity: 0.7;
 }
 
 .sidebar-item__count {

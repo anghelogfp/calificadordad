@@ -7,65 +7,48 @@ const props = defineProps({
   convocatoria: { type: Object, default: null },
 })
 
-const emit = defineEmits(['openConvocatoria'])
+const emit = defineEmits(['goHome'])
 </script>
 
 <template>
   <header class="app-header">
-    <div class="header-brand">
-      <div class="brand-logo">
-        <img
-          src="/unap.png"
-          alt="Logo"
-          width="80"
-          height="80"
-          style="border-radius: 12px"
-        />
-      </div>
+
+    <!-- Marca institucional -->
+    <div class="header-brand" role="button" tabindex="0" title="Ir al inicio" @click="emit('goHome')" @keydown.enter="emit('goHome')">
+      <img src="/unap.png" alt="UNAP" class="brand-logo" />
       <div class="brand-text">
-        <h1>Sistema de Calificación</h1>
-        <span class="brand-subtitle">Universidad Nacional del Altiplano - Puno</span>
+        <span class="brand-university">Universidad Nacional del Altiplano de Puno</span>
+        <span class="brand-division">Dirección de Admisión</span>
+        <span class="brand-sub">
+          <span class="brand-system">Sistema de Calificación</span>
+          <template v-if="convocatoria">
+            <span class="brand-sep">·</span>
+            <span class="brand-conv">{{ convocatoria.name }}</span>
+            <span
+              class="brand-dot"
+              :class="convocatoria.status === 'active' ? 'brand-dot--active' : 'brand-dot--closed'"
+            />
+          </template>
+        </span>
       </div>
     </div>
 
-    <div class="header-meta">
-      <!-- Selector de convocatoria -->
-      <button
-        type="button"
-        class="convocatoria-btn"
-        :class="{ 'convocatoria-btn--active': convocatoria?.status === 'active' }"
-        @click="emit('openConvocatoria')"
-        title="Administrar convocatorias"
-      >
-        <svg viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd"/>
-        </svg>
-        <span>{{ convocatoria ? convocatoria.name : 'Sin convocatoria' }}</span>
-        <span v-if="convocatoria?.status === 'active'" class="status-dot status-dot--active" />
-        <span v-else-if="convocatoria" class="status-dot status-dot--closed" />
-      </button>
-
-      <div class="header-badge">
-        Dirección de Admisión {{ new Date().getFullYear() }}
-      </div>
+    <!-- Acciones de sesión -->
+    <div class="header-actions">
 
       <!-- Usuario + logout -->
       <div class="user-chip">
         <svg viewBox="0 0 20 20" fill="currentColor">
           <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/>
         </svg>
-        <span>{{ auth.user.value?.first_name || auth.user.value?.username }}</span>
-        <button
-          type="button"
-          class="logout-btn"
-          title="Cerrar sesión"
-          @click="auth.logout()"
-        >
-          <svg viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M3 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zm7.707 3.293a1 1 0 010 1.414L9.414 9H17a1 1 0 110 2H9.414l1.293 1.293a1 1 0 01-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0z" clip-rule="evenodd"/>
+        <span class="user-name">{{ auth.user.value?.first_name || auth.user.value?.username }}</span>
+        <button type="button" class="logout-btn" title="Cerrar sesión" @click="auth.logout()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </button>
       </div>
+
     </div>
   </header>
 </template>
@@ -73,7 +56,8 @@ const emit = defineEmits(['openConvocatoria'])
 <style scoped>
 .app-header {
   background: linear-gradient(135deg, var(--unap-blue-800) 0%, var(--unap-blue-900) 100%);
-  padding: var(--space-5) var(--space-8);
+  padding: 0 var(--space-6);
+  height: 76px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -81,136 +65,169 @@ const emit = defineEmits(['openConvocatoria'])
   box-shadow: var(--shadow-lg);
   position: relative;
   z-index: 10;
+  flex-shrink: 0;
 }
 
 .app-header::after {
   content: '';
   position: absolute;
   bottom: 0; left: 0; right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--unap-gold-500), var(--unap-gold-400), var(--unap-gold-500));
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--unap-gold-400), transparent);
 }
 
+/* ── Marca ───────────────────────────────────────────────────────────────────── */
 .header-brand {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  min-width: 0;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-2);
+  margin: 0 calc(-1 * var(--space-2));
+  transition: background 0.15s;
+}
+.header-brand:hover { background: rgba(255,255,255,0.08); }
+
+.brand-logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  object-fit: contain;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
 }
 
-.brand-text h1 {
-  font-size: 1.5rem;
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.brand-university {
+  font-size: 1.08rem;
   font-weight: 700;
   color: white;
-  margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
-.brand-subtitle {
-  font-size: 0.85rem;
-  color: var(--unap-gold-300);
+.brand-division {
+  font-size: 0.88rem;
   font-weight: 500;
-  letter-spacing: 0.02em;
+  color: rgba(255,255,255,0.65);
+  white-space: nowrap;
+  line-height: 1.2;
 }
 
-.header-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-/* Botón convocatoria */
-.convocatoria-btn {
+.brand-sub {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-full);
-  color: white;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  backdrop-filter: blur(8px);
-  max-width: 280px;
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.45);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  line-height: 1.2;
 }
 
-.convocatoria-btn svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.8; }
-.convocatoria-btn span:not(.status-dot) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brand-sep { opacity: 0.5; }
 
-.convocatoria-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
+.brand-system {
+  color: var(--unap-gold-300);
+  font-weight: 600;
 }
 
-.convocatoria-btn--active {
-  border-color: var(--unap-gold-400);
+.brand-conv {
+  color: rgba(255,255,255,0.6);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
 }
 
-.status-dot {
-  width: 8px; height: 8px;
+.brand-dot {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
 }
+.brand-dot--active { background: #4ade80; box-shadow: 0 0 5px #4ade80; }
+.brand-dot--closed { background: var(--slate-500); }
 
-.status-dot--active { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
-.status-dot--closed { background: var(--slate-400); }
-
-.header-badge {
+/* ── Acciones ─────────────────────────────────────────────────────────────────── */
+.header-actions {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-full);
-  color: white;
-  font-size: 0.85rem;
-  font-weight: 500;
-  backdrop-filter: blur(8px);
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.icon-btn svg { width: 15px; height: 15px; }
+.icon-btn:hover {
+  background: rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.9);
 }
 
 .user-chip {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: var(--space-2) var(--space-3);
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
   border-radius: var(--radius-full);
   color: white;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 500;
 }
+.user-chip > svg { width: 13px; height: 13px; opacity: 0.5; flex-shrink: 0; }
 
-.user-chip svg { width: 14px; height: 14px; opacity: 0.7; flex-shrink: 0; }
+.user-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .logout-btn {
-  width: 24px; height: 24px;
+  width: 26px; height: 26px;
   border: none;
-  background: rgba(255,255,255,0.12);
-  border-radius: var(--radius-sm);
-  color: white;
+  background: rgba(255,255,255,0.1);
+  border-radius: var(--radius-full);
+  color: rgba(255,255,255,0.7);
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: all var(--transition-fast);
+  transition: all 0.15s;
   flex-shrink: 0;
 }
-.logout-btn svg { width: 14px; height: 14px; }
-.logout-btn:hover { background: rgba(239,68,68,0.4); }
-
-@media (max-width: 1024px) {
-  .app-header {
-    padding: var(--space-4) var(--space-5);
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
+.logout-btn svg { width: 13px; height: 13px; }
+.logout-btn:hover { background: rgba(239,68,68,0.45); color: white; }
 
 @media (max-width: 768px) {
-  .brand-text h1 { font-size: 1.2rem; }
-  .convocatoria-btn { max-width: 200px; }
+  .brand-university { font-size: 0.82rem; }
+  .brand-division   { display: none; }
+  .brand-conv       { max-width: 120px; }
+  .user-name        { display: none; }
 }
 </style>
