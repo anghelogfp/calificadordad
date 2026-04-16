@@ -47,6 +47,7 @@ Sin esto los refs no se auto-desenvuelven en el template (pantalla blanca).
 ## Composables clave (adicionales)
 
 - `useVerificador.js` — CRUD de sesiones del verificador (`/api/verificador/`)
+- `useUsuarios.js` — CRUD de usuarios del sistema (`/api/usuarios/`), singleton
 
 ---
 
@@ -55,7 +56,7 @@ Sin esto los refs no se auto-desenvuelven en el template (pantalla blanca).
 - Tab activo persiste en `localStorage` via `useStorage('calificador-active-tab', 'dashboard')`
 - Entrada por defecto: **Dashboard** (`DashboardHomeView.vue`)
 - Vistas del stepper (pasos 1-5): muestran `StepNav` arriba
-- Vistas secundarias (Ponderaciones, Historial, Config, Verificador): sin StepNav
+- Vistas secundarias (Ponderaciones, Historial, Config, Verificador, Usuarios): sin StepNav
 - **Breadcrumb** `← Inicio / [Sección]` aparece en todas las vistas excepto Dashboard
 - Logo del header es clickeable → navega al Dashboard
 
@@ -123,7 +124,7 @@ Sin esto los refs no se auto-desenvuelven en el template (pantalla blanca).
   - Eliminados: `ConfigPanel.vue`, `HistoryPanel.vue` (reemplazados por sus respectivas Views)
   - `useHistory.js`: eliminados `showHistoryPanel`, `openHistoryPanel`, `closeHistoryPanel` (sin uso)
 
-## Implementado (sesión actual)
+## Implementado al 2026-05-YY (sesión anterior)
 
 - **Paginación en tablas** (`useTableState.js` + `DataTable.vue`)
   - `useTableState` expone `pagedRows`, `pagination`, `goToPage` — solo renderiza 100 filas por página
@@ -145,15 +146,38 @@ Sin esto los refs no se auto-desenvuelven en el template (pantalla blanca).
   - `exportIngresantesPdf` modo simulacro → tabla plana con columna Programa
   - `exportIngresantesPdf` modo real → filas separadoras por carrera con nombre + conteo, sin columna Programa; archivo `ingresantes-real-*.pdf`
 
+## Implementado al 2026-05-ZZ (sesión actual)
+
+- **Gestión de usuarios** — `UsuariosView.vue` (vista central, sidebar abajo del todo, solo `is_staff`)
+  - Tabla de operadores: usuario, nombre, email, rol (Admin/Operador), estado (Activo/Inactivo)
+  - Modal crear usuario con confirmación de contraseña
+  - Modal editar usuario (username, nombre, email, rol)
+  - Modal cambiar contraseña independiente
+  - Toggle activo/inactivo por fila
+  - Backend: endpoints `GET/POST /api/usuarios/`, `PATCH /api/usuarios/:id/`, `POST /api/usuarios/:id/set-password/`
+  - Usa el modelo `User` de Django directamente (sin modelo custom)
+  - Permiso: `IsAdminUser` en todos los endpoints de gestión
+
+- **Calificación multi-área** (`useCalification.js`, `CalificationModal.vue`)
+  - Lógica de cálculo extraída en `_calcForArea(area, plantilla, correctValue, incorrectValue, blankValue)`
+  - `runAllAreas()` — califica todas las áreas de una vez, auto-selecciona plantilla lista por área
+  - `runCalification()` — al calcular una área avanza automáticamente a la siguiente pendiente; cierra solo cuando no quedan pendientes
+  - Modal: pills de progreso con todas las áreas (verde = calculada, azul = activa, clickeables)
+  - Botón **"Calcular todas las áreas"** (solo visible si hay más de 1 área)
+  - Botón dorado ahora dice el nombre del área activa ("Calcular Biomédicas")
+
 ---
 
-## Pendientes (orden de prioridad)
+## Decisiones de arquitectura
 
-1. **Gestión de usuarios** *(medio esfuerzo)*
-   - Backend: endpoints `GET/POST /api/usuarios/`, `PATCH /api/usuarios/:id/`, `POST /api/usuarios/:id/set-password/`
-   - Frontend: sección en `ConfigView` o vista nueva — tabla de operadores, crear/desactivar
-   - Solo visible para `is_staff = true`
+- **SQLite vs PostgreSQL**: SQLite es suficiente para el caso de uso (1–3 operadores, ~3000 filas/examen). Migrar a PostgreSQL solo tiene sentido si se despliega en VPS con múltiples sedes simultáneas.
+- **App de escritorio**: viable con Electron + Django embebido (PyInstaller). Instalador ~150–200MB. Solo aplica si el deploy es local; si hay servidor central, todos usan el navegador.
 
-2. **Deploy** — pendiente decisión de servidor
-   - Opción A: local en red (nginx + whitenoise, una sola máquina)
+---
+
+## Pendientes
+
+1. **Deploy** — pendiente decisión de infraestructura
+   - Opción A: red local UNAP (nginx + whitenoise + SQLite, una máquina)
    - Opción B: VPS (Dockerfile + PostgreSQL)
+   - Opción C: app de escritorio Electron (solo si es uso en una sola máquina)

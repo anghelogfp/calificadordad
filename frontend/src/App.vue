@@ -49,6 +49,7 @@ import DashboardHomeView from '@/components/views/DashboardHomeView.vue'
 import HistoryView from '@/components/views/HistoryView.vue'
 import ConfigView from '@/components/views/ConfigView.vue'
 import VerificadorView from '@/components/views/VerificadorView.vue'
+import UsuariosView from '@/components/views/UsuariosView.vue'
 import ToastContainer from '@/components/shared/ToastContainer.vue'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -278,6 +279,8 @@ onMounted(async () => {
         :active-history="activeTab === 'history'"
         :active-config="activeTab === 'config'"
         :active-verificador="activeTab === 'verificador'"
+        :active-usuarios="activeTab === 'usuarios'"
+        :is-staff="auth.user.value?.is_staff ?? false"
         @new-process="startNewProcess"
         @open-dashboard="activeTab = 'dashboard'"
         @open-ponderations="activeTab = TAB_KEYS.PONDERATIONS"
@@ -285,6 +288,7 @@ onMounted(async () => {
         @open-config="activeTab = 'config'"
         @open-backup="backup.showModal.value = true"
         @open-verificador="activeTab = 'verificador'"
+        @open-usuarios="activeTab = 'usuarios'"
       />
 
       <div class="app-content">
@@ -318,7 +322,8 @@ onMounted(async () => {
               activeTab === TAB_KEYS.PONDERATIONS ? 'Ponderaciones' :
               activeTab === 'history'    ? 'Historial de procesos' :
               activeTab === 'config'     ? 'Configuración' :
-              activeTab === 'verificador' ? 'Verificador' : activeTab
+              activeTab === 'verificador' ? 'Verificador' :
+              activeTab === 'usuarios'   ? 'Usuarios' : activeTab
             }}</span>
           </nav>
 
@@ -398,6 +403,10 @@ onMounted(async () => {
             v-else-if="activeTab === 'verificador'"
             :ponderations="ponderations"
             :current-user="auth.user.value?.username ?? ''"
+          />
+
+          <UsuariosView
+            v-else-if="activeTab === 'usuarios'"
           />
         </main>
       </div>

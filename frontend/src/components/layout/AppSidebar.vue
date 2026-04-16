@@ -10,9 +10,11 @@ const props = defineProps({
   activeHistory: { type: Boolean, default: false },
   activeConfig: { type: Boolean, default: false },
   activeVerificador: { type: Boolean, default: false },
+  activeUsuarios: { type: Boolean, default: false },
+  isStaff: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['newProcess', 'openDashboard', 'openPonderations', 'openHistory', 'openConfig', 'openBackup', 'openVerificador'])
+const emit = defineEmits(['newProcess', 'openDashboard', 'openPonderations', 'openHistory', 'openConfig', 'openBackup', 'openVerificador', 'openUsuarios'])
 
 // El proceso está activo cuando el tab es uno de los 5 pasos
 const PROCESS_TABS = ['archives', 'identifiers', 'responses', 'answer_keys', 'results']
@@ -159,6 +161,27 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
         </span>
         <span v-if="expanded" class="sidebar-item__label">Backup</span>
       </button>
+
+      <!-- Usuarios (solo admin) -->
+      <template v-if="isStaff">
+        <div class="sidebar-divider" />
+        <button
+          type="button"
+          class="sidebar-item"
+          :class="{ 'sidebar-item--active': activeUsuarios }"
+          :title="!expanded ? 'Gestión de usuarios' : undefined"
+          @click="emit('openUsuarios')"
+        >
+          <span class="sidebar-item__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span v-if="expanded" class="sidebar-item__label">Usuarios</span>
+        </button>
+      </template>
     </nav>
   </aside>
 </template>

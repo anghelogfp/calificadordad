@@ -399,39 +399,24 @@ export function useCalification(
   // CALIFICACIÓN
   // ═══════════════════════════════════════════════════════════════════════════
 
-  function runCalification() {
-    calificationError.value = ''
-
-    const area = normalizeArea(calificationArea.value, effectiveAreaNames.value)
+  /**
+   * Núcleo del cálculo para un área dada. Devuelve { results, summary } o lanza un string de error.
+   */
+  function _calcForArea(area, plantilla, correctValue, incorrectValue, blankValue) {
     const answersLength = effectiveAnswersLength.value
-
-    const plantilla = ponderationsComposable.getPlantillaById(calificationPlantillaId.value)
-    if (!plantilla) {
-      calificationError.value = 'Selecciona una plantilla de ponderación.'
-      return
-    }
-
     const plan = buildQuestionPlan(plantilla.items)
+
     if (plan.length !== answersLength) {
-      calificationError.value = `La plantilla "${plantilla.name}" cubre ${plan.length} preguntas. Deben sumar ${answersLength}.`
-      return
+      throw new Error(`La plantilla "${plantilla.name}" cubre ${plan.length} preguntas. Deben sumar ${answersLength}.`)
     }
 
     const totalWeight = plan.reduce((acc, item) => acc + (Number(item.weight) || 0), 0)
-    const correctValue = Number(calificationCorrectValue.value)
-    const incorrectValue = Number(calificationIncorrectValue.value)
-    const blankValue = Number(calificationBlankValue.value)
-
-    if (!Number.isFinite(correctValue)) { calificationError.value = 'El valor para respuesta correcta no es válido.'; return }
-    if (!Number.isFinite(incorrectValue)) { calificationError.value = 'El valor para respuesta incorrecta no es válido.'; return }
-    if (!Number.isFinite(blankValue)) { calificationError.value = 'El valor para respuesta en blanco no es válido.'; return }
 
     const candidates = archiveRows.value.filter(
       (row) => normalizeArea(row.area, effectiveAreaNames.value) === area
     )
     if (!candidates.length) {
-      calificationError.value = 'No hay postulantes registrados para el área seleccionada.'
-      return
+      throw new Error('No hay postulantes registrados para el área seleccionada.')
     }
 
     const processedResults = []
@@ -527,7 +512,6 @@ export function useCalification(
       (r) => !r.dni || r.dni.trim() === ''
     ).length
 
-    // Snapshot de plantilla para trazabilidad histórica
     const plantillaSnapshot = (plantilla.items || []).map(i => ({
       subject: i.subject,
       questionCount: i.questionCount,
@@ -551,6 +535,32 @@ export function useCalification(
       plantillaSnapshot,
     }
 
+    return { results: processedResults, summary }
+  }
+
+  function runCalification() {
+    calificationError.value = ''
+
+    const area = normalizeArea(calificationArea.value, effectiveAreaNames.value)
+    const plantilla = ponderationsComposable.getPlantillaById(calificationPlantillaId.value)
+    if (!plantilla) { calificationError.value = 'Selecciona una plantilla de ponderación.'; return }
+
+    const correctValue = Number(calificationCorrectValue.value)
+    const incorrectValue = Number(calificationIncorrectValue.value)
+    const blankValue = Number(calificationBlankValue.value)
+
+    if (!Number.isFinite(correctValue)) { calificationError.value = 'El valor para respuesta correcta no es válido.'; return }
+    if (!Number.isFinite(incorrectValue)) { calificationError.value = 'El valor para respuesta incorrecta no es válido.'; return }
+    if (!Number.isFinite(blankValue)) { calificationError.value = 'El valor para respuesta en blanco no es válido.'; return }
+
+    let areaResult
+    try {
+      areaResult = _calcForArea(area, plantilla, correctValue, incorrectValue, blankValue)
+    } catch (e) {
+      calificationError.value = e.message
+      return
+    }
+
     const currentId = activeProcess.value.id || generateId()
     const currentName = processName.value.trim() || generateDefaultName()
 
@@ -560,7 +570,7 @@ export function useCalification(
       type: processType.value,
       areas: {
         ...activeProcess.value.areas,
-        [area]: { results: processedResults, summary },
+        [area]: areaResult,
       },
     }
 
@@ -568,10 +578,77 @@ export function useCalification(
     calificationConfigStorage.value[area] = { correctValue, incorrectValue, blankValue }
     saveCalificationConfigToAPI(area, correctValue, incorrectValue, blankValue)
 
-    showCalificationModal.value = false
+    // Avanzar automáticamente a la siguiente área pendiente, o cerrar si ya no hay
+    const nextPending = effectiveAreaNames.value.find(
+      (a) => normalizeArea(a, effectiveAreaNames.value) !== area &&
+             !activeProcess.value.areas[normalizeArea(a, effectiveAreaNames.value)]
+    )
+    if (nextPending) {
+      calificationArea.value = nextPending
+    } else {
+      showCalificationModal.value = false
+      _saveProcesoToApi()
+    }
+  }
 
-    // Guardar proceso en la BD automáticamente tras calcular
+  /**
+   * Califica todas las áreas disponibles de una sola vez.
+   * Usa la plantilla lista (questionTotal === answersLength) de cada área, o la primera disponible.
+   * Devuelve { calculated: string[], skipped: string[] }
+   */
+  function runAllAreas() {
+    calificationError.value = ''
+
+    const correctValue = Number(calificationCorrectValue.value)
+    const incorrectValue = Number(calificationIncorrectValue.value)
+    const blankValue = Number(calificationBlankValue.value)
+
+    if (!Number.isFinite(correctValue) || !Number.isFinite(incorrectValue) || !Number.isFinite(blankValue)) {
+      calificationError.value = 'Revisa los valores de calificación antes de continuar.'
+      return null
+    }
+
+    const calculated = []
+    const skipped = []
+    const newAreas = { ...activeProcess.value.areas }
+
+    for (const areaName of effectiveAreaNames.value) {
+      const area = normalizeArea(areaName, effectiveAreaNames.value)
+      const available = ponderationsComposable.getPlantillasForCalification(area)
+
+      if (!available.length) { skipped.push(areaName); continue }
+
+      const plantilla = available.find(p => p.questionTotal === effectiveAnswersLength.value) || available[0]
+
+      try {
+        newAreas[area] = _calcForArea(area, plantilla, correctValue, incorrectValue, blankValue)
+        calificationConfigStorage.value[area] = { correctValue, incorrectValue, blankValue }
+        calculated.push(areaName)
+      } catch {
+        skipped.push(areaName)
+      }
+    }
+
+    if (!calculated.length) {
+      calificationError.value = 'No se pudo calificar ninguna área. Verifica las plantillas y el padrón.'
+      return null
+    }
+
+    const currentId = activeProcess.value.id || generateId()
+    const currentName = processName.value.trim() || generateDefaultName()
+
+    activeProcess.value = {
+      id: currentId,
+      name: currentName,
+      type: processType.value,
+      areas: newAreas,
+    }
+
+    calificationDisplayArea.value = calculated[0]
+    showCalificationModal.value = false
     _saveProcesoToApi()
+
+    return { calculated, skipped }
   }
 
   async function _saveProcesoToApi() {
@@ -626,6 +703,7 @@ export function useCalification(
     openCalificationModal,
     closeCalificationModal,
     runCalification,
+    runAllAreas,
     resetCalificationResults,
     startNewProcess,
     switchDisplayArea,

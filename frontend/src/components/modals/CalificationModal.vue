@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, watch } from 'vue'
+import { reactive, ref, watch } from 'vue'
 
 const props = defineProps({
   show: { type: Boolean, required: true },
@@ -15,8 +15,21 @@ watch(() => props.show, (val) => {
 const calification = reactive(props.calification)
 const emit = defineEmits(['close'])
 
+const runningAll = ref(false)
+const allResult = ref(null)
+
 function close() { emit('close') }
 function runCalification() { props.calification.runCalification() }
+
+async function runAllAreas() {
+  runningAll.value = true
+  allResult.value = null
+  // Pequeño tick para que el spinner se muestre
+  await new Promise(r => setTimeout(r, 50))
+  const result = props.calification.runAllAreas()
+  runningAll.value = false
+  allResult.value = result
+}
 
 function getVacantes(programa) {
   return props.vacantesPrograma.vacantesPrograma.value[programa] ?? 0
@@ -24,11 +37,6 @@ function getVacantes(programa) {
 
 function setVacantes(programa, val) {
   props.vacantesPrograma.setVacantes(programa, val)
-}
-
-function plantillaOptionLabel(p) {
-  const ready = p.questionTotal === (calification.selectedPonderationTotals?.answersLength ?? p.questionTotal)
-  return `${p.name}  (${p.questionTotal} pregs ${p.area ? '' : '· General '}${ready ? '✓' : '✗'})`
 }
 </script>
 
@@ -101,6 +109,34 @@ function plantillaOptionLabel(p) {
           </div>
 
           <div class="field-divider"></div>
+
+          <!-- Progreso de áreas -->
+          <div v-if="calification.calificationAreaOptions.length > 1" class="areas-progress">
+            <div class="areas-progress__label">
+              Áreas
+              <span class="areas-progress__count">
+                {{ calification.processAreas.length }}/{{ calification.calificationAreaOptions.length }} calculadas
+              </span>
+            </div>
+            <div class="areas-progress__pills">
+              <button
+                v-for="area in calification.calificationAreaOptions"
+                :key="area"
+                type="button"
+                class="area-pill"
+                :class="{
+                  'area-pill--done':    calification.processAreas.includes(area),
+                  'area-pill--active':  calification.calificationArea === area,
+                }"
+                @click="calification.calificationArea = area"
+              >
+                <svg v-if="calification.processAreas.includes(area)" viewBox="0 0 12 12" fill="currentColor" width="10" height="10">
+                  <path fill-rule="evenodd" d="M10.293 1.293a1 1 0 011.414 1.414l-7 7a1 1 0 01-1.414 0l-3-3a1 1 0 011.414-1.414L4 7.586l6.293-6.293z"/>
+                </svg>
+                {{ area }}
+              </button>
+            </div>
+          </div>
 
           <!-- Área a calificar -->
           <div class="field">
@@ -258,6 +294,25 @@ function plantillaOptionLabel(p) {
 
           <footer class="modal__footer">
             <button type="button" class="btn btn--ghost" @click="close">Cancelar</button>
+
+            <!-- Calcular todas las áreas (solo si hay más de 1) -->
+            <button
+              v-if="calification.calificationAreaOptions.length > 1"
+              type="button"
+              class="btn btn--all-areas"
+              :disabled="runningAll"
+              @click.prevent="runAllAreas"
+            >
+              <svg v-if="runningAll" class="btn__icon spin" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
+              </svg>
+              <svg v-else class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+                <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+              </svg>
+              {{ runningAll ? 'Calculando…' : 'Calcular todas las áreas' }}
+            </button>
+
             <button
               type="submit"
               class="btn btn--gold"
@@ -266,7 +321,7 @@ function plantillaOptionLabel(p) {
               <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" clip-rule="evenodd"/>
               </svg>
-              Calcular Puntajes
+              Calcular {{ calification.calificationArea }}
             </button>
           </footer>
         </form>
@@ -593,6 +648,85 @@ function plantillaOptionLabel(p) {
   background: transparent; color: var(--slate-600); border: 1px solid var(--slate-200);
 }
 .btn--ghost:hover:not(:disabled) { background: var(--slate-50); border-color: var(--slate-300); }
+
+.btn--all-areas {
+  background: transparent;
+  color: var(--unap-blue-700);
+  border: 1.5px solid var(--unap-blue-300);
+}
+.btn--all-areas:hover:not(:disabled) {
+  background: var(--unap-blue-50);
+  border-color: var(--unap-blue-500);
+}
+
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.spin { animation: spin 0.8s linear infinite; }
+
+/* ── Progreso de áreas ── */
+.areas-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--slate-50);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+}
+
+.areas-progress__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--slate-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.areas-progress__count {
+  font-weight: 600;
+  color: var(--unap-blue-600);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.areas-progress__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.area-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--slate-200);
+  background: white;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--slate-500);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.area-pill:hover { border-color: var(--unap-blue-300); color: var(--unap-blue-700); }
+.area-pill--done {
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #166534;
+}
+.area-pill--active {
+  background: var(--unap-blue-700);
+  border-color: var(--unap-blue-700);
+  color: white;
+}
+.area-pill--done.area-pill--active {
+  background: var(--unap-blue-700);
+  border-color: var(--unap-blue-700);
+  color: white;
+}
 
 /* ── Tipo de proceso ── */
 .process-type-toggle {
