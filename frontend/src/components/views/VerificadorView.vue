@@ -618,11 +618,11 @@ function formatFecha(iso) {
         <div class="config-row">
           <!-- Plantilla -->
           <div class="config-field config-field--wide">
-            <label class="config-label">Plantilla de ponderaciones</label>
-            <select v-model="selectedPlantillaId" class="config-select">
-              <option :value="null">— Sin plantilla (peso 0) —</option>
+            <label class="config-label">Plantilla de Ponderaciones</label>
+            <select v-model.number="selectedPlantillaId" class="config-select">
+              <option :value="null">Sin Plantilla</option>
               <option v-for="p in plantillasList" :key="p.id" :value="p.id">
-                {{ p.name }}{{ p.area ? ` · ${p.area}` : '' }}
+                {{ p.name }}{{ p.area ? ` : ${p.area}` : '' }}
               </option>
             </select>
           </div>
@@ -648,11 +648,11 @@ function formatFecha(iso) {
           <div class="candidate-row candidate-row--top">
             <div class="cfield cfield--proceso">
               <label class="cfield__label">Proceso / Convocatoria</label>
-              <input v-model="candidatoProceso" type="text" placeholder="Ej: Admisión 2025 - I" class="cfield__input" />
+              <input v-model="candidatoProceso" type="text" placeholder="Ej: CEPREUNA 2026 - I" class="cfield__input" />
             </div>
             <div class="cfield cfield--tipo">
               <label class="cfield__label">Tipo de prueba</label>
-              <input v-model="candidatoTipo" type="text" maxlength="10" placeholder="Ej: A, B, C" class="cfield__input cfield__input--center" />
+              <input v-model="candidatoTipo" type="text" maxlength="10" placeholder="Ej: P, Q, R, S o T" class="cfield__input cfield__input--center" />
             </div>
           </div>
 
@@ -660,7 +660,7 @@ function formatFecha(iso) {
           <div class="candidate-row candidate-row--mid">
             <div class="cfield cfield--nombre">
               <label class="cfield__label">Nombre completo</label>
-              <input v-model="candidatoNombre" type="text" placeholder="Apellidos y nombres" class="cfield__input" />
+              <input v-model="candidatoNombre" type="text" placeholder="Apellidos y Nombres" class="cfield__input" />
             </div>
             <div class="cfield cfield--dni">
               <label class="cfield__label">DNI</label>
@@ -694,7 +694,7 @@ function formatFecha(iso) {
       <div class="grids-row">
         <!-- Grid respuestas correctas -->
         <div class="vcard vcard--grid">
-          <div class="vcard__title vcard__title--correct">Claves correctas</div>
+          <div class="vcard__title vcard__title--correct">Respuestas Correctas</div>
           <div class="answer-grid">
             <div
               v-for="i in totalQuestions"
@@ -719,7 +719,7 @@ function formatFecha(iso) {
 
         <!-- Grid respuestas candidato -->
         <div class="vcard vcard--grid">
-          <div class="vcard__title vcard__title--answer">Respuestas del candidato</div>
+          <div class="vcard__title vcard__title--answer">Respuestas del Postulante</div>
           <div class="answer-grid">
             <div
               v-for="i in totalQuestions"
