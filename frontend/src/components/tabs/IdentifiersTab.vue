@@ -1,5 +1,5 @@
 <script setup>
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import { IDENTIFIER_SUBTABS } from '@/constants'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import FileUploader from '@/components/shared/FileUploader.vue'
@@ -10,27 +10,41 @@ import SourcesPanel from '@/components/shared/SourcesPanel.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 
 const props = defineProps({
-  identifiers: {
-    type: Object,
-    required: true
-  },
-  subTab: {
-    type: String,
-    required: true
-  }
+  identifiers: { type: Object, required: true },
+  subTab:      { type: String, required: true },
 })
 
 const emit = defineEmits(['update:subTab'])
 
 const identifiers = reactive(props.identifiers)
 
+// ── Confirmación inline ──────────────────────────────────────────────────────
+const pendingAction = ref(null)
+
 function confirmRemoveSelected() {
   const count = identifiers.totalSelected
   if (!count) return
-  if (confirm(`¿Eliminar ${count} registro(s) seleccionado(s)?`)) identifiers.removeSelected()
+  pendingAction.value = {
+    type: 'remove',
+    message: `¿Eliminar ${count} registro(s) seleccionado(s)? Esta acción no se puede deshacer.`,
+  }
 }
+
 function confirmClearAll() {
-  if (confirm('¿Limpiar todos los identificadores?')) identifiers.clearAllIdentifiers()
+  pendingAction.value = {
+    type: 'clear',
+    message: '¿Limpiar todos los identificadores? Esta acción no se puede deshacer.',
+  }
+}
+
+function executePending() {
+  if (pendingAction.value?.type === 'remove') identifiers.removeSelected()
+  if (pendingAction.value?.type === 'clear') identifiers.clearAllIdentifiers()
+  pendingAction.value = null
+}
+
+function cancelPending() {
+  pendingAction.value = null
 }
 
 const tableColumns = [
@@ -93,6 +107,18 @@ function getRowClass(row) {
 
     <div v-if="identifiers.importError" class="alert alert--error">
       {{ identifiers.importError }}
+    </div>
+
+    <!-- Confirmación inline -->
+    <div v-if="pendingAction" class="confirm-banner">
+      <svg viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+      </svg>
+      <span>{{ pendingAction.message }}</span>
+      <div class="confirm-banner__actions">
+        <button type="button" class="btn btn--sm btn--danger" @click="executePending">Confirmar</button>
+        <button type="button" class="btn btn--sm" @click="cancelPending">Cancelar</button>
+      </div>
     </div>
 
     <Toolbar
@@ -214,6 +240,20 @@ function getRowClass(row) {
   border-radius: var(--radius-lg);
   font-size: 0.9rem;
 }
+
+/* Confirm banner */
+.confirm-banner {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  background: #fff8e1; border: 1px solid #f59e0b;
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem; color: #92400e; flex-wrap: wrap;
+}
+.confirm-banner svg { width: 18px; height: 18px; flex-shrink: 0; color: #f59e0b; }
+.confirm-banner span { flex: 1; min-width: 200px; }
+.confirm-banner__actions { display: flex; gap: var(--space-2); }
+
+.btn--sm { padding: var(--space-1) var(--space-3); font-size: 0.8rem; }
 
 .alert--error {
   background: linear-gradient(135deg, var(--error-50) 0%, var(--error-100) 100%);

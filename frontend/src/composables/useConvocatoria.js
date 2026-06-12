@@ -76,8 +76,8 @@ export function useConvocatoria() {
       }
       const created = await res.json()
 
-      // Inicializar áreas y formato DAT por defecto
-      await apiFetch(`/convocatorias/${created.id}/init_defaults/`, {
+      // Inicializar áreas por defecto (get_or_create, idempotente)
+      await apiFetch(`/areas/init_defaults/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),

@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import { useToast } from '@/composables/useToast'
 
@@ -9,6 +9,7 @@ const props = defineProps({
   programasByArea:  { type: Map, required: true },
   vacantesPrograma: { type: Object, required: true },
   datFormat:        { type: Object, required: true },
+  areas:            { type: Object, required: true },
 })
 
 // ── Vacantes ──────────────────────────────────────────────────────────────
@@ -51,6 +52,63 @@ async function saveDatFormat() {
 
 function resetDatFormat() {
   props.datFormat.resetToDefault()
+}
+
+// ── Gestión de áreas ─────────────────────────────────────────────────────
+const areaForm = reactive({ name: '', question_count: 60 })
+const areaFormError = ref('')
+const areaFormSaving = ref(false)
+const showAreaForm = ref(false)
+
+const editingArea = ref(null)   // { id, name, question_count } — área en edición inline
+const deletingAreaId = ref(null)
+
+async function saveNewArea() {
+  areaFormError.value = ''
+  if (!areaForm.name.trim()) { areaFormError.value = 'El nombre es obligatorio'; return }
+  if (props.areas.areas.value.some(a => a.name.toLowerCase() === areaForm.name.trim().toLowerCase())) {
+    areaFormError.value = 'Ya existe un área con ese nombre'; return
+  }
+  areaFormSaving.value = true
+  try {
+    await props.areas.createArea({ name: areaForm.name.trim(), question_count: Number(areaForm.question_count) || 60, vacantes: 0, order: props.areas.areas.value.length + 1 })
+    areaForm.name = ''; areaForm.question_count = 60
+    showAreaForm.value = false
+    showToast('Área creada correctamente', 'success')
+  } catch (e) {
+    areaFormError.value = 'Error al crear el área'
+  } finally {
+    areaFormSaving.value = false
+  }
+}
+
+function startEditArea(area) {
+  editingArea.value = { id: area.id, name: area.name, question_count: area.question_count }
+}
+
+async function saveEditArea() {
+  if (!editingArea.value) return
+  if (!editingArea.value.name.trim()) return
+  try {
+    await props.areas.updateArea(editingArea.value.id, {
+      name: editingArea.value.name.trim(),
+      question_count: Number(editingArea.value.question_count) || 60,
+    })
+    editingArea.value = null
+    showToast('Área actualizada', 'success')
+  } catch {
+    showToast('Error al actualizar el área', 'error')
+  }
+}
+
+async function confirmDeleteArea(id) {
+  try {
+    await props.areas.deleteArea(id)
+    deletingAreaId.value = null
+    showToast('Área eliminada', 'success')
+  } catch {
+    showToast('Error al eliminar el área', 'error')
+  }
 }
 
 const DAT_FIELDS = [
@@ -138,12 +196,125 @@ const DAT_FIELDS = [
         <p class="note">Con vacantes en 0 el programa no marcará ingresantes.</p>
       </div>
 
+      <!-- ── Gestión de áreas ───────────────────────────────────────── -->
+      <div class="config-card">
+        <div class="card-header">
+          <h3 class="card-title">Áreas de evaluación</h3>
+          <p class="card-desc">Define las áreas del examen (Biomédicas, Ingeniería, etc.) y el número de preguntas por área.</p>
+        </div>
+
+        <!-- Lista de áreas -->
+        <div class="areas-mgr">
+          <div v-if="areas.loading.value" class="empty-msg">Cargando áreas...</div>
+
+          <template v-else>
+            <div
+              v-for="area in areas.areas.value"
+              :key="area.id"
+              class="area-mgr-row"
+              :class="{ 'area-mgr-row--editing': editingArea?.id === area.id }"
+            >
+              <!-- Vista normal -->
+              <template v-if="editingArea?.id !== area.id">
+                <span class="area-mgr-row__name">{{ area.name }}</span>
+                <span class="area-mgr-row__q">{{ area.question_count }} preg.</span>
+                <div class="area-mgr-row__actions">
+                  <button type="button" class="icon-btn" title="Editar" @click="startEditArea(area)">
+                    <svg viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/></svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="icon-btn icon-btn--danger"
+                    title="Eliminar"
+                    @click="deletingAreaId = area.id"
+                  >
+                    <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                  </button>
+                </div>
+              </template>
+
+              <!-- Vista edición inline -->
+              <template v-else>
+                <input
+                  v-model="editingArea.name"
+                  class="input input--sm input--grow"
+                  placeholder="Nombre del área"
+                  @keyup.enter="saveEditArea"
+                  @keyup.escape="editingArea = null"
+                />
+                <input
+                  v-model.number="editingArea.question_count"
+                  type="number" min="1" max="200"
+                  class="input input--sm input--narrow"
+                  title="Nro. preguntas"
+                />
+                <div class="area-mgr-row__actions">
+                  <button type="button" class="icon-btn icon-btn--save" title="Guardar" @click="saveEditArea">
+                    <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                  </button>
+                  <button type="button" class="icon-btn" title="Cancelar" @click="editingArea = null">
+                    <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                  </button>
+                </div>
+              </template>
+
+              <!-- Confirmación de borrado -->
+              <div v-if="deletingAreaId === area.id" class="delete-confirm">
+                <span>¿Eliminar "{{ area.name }}"?</span>
+                <button type="button" class="btn btn--danger btn--xs" @click="confirmDeleteArea(area.id)">Eliminar</button>
+                <button type="button" class="btn btn--ghost btn--xs" @click="deletingAreaId = null">Cancelar</button>
+              </div>
+            </div>
+
+            <!-- Formulario nueva área -->
+            <div v-if="showAreaForm" class="area-new-form">
+              <input
+                v-model="areaForm.name"
+                class="input input--sm input--grow"
+                placeholder="Nombre del área (ej: Biomédicas)"
+                @keyup.enter="saveNewArea"
+                @keyup.escape="showAreaForm = false"
+                autofocus
+              />
+              <input
+                v-model.number="areaForm.question_count"
+                type="number" min="1" max="200"
+                class="input input--sm input--narrow"
+                title="Nro. preguntas"
+              />
+              <button type="button" class="btn btn--primary btn--xs" :disabled="areaFormSaving" @click="saveNewArea">
+                {{ areaFormSaving ? '…' : 'Agregar' }}
+              </button>
+              <button type="button" class="btn btn--ghost btn--xs" @click="showAreaForm = false; areaFormError = ''">
+                Cancelar
+              </button>
+            </div>
+            <p v-if="areaFormError" class="field-error">{{ areaFormError }}</p>
+          </template>
+        </div>
+
+        <button
+          v-if="!showAreaForm"
+          type="button"
+          class="btn btn--ghost btn--add"
+          @click="showAreaForm = true; areaFormError = ''"
+        >
+          <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
+            <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+          </svg>
+          Nueva área
+        </button>
+      </div>
+
       <!-- ── Formato DAT ──────────────────────────────────────────────── -->
       <div class="config-card">
         <div class="card-header">
-          <h3 class="card-title">Formato del archivo .dat</h3>
+          <div class="card-title-row">
+            <h3 class="card-title">Formato del archivo .dat</h3>
+            <span class="card-badge card-badge--setup">Configurar una vez</span>
+          </div>
           <p class="card-desc">
-            Offsets y longitudes de campos según el modelo de lector óptico utilizado.
+            Offsets y longitudes de campos según el modelo de lector óptico. Debe coincidir con la configuración física del escáner.
           </p>
         </div>
 
@@ -187,12 +358,29 @@ const DAT_FIELDS = [
 .config-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
   gap: var(--space-5);
   align-items: start;
 }
 
+/* Formato DAT → col 1, ocupa ambas filas (lo más crítico, va primero) */
+.config-card:nth-child(3) { grid-column: 1; grid-row: 1 / 3; }
+/* Áreas → col 2, row 1 */
+.config-card:nth-child(2) { grid-column: 2; grid-row: 1; }
+/* Vacantes → col 2, row 2 */
+.config-card:nth-child(1) { grid-column: 2; grid-row: 2; }
+
 @media (max-width: 900px) {
-  .config-grid { grid-template-columns: 1fr; }
+  .config-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+  .config-card:nth-child(1),
+  .config-card:nth-child(2),
+  .config-card:nth-child(3) {
+    grid-column: 1;
+    grid-row: auto;
+  }
 }
 
 /* Cards */
@@ -207,11 +395,35 @@ const DAT_FIELDS = [
 }
 
 .card-header { display: flex; flex-direction: column; gap: var(--space-1); }
+
+.card-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
 .card-title {
   font-size: 0.8rem; font-weight: 700;
   color: var(--slate-500);
   text-transform: uppercase; letter-spacing: 0.06em; margin: 0;
 }
+
+.card-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.card-badge--setup {
+  background: var(--unap-blue-50);
+  color: var(--unap-blue-700);
+  border: 1px solid var(--unap-blue-100);
+}
+
 .card-desc { font-size: 0.82rem; color: var(--slate-500); margin: 0; line-height: 1.5; }
 .note { font-size: 0.78rem; color: var(--slate-400); margin: 0; font-style: italic; }
 
@@ -270,5 +482,118 @@ const DAT_FIELDS = [
 .btn--primary:hover:not(:disabled) { background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%); }
 .btn--ghost { background: transparent; color: var(--slate-600); border: 1px solid var(--slate-200); }
 .btn--ghost:hover { background: var(--slate-50); border-color: var(--slate-300); }
+
+/* ── Gestión de áreas ─────────────────────────────────────────────────────── */
+.areas-mgr {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.area-mgr-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.area-mgr-row:hover { background: var(--slate-50); }
+
+.area-mgr-row--editing {
+  background: var(--unap-blue-50);
+  border: 1px solid var(--unap-blue-100);
+}
+
+.area-mgr-row__name {
+  flex: 1;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--slate-800);
+}
+
+.area-mgr-row__q {
+  font-size: 0.75rem;
+  color: var(--unap-blue-600);
+  background: var(--unap-blue-50);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.area-mgr-row__actions {
+  display: flex;
+  gap: var(--space-1);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.area-mgr-row:hover .area-mgr-row__actions,
+.area-mgr-row--editing .area-mgr-row__actions {
+  opacity: 1;
+}
+
+.icon-btn {
+  width: 28px; height: 28px;
+  border: none; border-radius: var(--radius-md);
+  background: var(--slate-100); color: var(--slate-500);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all var(--transition-fast);
+}
+.icon-btn svg { width: 14px; height: 14px; }
+.icon-btn:hover { background: var(--unap-blue-100); color: var(--unap-blue-700); }
+.icon-btn--danger:hover { background: var(--error-100); color: var(--error-600); }
+.icon-btn--save { background: var(--success-100); color: var(--success-600); }
+.icon-btn--save:hover { background: var(--success-500); color: white; }
+
+/* Confirmación de borrado */
+.delete-confirm {
+  width: 100%;
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  background: var(--error-50);
+  border: 1px solid var(--error-100);
+  border-radius: var(--radius-md);
+  font-size: 0.8rem; color: var(--error-600);
+}
+.delete-confirm span { flex: 1; font-weight: 500; }
+
+/* Formulario nueva área */
+.area-new-form {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--unap-blue-50);
+  border: 1px solid var(--unap-blue-100);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.input--grow { flex: 1; min-width: 120px; }
+.input--narrow { width: 68px; text-align: center; }
+
+.field-error {
+  font-size: 0.75rem; color: var(--error-600);
+  font-weight: 500; margin: 0;
+}
+
+.btn--add {
+  width: 100%;
+  justify-content: center;
+  gap: var(--space-2);
+  border-style: dashed;
+  color: var(--slate-500);
+  font-size: 0.82rem;
+}
+.btn--add:hover { color: var(--unap-blue-700); border-color: var(--unap-blue-300); background: var(--unap-blue-50); }
 
 </style>

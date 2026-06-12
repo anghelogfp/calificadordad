@@ -77,6 +77,8 @@ export function useArchives() {
     },
   })
 
+  const lastFileName = reactive({ value: '' })
+
   // Fila pendiente para agregar manualmente
   const pendingRow = reactive(createEmptyArchiveRow())
 
@@ -190,6 +192,7 @@ export function useArchives() {
       (item) => item && item.name && item.name.toLowerCase().endsWith('.xlsx')
     )
     if (!file) return
+    lastFileName.value = file.name
     await readArchiveWorkbook(file)
   }
 
@@ -199,6 +202,7 @@ export function useArchives() {
   async function onArchiveFileChange(event) {
     const [file] = Array.from(event.target.files || [])
     if (!file) return
+    lastFileName.value = file.name
     await readArchiveWorkbook(file)
     event.target.value = ''
   }
@@ -236,6 +240,7 @@ export function useArchives() {
     pendingRow,
     archiveHasData,
     archiveByDni,
+    lastFileName,
 
     // Métodos específicos
     readArchiveWorkbook,

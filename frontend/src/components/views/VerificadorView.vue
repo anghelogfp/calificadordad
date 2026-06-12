@@ -1096,7 +1096,7 @@ function formatFecha(iso) {
 
 .answer-grid {
   display: grid;
-  grid-template-columns: repeat(10, 1fr);
+  grid-template-columns: repeat(10, minmax(28px, 1fr));
   gap: 4px;
 }
 
@@ -1356,7 +1356,11 @@ function formatFecha(iso) {
 .btn-icon--delete { color: #dc2626; }
 .btn-icon--delete:hover { background: #fee2e2; border-color: #fca5a5; }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .grids-row { grid-template-columns: 1fr; }
+}
+
+@media (min-width: 1100px) {
+  .answer-grid { grid-template-columns: repeat(10, minmax(30px, 1fr)); }
 }
 </style>

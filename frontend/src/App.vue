@@ -101,6 +101,11 @@ const dashboard = useScoreDashboard(calification.calificationAllResults)
 const showDashboardPanel = ref(false)
 const showNuevoProcesoModal = ref(false)
 
+// Responses vinculadas con identificadores (aula viene solo del identificador)
+const linkedResponsesCount = computed(() =>
+  responses.rows.value.filter(r => r.aula && r.aula !== '').length
+)
+
 const hasProcessData = computed(() =>
   archives.rows.value.length > 0 ||
   identifiers.rows.value.length > 0 ||
@@ -333,6 +338,8 @@ onMounted(async () => {
           <ArchivesTab
             v-else-if="activeTab === TAB_KEYS.ARCHIVES"
             :archives="archives"
+            :area-names="areas.areaNames.value"
+            @go-config="activeTab = 'config'"
           />
 
           <IdentifiersTab
@@ -346,6 +353,8 @@ onMounted(async () => {
             v-else-if="activeTab === TAB_KEYS.RESPONSES"
             :responses="responses"
             :sub-tab="responsesSubTab"
+            :identifiers-loaded="identifiers.rows.value.length > 0"
+            :linked-count="linkedResponsesCount"
             @update:sub-tab="responsesSubTab = $event"
           />
 
@@ -385,6 +394,7 @@ onMounted(async () => {
             :programas-by-area="programasByArea"
             :vacantes-programa="vacantesPrograma"
             :dat-format="datFormat"
+            :areas="areas"
           />
 
           <VerificadorView
@@ -403,6 +413,8 @@ onMounted(async () => {
     <NuevoProcesoModal
       :show="showNuevoProcesoModal"
       :has-data="hasProcessData"
+      :areas-count="areas.areas.value.length"
+      :plantillas-count="ponderations.plantillas.value.length"
       @confirm="confirmNewProcess"
       @close="showNuevoProcesoModal = false"
     />

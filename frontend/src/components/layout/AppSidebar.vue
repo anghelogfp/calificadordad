@@ -31,6 +31,8 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
       type="button"
       class="sidebar-toggle"
       :title="expanded ? 'Colapsar panel' : 'Expandir panel'"
+      :aria-label="expanded ? 'Colapsar panel' : 'Expandir panel'"
+      :aria-expanded="expanded"
       @click="expanded = !expanded"
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -45,13 +47,13 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
         type="button"
         class="btn-new-process"
         :class="{ 'btn-new-process--active': activeProcess }"
-        :title="!expanded ? 'Nuevo proceso' : undefined"
         @click="emit('newProcess')"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <span v-if="expanded">Nuevo proceso</span>
+        <span v-if="!expanded" class="sidebar-tooltip">Nuevo proceso</span>
       </button>
     </div>
 
@@ -62,7 +64,6 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
         type="button"
         class="sidebar-item"
         :class="{ 'sidebar-item--active': activeDashboard }"
-        :title="!expanded ? 'Inicio' : undefined"
         @click="emit('openDashboard')"
       >
         <span class="sidebar-item__icon">
@@ -72,6 +73,7 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
           </svg>
         </span>
         <span v-if="expanded" class="sidebar-item__label">Inicio</span>
+        <span v-if="!expanded" class="sidebar-tooltip">Inicio</span>
       </button>
 
       <!-- Ponderaciones -->
@@ -79,7 +81,6 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
         type="button"
         class="sidebar-item"
         :class="{ 'sidebar-item--active': activePonderations }"
-        :title="!expanded ? 'Ponderaciones' : undefined"
         @click="emit('openPonderations')"
       >
         <span class="sidebar-item__icon">
@@ -88,6 +89,7 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
           </svg>
         </span>
         <span v-if="expanded" class="sidebar-item__label">Ponderaciones</span>
+        <span v-if="!expanded" class="sidebar-tooltip">Ponderaciones</span>
       </button>
 
       <div class="sidebar-divider" />
@@ -97,7 +99,6 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
         type="button"
         class="sidebar-item"
         :class="{ 'sidebar-item--active': activeHistory }"
-        :title="!expanded ? 'Historial de procesos' : undefined"
         @click="emit('openHistory')"
       >
         <span class="sidebar-item__icon">
@@ -111,6 +112,7 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
           Historial
           <span v-if="historyCount > 0" class="sidebar-item__count">{{ historyCount }}</span>
         </span>
+        <span v-if="!expanded" class="sidebar-tooltip">Historial{{ historyCount > 0 ? ` (${historyCount})` : '' }}</span>
       </button>
 
       <!-- Configuración -->
@@ -118,7 +120,6 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
         type="button"
         class="sidebar-item"
         :class="{ 'sidebar-item--active': activeConfig }"
-        :title="!expanded ? 'Configuración' : undefined"
         @click="emit('openConfig')"
       >
         <span class="sidebar-item__icon">
@@ -128,6 +129,7 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
           </svg>
         </span>
         <span v-if="expanded" class="sidebar-item__label">Configuración</span>
+        <span v-if="!expanded" class="sidebar-tooltip">Configuración</span>
       </button>
 
       <!-- Verificador -->
@@ -135,7 +137,6 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
         type="button"
         class="sidebar-item"
         :class="{ 'sidebar-item--active': activeVerificador }"
-        :title="!expanded ? 'Verificador de respuestas' : undefined"
         @click="emit('openVerificador')"
       >
         <span class="sidebar-item__icon">
@@ -145,6 +146,7 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
           </svg>
         </span>
         <span v-if="expanded" class="sidebar-item__label">Verificador</span>
+        <span v-if="!expanded" class="sidebar-tooltip">Verificador</span>
       </button>
 
       <div class="sidebar-divider" />
@@ -153,7 +155,6 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
       <button
         type="button"
         class="sidebar-item"
-        :title="!expanded ? 'Backup de sesión' : undefined"
         @click="emit('openBackup')"
       >
         <span class="sidebar-item__icon">
@@ -162,6 +163,7 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
           </svg>
         </span>
         <span v-if="expanded" class="sidebar-item__label">Backup</span>
+        <span v-if="!expanded" class="sidebar-tooltip">Backup</span>
       </button>
 
       <!-- Usuarios (solo admin) -->
@@ -171,7 +173,6 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
           type="button"
           class="sidebar-item"
           :class="{ 'sidebar-item--active': activeUsuarios }"
-          :title="!expanded ? 'Gestión de usuarios' : undefined"
           @click="emit('openUsuarios')"
         >
           <span class="sidebar-item__icon">
@@ -182,6 +183,7 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
             </svg>
           </span>
           <span v-if="expanded" class="sidebar-item__label">Usuarios</span>
+          <span v-if="!expanded" class="sidebar-tooltip">Usuarios</span>
         </button>
       </template>
     </nav>
@@ -399,5 +401,41 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
   .app-sidebar {
     display: none;
   }
+}
+
+/* ── Tooltips en modo colapsado ─────────────────────────────────────────── */
+.sidebar-tooltip {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  background: var(--slate-900);
+  color: white;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 100;
+  box-shadow: var(--shadow-md);
+}
+
+.sidebar-tooltip::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-right-color: var(--slate-900);
+}
+
+.app-sidebar--collapsed .sidebar-item:hover .sidebar-tooltip,
+.app-sidebar--collapsed .btn-new-process:hover .sidebar-tooltip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
 }
 </style>

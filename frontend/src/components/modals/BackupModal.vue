@@ -1,10 +1,16 @@
 <script setup>
+import { ref, computed } from 'vue'
+import { useFocusTrap } from '@/composables/useFocusTrap'
+
 const props = defineProps({
   show: { type: Boolean, required: true },
   backup: { type: Object, required: true },
 })
 
 const emit = defineEmits(['close'])
+
+const modalRef = ref(null)
+useFocusTrap(modalRef, computed(() => props.show))
 
 function handleFileChange(e) {
   const file = e.target.files?.[0]
@@ -15,7 +21,7 @@ function handleFileChange(e) {
 <template>
   <Teleport to="body">
     <div v-if="show" class="modal-overlay" @click.self="emit('close')">
-      <div class="modal">
+      <div ref="modalRef" class="modal" role="dialog" aria-modal="true">
         <header class="modal__header">
           <div class="modal__title">
             <h2>Backup de Sesión</h2>
@@ -101,7 +107,7 @@ function handleFileChange(e) {
   background: rgba(0, 29, 61, 0.6);
   backdrop-filter: blur(4px);
   display: flex; align-items: center; justify-content: center;
-  padding: var(--space-8); z-index: 200;
+  padding: var(--space-8); z-index: var(--z-modal);
   animation: fadeIn 0.2s ease-out;
 }
 

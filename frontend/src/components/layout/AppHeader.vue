@@ -10,7 +10,7 @@ const emit = defineEmits(['goHome'])
   <header class="app-header">
 
     <!-- Marca institucional -->
-    <div class="header-brand" role="button" tabindex="0" title="Ir al inicio" @click="emit('goHome')" @keydown.enter="emit('goHome')">
+    <button type="button" class="header-brand" aria-label="Ir al inicio" @click="emit('goHome')">
       <img src="/unap.png" alt="UNAP" class="brand-logo" />
       <div class="brand-text">
         <span class="brand-university">Universidad Nacional del Altiplano de Puno</span>
@@ -19,7 +19,7 @@ const emit = defineEmits(['goHome'])
           <span class="brand-system">Sistema de Calificación</span>
         </span>
       </div>
-    </div>
+    </button>
 
     <!-- Acciones de sesión -->
     <div class="header-actions">
@@ -30,7 +30,7 @@ const emit = defineEmits(['goHome'])
           <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/>
         </svg>
         <span class="user-name">{{ auth.user.value?.first_name || auth.user.value?.username }}</span>
-        <button type="button" class="logout-btn" title="Cerrar sesión" @click="auth.logout()">
+        <button type="button" class="logout-btn" title="Cerrar sesión" aria-label="Cerrar sesión" @click="auth.logout()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
@@ -52,7 +52,7 @@ const emit = defineEmits(['goHome'])
   gap: var(--space-6);
   box-shadow: var(--shadow-lg);
   position: relative;
-  z-index: 10;
+  z-index: var(--z-header);
   flex-shrink: 0;
 }
 
@@ -71,6 +71,9 @@ const emit = defineEmits(['goHome'])
   gap: var(--space-3);
   min-width: 0;
   cursor: pointer;
+  border: none;
+  background: transparent;
+  text-align: left;
   border-radius: var(--radius-md);
   padding: var(--space-1) var(--space-2);
   margin: 0 calc(-1 * var(--space-2));

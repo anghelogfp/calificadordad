@@ -140,6 +140,19 @@ const groupedResults = computed(() => {
     })
 })
 
+// ── Acordeón carreras (modo real) ────────────────────────────────────────────
+const collapsedCarreras = ref(new Set())
+
+function toggleCarrera(programa) {
+  const s = new Set(collapsedCarreras.value)
+  s.has(programa) ? s.delete(programa) : s.add(programa)
+  collapsedCarreras.value = s
+}
+
+function isCollapsed(programa) {
+  return collapsedCarreras.value.has(programa)
+}
+
 // ── Detalle candidato ────────────────────────────────────────────────────────
 const detailCandidate = ref(null)
 
@@ -510,7 +523,7 @@ function handleExportIngresantesPdf() {
         class="carrera-section"
       >
         <!-- Encabezado de carrera -->
-        <div class="carrera-header">
+        <div class="carrera-header" @click="toggleCarrera(group.programa)" style="cursor:pointer">
           <div class="carrera-header__left">
             <svg viewBox="0 0 20 20" fill="currentColor">
               <path d="M10.394 2.08a1 1 0 00-.788 0l-7 3a1 1 0 000 1.84L5.25 8.051a.999.999 0 01.356-.257l4-1.714a1 1 0 11.788 1.838L7.667 9.088l1.94.831a1 1 0 00.787 0l7-3a1 1 0 000-1.838l-7-3zM3.31 9.397L5 10.12v4.102a8.969 8.969 0 00-1.05-.174 1 1 0 01-.89-.89 11.115 11.115 0 01.25-3.762zM9.3 16.573A9.026 9.026 0 007 14.935v-3.957l1.818.78a3 3 0 002.364 0l5.508-2.361a11.026 11.026 0 01.25 3.762 1 1 0 01-.89.89 8.968 8.968 0 00-5.35 2.524 1 1 0 01-1.4 0zM6 18a1 1 0 001-1v-2.065a8.935 8.935 0 00-2-.712V17a1 1 0 001 1z"/>
@@ -530,11 +543,18 @@ function handleExportIngresantesPdf() {
             <span class="carrera-stat carrera-stat--out">
               <strong>{{ group.results.length - group.ingresantes }}</strong> no ingresantes
             </span>
+            <svg
+              class="carrera-caret"
+              :class="{ 'carrera-caret--open': !isCollapsed(group.programa) }"
+              viewBox="0 0 20 20" fill="currentColor"
+            >
+              <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
+            </svg>
           </div>
         </div>
 
-        <!-- Tabla de la carrera -->
-        <table class="carrera-table">
+        <!-- Tabla de la carrera (colapsable) -->
+        <table v-show="!isCollapsed(group.programa)" class="carrera-table">
           <thead>
             <tr>
               <th class="col-number">#</th>
@@ -964,6 +984,17 @@ tbody tr.row--ingresante:hover { background: #dcfce7; }
 .carrera-stat--out {
   background: rgba(239, 68, 68, 0.25);
   color: #fecaca;
+}
+
+.carrera-caret {
+  width: 16px; height: 16px;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transform: rotate(-90deg);
+  transition: transform 0.2s ease;
+}
+.carrera-caret--open {
+  transform: rotate(0deg);
 }
 
 .carrera-table {

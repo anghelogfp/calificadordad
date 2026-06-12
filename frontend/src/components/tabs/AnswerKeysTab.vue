@@ -1,5 +1,5 @@
 <script setup>
-import { reactive } from 'vue'
+import { reactive, computed } from 'vue'
 import { ANSWER_KEY_SUBTABS } from '@/constants'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
@@ -46,6 +46,17 @@ function getRowClass(row) {
     'row--issue': row.observaciones !== 'Sin observaciones'
   }
 }
+
+// Cobertura de áreas
+const areaCoverage = computed(() => {
+  const loaded = new Set(answerKeys.sources.map(s => s.area).filter(Boolean))
+  return (answerKeys.answerKeyAreaOptions || []).map(area => ({
+    name: area,
+    hasKey: loaded.has(area),
+  }))
+})
+
+const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).length)
 </script>
 
 <template>
@@ -64,6 +75,32 @@ function getRowClass(row) {
         </svg>
       </template>
     </StepInfoCard>
+
+    <!-- Cobertura de áreas -->
+    <div v-if="areaCoverage.length" class="area-coverage">
+      <div class="area-coverage__header">
+        <span class="area-coverage__label">Cobertura de claves por área</span>
+        <span class="area-coverage__summary" :class="coveredCount === areaCoverage.length ? 'area-coverage__summary--ok' : ''">
+          {{ coveredCount }} / {{ areaCoverage.length }} áreas con clave
+        </span>
+      </div>
+      <div class="area-coverage__items">
+        <div
+          v-for="area in areaCoverage"
+          :key="area.name"
+          class="area-badge"
+          :class="area.hasKey ? 'area-badge--ok' : 'area-badge--missing'"
+        >
+          <svg v-if="area.hasKey" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+          </svg>
+          <svg v-else viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+          </svg>
+          {{ area.name }}
+        </div>
+      </div>
+    </div>
 
     <section class="upload-form-card">
       <header class="upload-form-card__header">
@@ -253,6 +290,79 @@ function getRowClass(row) {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* ── Cobertura de áreas ──────────────────────────────────────────────────── */
+.area-coverage {
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-xl);
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-shadow: var(--shadow-sm);
+}
+
+.area-coverage__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.area-coverage__label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--slate-500);
+}
+
+.area-coverage__summary {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--slate-500);
+  background: var(--slate-100);
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-full);
+}
+
+.area-coverage__summary--ok {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.area-coverage__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.area-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-lg);
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+}
+
+.area-badge svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+.area-badge--ok {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.area-badge--missing {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
 }
 
 .upload-form-card {

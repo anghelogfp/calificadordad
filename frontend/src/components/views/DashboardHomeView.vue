@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
   history:     { type: Object, required: true },
@@ -25,10 +25,32 @@ const greeting = computed(() => {
   return 'Buenas noches'
 })
 
-// Stats rápidas del historial
 const totalCandidatesAll = computed(() =>
   (props.history.historyList.value || []).reduce((s, p) => s + (p.totalCandidates || 0), 0)
 )
+
+const totalProcesses = computed(() => (props.history.historyList.value || []).length)
+
+// ── Count-up animation ────────────────────────────────────────────────────────
+const displayProcesses   = ref(0)
+const displayCandidates  = ref(0)
+const displayAreas       = ref(0)
+
+function countUp(target, displayRef, duration = 900) {
+  const start = performance.now()
+  const from = displayRef.value
+  function step(now) {
+    const progress = Math.min((now - start) / duration, 1)
+    const ease = 1 - Math.pow(1 - progress, 3)
+    displayRef.value = Math.round(from + (target - from) * ease)
+    if (progress < 1) requestAnimationFrame(step)
+  }
+  requestAnimationFrame(step)
+}
+
+watch(totalProcesses,  (v) => countUp(v, displayProcesses), { immediate: true })
+watch(totalCandidatesAll, (v) => countUp(v, displayCandidates), { immediate: true })
+watch(() => areasList.value.length, (v) => countUp(v, displayAreas), { immediate: true })
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function formatDate(iso) {
@@ -55,6 +77,46 @@ onMounted(() => {
       </div>
       <div class="dash__meta" v-if="areasList.length">
         <span class="dash__conv-badge badge--active">{{ areasList.length }} área(s)</span>
+      </div>
+    </div>
+
+    <!-- ── Métricas ─────────────────────────────────────────────────────────── -->
+    <div class="dash__metrics">
+      <div class="metric-card" style="--delay: 0ms">
+        <div class="metric-card__icon metric-card__icon--blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="metric-card__body">
+          <span class="metric-card__value">{{ displayProcesses.toLocaleString('es-PE') }}</span>
+          <span class="metric-card__label">Procesos guardados</span>
+        </div>
+      </div>
+      <div class="metric-card" style="--delay: 80ms">
+        <div class="metric-card__icon metric-card__icon--gold">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="metric-card__body">
+          <span class="metric-card__value">{{ displayCandidates.toLocaleString('es-PE') }}</span>
+          <span class="metric-card__label">Candidatos totales</span>
+        </div>
+      </div>
+      <div class="metric-card" style="--delay: 160ms">
+        <div class="metric-card__icon metric-card__icon--green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="metric-card__body">
+          <span class="metric-card__value">{{ displayAreas.toLocaleString('es-PE') }}</span>
+          <span class="metric-card__label">Áreas configuradas</span>
+        </div>
       </div>
     </div>
 
@@ -123,6 +185,8 @@ onMounted(() => {
                 <span v-for="area in p.areaNames" :key="area" class="area-tag">{{ area }}</span>
                 <span class="meta-sep" v-if="p.areaNames?.length">·</span>
                 <span class="meta-text">{{ p.totalCandidates }} candidatos</span>
+                <span v-if="p.type === 'real'" class="type-badge type-badge--real">Real</span>
+                <span v-else-if="p.type === 'simulacro'" class="type-badge type-badge--sim">Simulacro</span>
               </div>
               <div class="process-item__date">{{ formatDate(p.savedAt) }}</div>
             </div>
@@ -240,6 +304,53 @@ onMounted(() => {
 .badge--closed {
   background: var(--slate-100);
   color: var(--slate-500);
+}
+
+/* ── Métricas ────────────────────────────────────────────────────────────────── */
+.dash__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+
+.metric-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  animation: slideUp 0.4s ease-out both;
+  animation-delay: var(--delay, 0ms);
+}
+
+.metric-card__icon {
+  width: 44px; height: 44px; flex-shrink: 0;
+  border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+}
+.metric-card__icon svg { width: 22px; height: 22px; }
+
+.metric-card__icon--blue { background: var(--unap-blue-50); color: var(--unap-blue-600); }
+.metric-card__icon--gold { background: var(--unap-gold-50); color: var(--unap-gold-600); }
+.metric-card__icon--green { background: var(--success-50); color: var(--success-600); }
+
+.metric-card__body { display: flex; flex-direction: column; gap: 2px; }
+
+.metric-card__value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--slate-900);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-card__label {
+  font-size: 0.75rem;
+  color: var(--slate-500);
+  font-weight: 500;
 }
 
 /* ── Acciones rápidas ────────────────────────────────────────────────────────── */
@@ -409,6 +520,17 @@ onMounted(() => {
   color: var(--slate-500);
 }
 
+.type-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.type-badge--real { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.type-badge--sim  { background: var(--slate-100); color: var(--slate-500); border: 1px solid var(--slate-200); }
+
 .process-item__date {
   font-size: 0.72rem;
   color: var(--slate-400);
@@ -451,11 +573,18 @@ onMounted(() => {
   margin-bottom: var(--space-2);
 }
 
+.areas-list {
+  padding: var(--space-2) var(--space-5) var(--space-3);
+  display: flex;
+  flex-direction: column;
+}
+
 .area-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-2) 0;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-1);
   border-bottom: 1px solid var(--slate-100);
 }
 .area-row:last-child { border-bottom: none; }
@@ -464,28 +593,42 @@ onMounted(() => {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--slate-700);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .area-row__right {
   display: flex;
-  gap: var(--space-3);
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
 }
 
 .area-row__q {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--slate-400);
+  white-space: nowrap;
 }
 
 .area-row__vac {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--unap-blue-600);
   background: var(--unap-blue-50);
   padding: 1px var(--space-2);
   border-radius: var(--radius-full);
+  white-space: nowrap;
 }
 
 @media (max-width: 960px) {
   .dash__body { grid-template-columns: 1fr; }
+  .dash__metrics { grid-template-columns: 1fr; gap: var(--space-3); }
+}
+
+@media (min-width: 600px) and (max-width: 960px) {
+  .dash__metrics { grid-template-columns: repeat(3, 1fr); }
 }
 </style>

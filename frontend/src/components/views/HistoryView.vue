@@ -98,6 +98,8 @@ const sorted = computed(() =>
           >
             {{ area }}
           </span>
+          <span v-if="process.type === 'real'" class="type-chip type-chip--real">Real</span>
+          <span v-else-if="process.type === 'simulacro'" class="type-chip type-chip--sim">Simulacro</span>
         </div>
 
         <div class="process-card__stats">
@@ -248,6 +250,19 @@ const sorted = computed(() =>
   font-weight: 600;
   color: var(--unap-blue-700);
 }
+
+.type-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.type-chip--real { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.type-chip--sim  { background: var(--slate-100); color: var(--slate-500); border: 1px solid var(--slate-200); }
 
 /* Stats */
 .process-card__stats {

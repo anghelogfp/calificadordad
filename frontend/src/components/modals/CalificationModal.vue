@@ -1,5 +1,6 @@
 <script setup>
-import { reactive, ref, watch } from 'vue'
+import { reactive, ref, watch, computed } from 'vue'
+import { useFocusTrap } from '@/composables/useFocusTrap'
 
 const props = defineProps({
   show: { type: Boolean, required: true },
@@ -14,6 +15,9 @@ watch(() => props.show, (val) => {
 
 const calification = reactive(props.calification)
 const emit = defineEmits(['close'])
+
+const modalRef = ref(null)
+useFocusTrap(modalRef, computed(() => props.show))
 
 const runningAll = ref(false)
 const allResult = ref(null)
@@ -43,7 +47,7 @@ function setVacantes(programa, val) {
 <template>
   <Teleport to="body">
     <div v-if="show" class="modal-overlay" @click.self="close">
-      <div class="modal" aria-modal="true">
+      <div ref="modalRef" class="modal" role="dialog" aria-modal="true">
         <header class="modal__header">
           <div class="modal__title">
             <h2>Calcular Puntajes</h2>
@@ -338,7 +342,7 @@ function setVacantes(programa, val) {
   display: flex; align-items: flex-start; justify-content: center;
   padding: var(--space-8);
   overflow-y: auto;
-  z-index: 100;
+  z-index: var(--z-modal);
   animation: fadeIn 0.2s ease-out;
 }
 

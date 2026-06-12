@@ -1,17 +1,21 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { buildQuestionPlan } from '@/utils/helpers'
+import { useFocusTrap } from '@/composables/useFocusTrap'
 
 const props = defineProps({
-  candidate: { type: Object, required: true },   // resultado con answersRaw, correctAnswersRaw, etc.
-  summary:   { type: Object, required: true },   // summary del área (plantillaSnapshot, valores)
+  candidate: { type: Object, required: true },
+  summary:   { type: Object, required: true },
   convocatoriaName: { type: String, default: '' },
   currentUser: { type: String, default: '' },
 })
 
 const emit = defineEmits(['close'])
+
+const modalRef = ref(null)
+useFocusTrap(modalRef, ref(true))
 
 // ── Plan de preguntas (materia + peso por índice) ─────────────────────────────
 const questionPlan = computed(() =>
@@ -115,6 +119,18 @@ function abbrevCurso(name) {
   return name.slice(0, 3).toUpperCase()
 }
 
+// ── Helper: barra de sección con acento dorado ───────────────────────────────
+function _pdfSectionBar(doc, blue, gold, white, x, y, w, label) {
+  doc.setFillColor(...blue)
+  doc.roundedRect(x, y, w, 6.5, 1, 1, 'F')
+  doc.setFillColor(...gold)
+  doc.rect(x + 3.5, y + 1.5, 2.2, 3.5, 'F')
+  doc.setTextColor(...white)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.text(label, x + 8.5, y + 4.4)
+}
+
 async function _loadLogo() {
   try {
     const res = await fetch('/unap.png')
@@ -127,200 +143,213 @@ async function _loadLogo() {
   } catch { return null }
 }
 
-// ── Exportar PDF — una sola hoja, dos columnas ────────────────────────────────
+// ── Exportar PDF — Diseño D "Ejecutivo Moderno" ───────────────────────────────
 async function exportPdf() {
   const c   = props.candidate
   const s   = props.summary
   const { correctCount, incorrectCount, blankCount } = stats.value
   const logoBase64 = await _loadLogo()
 
-  const doc   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const pageW = doc.internal.pageSize.getWidth()   // 210
-  const pageH = doc.internal.pageSize.getHeight()  // 297
+  // ── Paleta "Ejecutivo Moderno" ────────────────────────────────────────────
+  const CARBON    = [28,  43,  58]    // header, tabla heads
+  const ELECTRIC  = [37,  99,  235]   // acento único: azul eléctrico
+  const EL_LIGHT  = [219, 234, 254]   // tint azul muy suave (sky)
+  const EL_MUTED  = [147, 197, 253]   // azul apagado (texto secundario en header)
+  const WHITE     = [255, 255, 255]
+  const BODY_TXT  = [30,  41,  59]
+  const MUTED     = [100, 116, 139]
+  const DIVIDER   = [226, 232, 240]
+  const ZEBRA     = [248, 250, 252]
+  const G_OK      = [21,  128, 61]    // verde correcto
+  const G_OK_BG   = [240, 253, 244]
+  const R_BAD     = [185, 28,  28]    // rojo incorrecto
+  const R_BAD_BG  = [254, 242, 242]
 
-  // ── 1. Encabezado institucional ────────────────────────────────────────────
-  const HDR_H = 28
-  doc.setFillColor(30, 41, 59)
-  doc.rect(0, 0, pageW, HDR_H, 'F')
+  const W = 210, H = 297, M = 14
 
-  // Insignia UNAP
-  if (logoBase64) {
-    doc.addImage(logoBase64, 'PNG', 7, 3, 20, 20)
-  }
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const setF = (a) => doc.setFillColor(...a)
+  const setD = (a) => doc.setDrawColor(...a)
+  const setT = (a) => doc.setTextColor(...a)
+  const font = (style, size) => { doc.setFont('helvetica', style); if (size !== undefined) doc.setFontSize(size) }
 
-  // Textos centrados (desplazados si hay logo)
-  const txtX = logoBase64 ? pageW / 2 + 5 : pageW / 2
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'bold')
-  doc.text('UNIVERSIDAD NACIONAL DEL ALTIPLANO DE PUNO', txtX, 8, { align: 'center' })
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(203, 213, 225)
-  doc.text('DIRECCIÓN DE ADMISIÓN', txtX, 14, { align: 'center' })
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(255, 255, 255)
-  doc.text(props.convocatoriaName || 'EXAMEN DE ADMISIÓN', txtX, 20, { align: 'center' })
-  doc.setFontSize(7)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(148, 163, 184)
-  doc.text('DETALLE DE RESPUESTAS POR PREGUNTA', txtX, 25.5, { align: 'center' })
+  // ── 1. Header limpio — blanco, sin fondo de color ────────────────────────
+  if (logoBase64) doc.addImage(logoBase64, 'PNG', M, 3, 15, 15)
 
-  // ── 2. Sección candidato ───────────────────────────────────────────────────
-  const CAND_Y = HDR_H + 3
-  const CAND_H = 42
-  doc.setFillColor(248, 250, 252)
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.3)
-  doc.rect(10, CAND_Y, pageW - 20, CAND_H, 'FD')
+  font('bold', 9.5); setT(BODY_TXT)
+  doc.text('UNIVERSIDAD NACIONAL DEL ALTIPLANO DE PUNO', W / 2, 8, { align: 'center' })
+  font('normal', 6.8); setT(MUTED)
+  doc.text('Direccion de Admision  -  Sistema de Calificacion', W / 2, 13.5, { align: 'center' })
+  font('bold', 7.5); setT(ELECTRIC)
+  doc.text('REPORTE DE CALIFICACION INDIVIDUAL', W / 2, 19, { align: 'center' })
+  setD(ELECTRIC); doc.setLineWidth(0.8); doc.line(0, 22, W, 22)
 
-  // Franja superior del card (acento visual)
-  doc.setFillColor(30, 41, 59)
-  doc.rect(10, CAND_Y, 3, CAND_H, 'F')
+  // ── 2. Metadatos ──────────────────────────────────────────────────────────
+  let y = 28
+  const now     = new Date()
+  const fmtDate = now.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const fmtTime = now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
+
+  font('normal', 6.8); setT(MUTED)
+  doc.text(`Convocatoria: ${props.convocatoriaName || '-'}`, M, y)
+  doc.text(`${fmtDate}  ${fmtTime}  -  ${props.currentUser || ''}`, W - M, y, { align: 'right' })
+  y += 3
+  setD(DIVIDER); doc.setLineWidth(0.25); doc.line(M, y, W - M, y)
+  y += 5.5
+
+  // ── 3. Sección candidato ──────────────────────────────────────────────────
+  font('bold', 6.2); setT(ELECTRIC)
+  doc.text('DATOS DEL POSTULANTE', M, y)
+  y += 1.2
+  setD(ELECTRIC); doc.setLineWidth(0.6); doc.line(M, y, M + 55, y)
+  y += 4.5
+
+  const INFO_W  = (W - M * 2) * 0.695
+  const SCORE_W = (W - M * 2) - INFO_W - 3
+  const SCORE_X = M + INFO_W + 3
+  const BOX_H   = 36
+
+  // Panel info — borde fino + acento eléctrico izquierdo
+  setD(DIVIDER); doc.setLineWidth(0.3)
+  doc.rect(M, y, INFO_W, BOX_H, 'D')
+  setF(ELECTRIC); doc.rect(M, y, 2.8, BOX_H, 'F')
+
+  // Panel puntaje — sólido eléctrico
+  setF(ELECTRIC); doc.rect(SCORE_X, y, SCORE_W, BOX_H, 'F')
 
   // Nombre completo
   const fullName = [c.paterno, c.materno, c.nombres].filter(Boolean).join(' ')
-  doc.setFontSize(11)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(15, 23, 42)
-  doc.text(fullName.toUpperCase(), 17, CAND_Y + 8)
+  font('bold', 9); setT(BODY_TXT)
+  doc.text((fullName || c.dni || '-').toUpperCase(), M + 6.5, y + 6.5, { maxWidth: INFO_W - 10 })
 
-  // Programa bajo el nombre
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(71, 85, 105)
-  doc.text(c.programa || '—', 17, CAND_Y + 14)
+  // Separador interno sutil
+  setD([235, 240, 250]); doc.setLineWidth(0.2)
+  doc.line(M + 6.5, y + 9, M + INFO_W - 3, y + 9)
 
-  // Badge INGRESANTE / NO INGRESANTE (derecha, arriba)
-  const estado = c.isIngresante ? 'INGRESANTE' : 'NO INGRESANTE'
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'bold')
-  const badgeW = doc.getTextWidth(estado) + 10
-  const badgeX = pageW - 14 - badgeW
-  const badgeY = CAND_Y + 2
-  doc.setFillColor(...(c.isIngresante ? [21, 128, 61] : [100, 116, 139]))
-  doc.roundedRect(badgeX, badgeY, badgeW, 7, 1.5, 1.5, 'F')
-  doc.setTextColor(255, 255, 255)
-  doc.text(estado, badgeX + badgeW / 2, badgeY + 5, { align: 'center' })
-
-  // Puntaje final — solo borde dorado, sin fondo (texto en dorado)
-  const scoreBoxW = badgeW + 4
-  const scoreBoxH = 20
-  const scoreBoxX = badgeX - 2
-  const scoreBoxY = badgeY + 11
-  doc.setDrawColor(202, 138, 4)
-  doc.setLineWidth(0.8)
-  doc.roundedRect(scoreBoxX, scoreBoxY, scoreBoxW, scoreBoxH, 2, 2, 'D')
-  doc.setFontSize(7)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(146, 64, 14)
-  doc.text('PUNTAJE FINAL', scoreBoxX + scoreBoxW / 2, scoreBoxY + 6, { align: 'center' })
-  doc.setFontSize(15)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(120, 53, 15)
-  doc.text(c.score.toFixed(3), scoreBoxX + scoreBoxW / 2, scoreBoxY + 15, { align: 'center' })
-
-  // Separador horizontal
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.3)
-  doc.line(17, CAND_Y + 18, badgeX - 4, CAND_Y + 18)
-
-  // Campos en 3 columnas con chips visuales
-  const fieldMaxX = badgeX - 4
-  const colW = (fieldMaxX - 17) / 3
-  const fieldDefs = [
-    ['DNI',      c.dni      || '—'],
-    ['Litho',    c.litho    || '—'],
-    ['Aula',     c.aula     || '—'],
-    ['Tipo',     c.tipo     || '—'],
-    ['Cor. ID',  c.corId    || '—'],
-    ['Área',     c.area     || '—'],
-    ['Posición', `#${c.position}`],
-    ['Programa', c.programa || '—'],
+  // Campos en 2 columnas
+  const infoFields = [
+    ['DNI',      c.dni      || '-'],
+    ['N Litho',  c.litho    || '-'],
+    ['Aula',     c.aula     || '-'],
+    ['Tipo',     c.tipo     || '-'],
+    ['Cor. ID',  c.corId    || '-'],
+    ['Area',     c.area     || '-'],
+    ['Posicion', c.position ? `#${c.position}` : '-'],
+    ['Programa', c.programa || '-'],
   ]
-  doc.setFontSize(8.5)
-  fieldDefs.forEach(([label, val], i) => {
-    const col = i % 3
-    const row = Math.floor(i / 3)
-    const fx  = 17 + col * colW
-    const fy  = CAND_Y + 19 + row * 8
-    // Label en gris pequeño
-    doc.setFontSize(7)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(100, 116, 139)
+  const COL_W = (INFO_W - 7) / 2
+  infoFields.forEach(([label, value], i) => {
+    const col = i % 2
+    const row = Math.floor(i / 2)
+    const fx  = M + 6.5 + col * COL_W
+    const fy  = y + 13 + row * 6
+    font('normal', 5.5); setT(MUTED)
     doc.text(label.toUpperCase(), fx, fy)
-    // Valor en negro más grande
-    doc.setFontSize(8.5)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(15, 23, 42)
-    doc.text(String(val), fx, fy + 5.5)
+    font('bold', 7); setT(BODY_TXT)
+    doc.text(String(value), fx, fy + 3.2, { maxWidth: COL_W - 4 })
   })
 
-  // ── 3. Barra de stats ──────────────────────────────────────────────────────
-  const STATS_Y = CAND_Y + CAND_H + 2
-  doc.setFillColor(241, 245, 249)
-  doc.setDrawColor(226, 232, 240)
-  doc.rect(10, STATS_Y, pageW - 20, 9, 'FD')
+  // Puntaje (panel derecho)
+  font('bold', 6.8); setT(EL_LIGHT)
+  doc.text('PUNTAJE FINAL', SCORE_X + SCORE_W / 2, y + 7, { align: 'center' })
+  font('bold', 21); setT(WHITE)
+  doc.text(c.score.toFixed(3), SCORE_X + SCORE_W / 2, y + 21, { align: 'center' })
 
-  doc.setFontSize(7.5)
-  const statItems = [
-    [`Correctas: `,   `${correctCount}`,   [21, 128, 61]],
-    [`Incorrectas: `, `${incorrectCount}`, [220, 38, 38]],
-    [`En blanco: `,   `${blankCount}`,     [100, 116, 139]],
-    [`C×`,  `${s.correctValue}`,   [30, 41, 59]],
-    [`I×`,  `${s.incorrectValue}`, [30, 41, 59]],
-    [`B×`,  `${s.blankValue}`,     [30, 41, 59]],
-    [`Plantilla: `, s.plantillaName || '—', [30, 58, 138]],
+  // Línea divisora interna
+  doc.setDrawColor(255, 255, 255); doc.setLineWidth(0.25)
+  doc.line(SCORE_X + 5, y + 25, SCORE_X + SCORE_W - 5, y + 25)
+
+  // Badge estado
+  const estado      = c.isIngresante ? 'INGRESANTE' : 'NO INGRESANTE'
+  const badgeFill   = c.isIngresante ? [16, 185, 129] : [71, 85, 105]
+  font('bold', 6.2)
+  const bW = doc.getTextWidth(estado) + 8
+  setF(badgeFill)
+  doc.roundedRect(SCORE_X + (SCORE_W - bW) / 2, y + 28, bW, 5.5, 1, 1, 'F')
+  setT(WHITE); doc.text(estado, SCORE_X + SCORE_W / 2, y + 32.2, { align: 'center' })
+
+  y += BOX_H + 4
+
+  // ── 4. Leyenda de ponderación — solo borde, sin fondo ────────────────────
+  setD(DIVIDER); doc.setLineWidth(0.25)
+  doc.rect(M, y, W - M * 2, 7, 'D')
+
+  const incStr   = s.incorrectValue <= 0 ? String(s.incorrectValue) : `+${s.incorrectValue}`
+  const blankStr = s.blankValue     <= 0 ? String(s.blankValue)     : `+${s.blankValue}`
+
+  let lx = M + 4
+  const legItems = [
+    ['Correcta: ',   `+${s.correctValue}`,  G_OK],
+    ['Incorrecta: ', incStr,                R_BAD],
+    ['En blanco: ',  blankStr,              MUTED],
+    ['Plantilla: ',  s.plantillaName || '-', BODY_TXT],
   ]
-  let sx = 14
-  statItems.forEach(([label, val, rgb]) => {
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 116, 139)
-    doc.text(label, sx, STATS_Y + 6)
-    sx += doc.getTextWidth(label)
-    doc.setFont('helvetica', 'bold'); doc.setTextColor(...rgb)
-    doc.text(val, sx, STATS_Y + 6)
-    sx += doc.getTextWidth(val) + 5
+  legItems.forEach(([label, val, valColor]) => {
+    font('normal', 6.5); setT(MUTED)
+    doc.text(label, lx, y + 4.6)
+    lx += doc.getTextWidth(label)
+    font('bold', 6.5); setT(valColor)
+    doc.text(val, lx, y + 4.6)
+    lx += doc.getTextWidth(val) + 7
   })
+  font('normal', 6.2); setT(MUTED)
+  doc.text(`${correctCount}C  ${incorrectCount}I  ${blankCount}B`, W - M - 3, y + 4.6, { align: 'right' })
 
-  // ── 4. Tablas dos columnas — split dinámico ────────────────────────────────
-  const TABLE_Y = STATS_Y + 12
-  const GAP     = 5
-  const halfW   = (pageW - 20 - GAP) / 2   // 92.5mm por tabla
+  y += 10
 
-  // Anchos de columna × 2 = halfW (92.5mm total)
-  // N°(8) Curso(18) Marc(11) Corr(11) Pond(12) Pts(14) Acum(18.5) = 92.5
-  const CW = { 0:8, 1:18, 2:11, 3:11, 4:12, 5:14, 6:18.5 }
-  const HEAD = [['N°', 'Curso', 'Marc.', 'Corr.', 'Pond.', 'Pts', 'Acum.']]
+  // ── 5. Tabla en dos columnas — split dinámico ─────────────────────────────
+  font('bold', 6.2); setT(ELECTRIC)
+  doc.text('DETALLE DE RESPUESTAS POR PREGUNTA', M, y)
+  y += 1.2
+  setD(ELECTRIC); doc.setLineWidth(0.6); doc.line(M, y, M + 74, y)
+  y += 4.5
+
+  const GAP   = 5
+  const halfW = (W - M * 2 - GAP) / 2
+  // N°(8) + Curso(17) + Marc(10) + Corr(10) + Pond(11) + Pts(13) + Acum(19.5) = 88.5mm exacto
+  const CW    = { 0: 8, 1: 17, 2: 10, 3: 10, 4: 11, 5: 13, 6: 19.5 }
+  const HEAD  = [['N', 'Curso', 'Marc.', 'Corr.', 'Pond.', 'Pts', 'Acum.']]
+
+  // Calcular altura de fila para llenar exactamente el espacio hasta el footer
+  const BOTTOM_M   = 11
+  const TABLE_FS   = 7.5
+  const HEAD_PAD   = 1.7
+  const BODY_PAD   = 1.3
 
   function makeDidParseCell(halfRows, isLastTable) {
-    return function(data) {
+    return function (data) {
       if (data.section !== 'body') return
       const row = halfRows[data.row.index]
       if (!row) return
-      if (row.status === 'correct')   data.cell.styles.fillColor = [240, 253, 244]
-      if (row.status === 'incorrect') data.cell.styles.fillColor = [255, 245, 245]
+
+      // Zebra base (filas impares)
+      if (data.row.index % 2 === 1) data.cell.styles.fillColor = ZEBRA
+
+      // Colores semánticos (sobrescriben zebra)
+      if (row.status === 'correct')   data.cell.styles.fillColor = G_OK_BG
+      if (row.status === 'incorrect') data.cell.styles.fillColor = R_BAD_BG
+
+      // Columna Marc.
       if (data.column.index === 2) {
         data.cell.styles.fontStyle = 'bold'
-        if (row.status === 'correct')   data.cell.styles.textColor = [21, 128, 61]
-        if (row.status === 'incorrect') data.cell.styles.textColor = [220, 38, 38]
+        if (row.status === 'correct')   data.cell.styles.textColor = G_OK
+        if (row.status === 'incorrect') data.cell.styles.textColor = R_BAD
         if (row.status === 'blank')     data.cell.styles.textColor = [148, 163, 184]
       }
-      // Columna Corr. siempre azul
+      // Columna Corr. — eléctrico
       if (data.column.index === 3) {
-        data.cell.styles.textColor = [29, 78, 216]
+        data.cell.styles.textColor = ELECTRIC
         data.cell.styles.fontStyle = 'bold'
       }
+      // Columna Pts
       if (data.column.index === 5) {
-        data.cell.styles.textColor = row.status === 'correct' ? [21, 128, 61] : [148, 163, 184]
+        data.cell.styles.textColor = row.status === 'correct' ? G_OK : [148, 163, 184]
       }
-      // Fondo verde suave para correctas, rojo para incorrectas
-      if (row.status === 'correct')   data.cell.styles.fillColor = [240, 253, 244]
-      if (row.status === 'incorrect') data.cell.styles.fillColor = [255, 245, 245]
-      // Último acumulado en dorado — solo en la tabla derecha (pregunta final)
+      // Última celda Acum. — tint eléctrico
       if (isLastTable && data.column.index === 6 && data.row.index === halfRows.length - 1) {
-        data.cell.styles.fillColor = [254, 249, 195]
-        data.cell.styles.textColor = [146, 64, 14]
-        data.cell.styles.fontStyle = 'bold'
+        data.cell.styles.fillColor  = EL_LIGHT
+        data.cell.styles.textColor  = ELECTRIC
+        data.cell.styles.fontStyle  = 'bold'
       }
     }
   }
@@ -329,71 +358,70 @@ async function exportPdf() {
     return halfRows.map(row => [
       row.n,
       abbrevCurso(row.subject),
-      row.status === 'blank' ? '—' : row.marked,
+      row.status === 'blank' ? '-' : row.marked,
       row.correct,
-      `×${Number(row.weight).toFixed(3)}`,
+      `x${Number(row.weight).toFixed(3)}`,
       row.status === 'incorrect' ? '0.000' : row.pts.toFixed(3),
       row.acum.toFixed(3),
     ])
   }
 
-  // Split dinámico: mitad del total de preguntas
   const half      = Math.ceil(rows.value.length / 2)
   const leftRows  = rows.value.slice(0, half)
   const rightRows = rows.value.slice(half)
 
-  const sharedTableCfg = (halfRows, marginLeft, marginRight, isLastTable) => ({
-    startY: TABLE_Y,
+  // nRowsMax siempre = half (leftRows.length >= rightRows.length)
+  const nRowsMax  = leftRows.length
+  const availH    = H - BOTTOM_M - y
+  const headRowH  = TABLE_FS * 1.15 * 0.3528 + HEAD_PAD * 2
+  const bodyRowH  = Math.max((availH - headRowH) / nRowsMax, TABLE_FS * 0.3528 + BODY_PAD * 2)
+
+  const sharedCfg = (halfRows, marginLeft, marginRight, isLastTable) => ({
+    startY: y,
     margin: { left: marginLeft, right: marginRight },
     head: HEAD,
     body: buildBody(halfRows),
     styles: {
-      fontSize: 7.5,
-      cellPadding: 1.6,
-      halign: 'center',
-      lineColor: [226, 232, 240],
-      lineWidth: 0.15,
-    },
-    columnStyles: {
-      0: { cellWidth: CW[0] },
-      1: { cellWidth: CW[1], halign: 'left', fontSize: 7.5, overflow: 'ellipsize' },
-      2: { cellWidth: CW[2] },
-      3: { cellWidth: CW[3] },
-      4: { cellWidth: CW[4], fontSize: 7 },
-      5: { cellWidth: CW[5] },
-      6: { cellWidth: CW[6], fontStyle: 'bold' },
+      fontSize: TABLE_FS, cellPadding: BODY_PAD,
+      halign: 'center', lineColor: DIVIDER, lineWidth: 0.15,
+      fillColor: WHITE,
     },
     headStyles: {
-      fillColor: [30, 41, 59], textColor: 255,
-      fontStyle: 'bold', fontSize: 7.5, cellPadding: 2,
+      fillColor: CARBON, textColor: WHITE,
+      fontStyle: 'bold', fontSize: TABLE_FS, cellPadding: HEAD_PAD,
+    },
+    bodyStyles: { textColor: BODY_TXT, minCellHeight: bodyRowH },
+    columnStyles: {
+      0: { cellWidth: CW[0] },
+      1: { cellWidth: CW[1], halign: 'left', fontSize: 7, overflow: 'ellipsize' },
+      2: { cellWidth: CW[2] },
+      3: { cellWidth: CW[3] },
+      4: { cellWidth: CW[4], fontSize: 6.5 },
+      5: { cellWidth: CW[5] },
+      6: { cellWidth: CW[6], fontStyle: 'bold' },
     },
     didParseCell: makeDidParseCell(halfRows, isLastTable),
   })
 
-  autoTable(doc, sharedTableCfg(leftRows,  10,              10 + halfW + GAP, false))
-  autoTable(doc, sharedTableCfg(rightRows, 10 + halfW + GAP, 10,              true))
+  autoTable(doc, { ...sharedCfg(leftRows,  M,              M + halfW + GAP, false), margin: { left: M,              right: M + halfW + GAP, bottom: BOTTOM_M } })
+  autoTable(doc, { ...sharedCfg(rightRows, M + halfW + GAP, M,              true),  margin: { left: M + halfW + GAP, right: M,              bottom: BOTTOM_M } })
 
-  // ── 5. Footer ──────────────────────────────────────────────────────────────
-  doc.setFontSize(6.5)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(148, 163, 184)
-  const yf = pageH - 5
-  doc.text(
-    `Generado: ${consultaTimestamp.value.fecha}  ${consultaTimestamp.value.hora}` +
-    (props.currentUser ? `   ·   ${props.currentUser}` : ''),
-    14, yf
-  )
-  doc.text('Pág. 1 / 1', pageW - 12, yf, { align: 'right' })
+  // ── 6. Footer minimalista — solo línea + texto ────────────────────────────
+  setD(DIVIDER); doc.setLineWidth(0.3); doc.line(M, H - 11, W - M, H - 11)
+  font('normal', 6); setT(MUTED)
+  doc.text('Universidad Nacional del Altiplano de Puno  -  Direccion de Admision', M, H - 7)
+  doc.text(`${fmtDate}  ${fmtTime}${props.currentUser ? '  -  ' + props.currentUser : ''}  -  Pag. 1`, W - M, H - 7, { align: 'right' })
 
+  // ── 7. Guardar ────────────────────────────────────────────────────────────
   const safeName = (c.paterno || c.dni || 'candidato').replace(/[^a-z0-9_-]/gi, '_').toLowerCase()
-  doc.save(`detalle-${safeName}-${c.area}-${consultaTimestamp.value.fecha.replace(/\//g, '')}.pdf`)
+  doc.save(`reporte-${safeName}-${(c.area || '').replace(/\s+/g, '-')}-${fmtDate.replace(/\//g, '')}.pdf`)
 }
 </script>
 
 <template>
   <Teleport to="body">
     <div class="cdm-overlay" @click.self="emit('close')">
-      <div class="cdm-modal" role="dialog" aria-modal="true">
+      <div ref="modalRef" class="cdm-modal" role="dialog" aria-modal="true">
 
         <!-- ══ HEADER ══ -->
         <div class="cdm-header">
@@ -503,6 +531,24 @@ async function exportPdf() {
           </div>
         </div>
 
+        <!-- ══ GRID VISUAL DE RESPUESTAS ══ -->
+        <div class="cdm-answers-grid">
+          <span
+            v-for="row in rows"
+            :key="row.n"
+            class="ans-bubble"
+            :class="{
+              'ans-bubble--ok':  row.status === 'correct',
+              'ans-bubble--bad': row.status === 'incorrect',
+              'ans-bubble--blk': row.status === 'blank',
+            }"
+            :title="`#${row.n} · Marc: ${row.marked} · Corr: ${row.correct}`"
+          >
+            <span class="ans-bubble__n">{{ row.n }}</span>
+            <span class="ans-bubble__letter">{{ row.status === 'blank' ? '·' : row.marked }}</span>
+          </span>
+        </div>
+
         <!-- ══ TABLA ══ -->
         <div class="cdm-table-scroll">
           <table class="cdm-table">
@@ -597,7 +643,7 @@ async function exportPdf() {
 <style scoped>
 /* ── Overlay ── */
 .cdm-overlay {
-  position: fixed; inset: 0; z-index: 1000;
+  position: fixed; inset: 0; z-index: var(--z-modal);
   background: rgba(15, 23, 42, 0.6);
   display: flex; align-items: center; justify-content: center;
   padding: 24px;
@@ -736,6 +782,50 @@ async function exportPdf() {
 .cdm-stat--blk .cdm-stat__n   { color: #64748b; }
 .cdm-stat__n   { font-size: 1.08rem; font-weight: 800; }
 .cdm-stat__lbl { font-size: 0.7rem; color: #64748b; font-weight: 500; }
+
+/* ══ GRID VISUAL DE RESPUESTAS ══ */
+.cdm-answers-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 10px 16px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.ans-bubble {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: default;
+  transition: transform 0.1s;
+  position: relative;
+}
+
+.ans-bubble:hover { transform: scale(1.2); z-index: 1; }
+
+.ans-bubble__n {
+  font-size: 0.48rem;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.65;
+}
+
+.ans-bubble__letter {
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  font-family: var(--font-mono);
+}
+
+.ans-bubble--ok  { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+.ans-bubble--bad { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
+.ans-bubble--blk { background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; }
 
 /* ══ TABLE ══ */
 .cdm-table-scroll { overflow-y: auto; flex: 1; }

@@ -1,5 +1,5 @@
 <script setup>
-import { reactive } from 'vue'
+import { reactive, ref, computed } from 'vue'
 import { RESPONSES_SUBTABS } from '@/constants'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import FileUploader from '@/components/shared/FileUploader.vue'
@@ -10,27 +10,57 @@ import SourcesPanel from '@/components/shared/SourcesPanel.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 
 const props = defineProps({
-  responses: {
-    type: Object,
-    required: true
-  },
-  subTab: {
-    type: String,
-    required: true
-  }
+  responses:         { type: Object,  required: true },
+  subTab:            { type: String,  required: true },
+  identifiersLoaded: { type: Boolean, default: false },
+  linkedCount:       { type: Number,  default: 0 },
+})
+
+const matchPercent = computed(() => {
+  const total = props.responses.totalRows
+  if (!total) return 0
+  return Math.round((props.linkedCount / total) * 100)
+})
+
+const matchStatus = computed(() => {
+  if (!props.identifiersLoaded) return 'no-identifiers'
+  if (matchPercent.value === 100) return 'complete'
+  if (matchPercent.value >= 80)  return 'good'
+  if (matchPercent.value >= 50)  return 'partial'
+  return 'low'
 })
 
 const emit = defineEmits(['update:subTab'])
 
 const responses = reactive(props.responses)
 
+// ── Confirmación inline ──────────────────────────────────────────────────────
+const pendingAction = ref(null)
+
 function confirmRemoveSelected() {
   const count = responses.totalSelected
   if (!count) return
-  if (confirm(`¿Eliminar ${count} registro(s) seleccionado(s)?`)) responses.removeSelected()
+  pendingAction.value = {
+    type: 'remove',
+    message: `¿Eliminar ${count} registro(s) seleccionado(s)? Esta acción no se puede deshacer.`,
+  }
 }
+
 function confirmClearAll() {
-  if (confirm('¿Limpiar todas las respuestas?')) responses.clearAllResponses()
+  pendingAction.value = {
+    type: 'clear',
+    message: '¿Limpiar todas las respuestas? Esta acción no se puede deshacer.',
+  }
+}
+
+function executePending() {
+  if (pendingAction.value?.type === 'remove') responses.removeSelected()
+  if (pendingAction.value?.type === 'clear') responses.clearAllResponses()
+  pendingAction.value = null
+}
+
+function cancelPending() {
+  pendingAction.value = null
 }
 
 const tableColumns = [
@@ -95,6 +125,40 @@ function getRowClass(row) {
 
     <div v-if="responses.importError" class="alert alert--error">
       {{ responses.importError }}
+    </div>
+
+    <!-- Confirmación inline -->
+    <div v-if="pendingAction" class="confirm-banner">
+      <svg viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+      </svg>
+      <span>{{ pendingAction.message }}</span>
+      <div class="confirm-banner__actions">
+        <button type="button" class="btn btn--sm btn--danger" @click="executePending">Confirmar</button>
+        <button type="button" class="btn btn--sm" @click="cancelPending">Cancelar</button>
+      </div>
+    </div>
+
+    <!-- Barra de vinculación con identificadores -->
+    <div v-if="responses.responsesHasData" class="match-bar" :class="`match-bar--${matchStatus}`">
+      <div class="match-bar__info">
+        <svg viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M12.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
+        </svg>
+        <span v-if="!identifiersLoaded" class="match-bar__text">
+          Sin identificadores cargados — las respuestas no tendrán DNI ni aula asignados (Paso 2)
+        </span>
+        <span v-else class="match-bar__text">
+          <strong>{{ linkedCount }} / {{ responses.totalRows }}</strong> respuestas vinculadas con identificadores
+          <em v-if="matchStatus === 'complete'">— vinculación completa</em>
+          <em v-else-if="matchStatus === 'good'">— {{ 100 - matchPercent }}% sin vincular</em>
+          <em v-else>— revisar Paso 2</em>
+        </span>
+        <span class="match-bar__pct">{{ matchPercent }}%</span>
+      </div>
+      <div class="match-bar__track">
+        <div class="match-bar__fill" :style="{ width: matchPercent + '%' }"></div>
+      </div>
     </div>
 
     <Toolbar
@@ -223,6 +287,20 @@ function getRowClass(row) {
   border: 1px solid var(--error-100);
 }
 
+/* Confirm banner */
+.confirm-banner {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  background: #fff8e1; border: 1px solid #f59e0b;
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem; color: #92400e; flex-wrap: wrap;
+}
+.confirm-banner svg { width: 18px; height: 18px; flex-shrink: 0; color: #f59e0b; }
+.confirm-banner span { flex: 1; min-width: 200px; }
+.confirm-banner__actions { display: flex; gap: var(--space-2); }
+
+.btn--sm { padding: var(--space-1) var(--space-3); font-size: 0.8rem; }
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -279,4 +357,95 @@ function getRowClass(row) {
   width: 16px;
   height: 16px;
 }
+
+/* ── Match bar ───────────────────────────────────────────────────────────── */
+.match-bar {
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: 1px solid var(--slate-200);
+}
+
+.match-bar__info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.82rem;
+}
+
+.match-bar__info svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.match-bar__text {
+  flex: 1;
+}
+
+.match-bar__text strong { font-weight: 700; }
+.match-bar__text em     { font-style: normal; font-weight: 500; margin-left: 4px; }
+
+.match-bar__pct {
+  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.match-bar__track {
+  height: 5px;
+  background: rgba(0,0,0,0.08);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.match-bar__fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Estados */
+.match-bar--no-identifiers {
+  background: #fefce8;
+  border-color: #fde68a;
+  color: #92400e;
+}
+.match-bar--no-identifiers svg  { color: #d97706; }
+.match-bar--no-identifiers .match-bar__fill { background: #fcd34d; }
+
+.match-bar--complete {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+.match-bar--complete svg        { color: var(--success-500); }
+.match-bar--complete .match-bar__fill { background: var(--success-500); }
+
+.match-bar--good {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+.match-bar--good svg            { color: var(--success-500); }
+.match-bar--good .match-bar__fill { background: var(--success-400); }
+
+.match-bar--partial {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+.match-bar--partial svg         { color: #d97706; }
+.match-bar--partial .match-bar__fill { background: #fbbf24; }
+
+.match-bar--low {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+.match-bar--low svg             { color: #dc2626; }
+.match-bar--low .match-bar__fill { background: #f87171; }
 </style>

@@ -17,6 +17,9 @@ const props = defineProps({
   selectedCount: { type: Number, default: 0 },
   // Paginación — pasar el objeto `pagination` de useTableState
   pagination: { type: Object, default: null },
+  // Skeleton loader
+  loading: { type: Boolean, default: false },
+  skeletonRows: { type: Number, default: 8 },
 })
 
 const emit = defineEmits([
@@ -30,6 +33,13 @@ const emit = defineEmits([
 
 // Snapshot de valores originales para cancel
 const originalValues = new Map()
+
+// Confirmación inline por fila
+const pendingRemoveId = ref(null)
+
+function onRemoveRequest(id) { pendingRemoveId.value = id }
+function onRemoveConfirm()   { emit('removeRow', pendingRemoveId.value); pendingRemoveId.value = null }
+function onRemoveCancel()    { pendingRemoveId.value = null }
 
 function isEditing(id) { return props.editing.has(id) }
 function isSelected(id) { return props.selection.has(id) }
@@ -58,11 +68,7 @@ function onCancelEdit(id) {
   emit('cancelEdit', id)
 }
 
-function onRemoveRow(id) {
-  if (confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) {
-    emit('removeRow', id)
-  }
-}
+function onRemoveRow(id) { onRemoveRequest(id) }
 
 function getRowClasses(row) {
   return {
@@ -123,6 +129,22 @@ function visiblePages(current, total) {
           </tr>
         </thead>
         <tbody>
+          <!-- Skeleton rows -->
+          <template v-if="loading">
+            <tr v-for="i in skeletonRows" :key="`sk-${i}`" class="row--skeleton">
+              <td v-if="showIndex" class="col-index"><span class="skel skel--xs"></span></td>
+              <td v-if="showCheckbox" class="col-check"><span class="skel skel--check"></span></td>
+              <td v-for="col in columns" :key="col.key"><span class="skel" :style="{ width: col.tight ? '50px' : `${55 + (i * 13 + col.key.length * 7) % 35}%` }"></span></td>
+              <td v-if="showActions" class="col-actions">
+                <div class="row-actions">
+                  <span class="skel skel--btn"></span>
+                  <span class="skel skel--btn"></span>
+                </div>
+              </td>
+            </tr>
+          </template>
+
+          <template v-else>
           <tr
             v-for="(row, index) in rows"
             :key="row.id"
@@ -184,6 +206,7 @@ function visiblePages(current, total) {
                   class="action-btn action-btn--save"
                   @click="onToggleEdit(row.id)"
                   title="Guardar cambios"
+                  aria-label="Guardar cambios"
                 >
                   <svg viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
@@ -196,6 +219,7 @@ function visiblePages(current, total) {
                   class="action-btn action-btn--cancel"
                   @click="onCancelEdit(row.id)"
                   title="Cancelar edición"
+                  aria-label="Cancelar edición"
                 >
                   <svg viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
@@ -208,18 +232,29 @@ function visiblePages(current, total) {
                   class="action-btn"
                   @click="onToggleEdit(row.id)"
                   title="Editar"
+                  aria-label="Editar fila"
                 >
                   <svg viewBox="0 0 20 20" fill="currentColor">
                     <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
                   </svg>
                 </button>
-                <!-- Eliminar (solo si no editando) -->
+                <!-- Confirmar eliminación inline -->
+                <template v-if="pendingRemoveId === row.id">
+                  <button type="button" class="action-btn action-btn--confirm" @click="onRemoveConfirm" title="Confirmar eliminación" aria-label="Confirmar eliminación">
+                    <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                  </button>
+                  <button type="button" class="action-btn action-btn--cancel" @click="onRemoveCancel" title="Cancelar" aria-label="Cancelar eliminación">
+                    <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                  </button>
+                </template>
+                <!-- Eliminar (solo si no editando y sin confirmación pendiente) -->
                 <button
-                  v-if="!isEditing(row.id)"
+                  v-else-if="!isEditing(row.id)"
                   type="button"
                   class="action-btn action-btn--danger"
                   @click="onRemoveRow(row.id)"
                   title="Eliminar"
+                  aria-label="Eliminar fila"
                 >
                   <svg viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
@@ -228,6 +263,7 @@ function visiblePages(current, total) {
               </div>
             </td>
           </tr>
+          </template>
         </tbody>
       </table>
     </div>
@@ -387,8 +423,19 @@ function visiblePages(current, total) {
 .badge--ok { background: var(--success-100); color: var(--success-600); }
 .badge--warn { background: var(--warning-100); color: var(--warning-600); }
 
-/* Row actions */
-.row-actions { display: flex; gap: var(--space-1); }
+/* Row actions — aparecen al hover */
+.col-actions { width: 110px; }
+
+.row-actions {
+  display: flex; gap: var(--space-1);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.data-table tbody tr:hover .row-actions,
+.data-table tbody tr.row--editing .row-actions {
+  opacity: 1;
+}
 
 .action-btn {
   width: 30px; height: 30px; border: none; border-radius: var(--radius-md);
@@ -406,6 +453,9 @@ function visiblePages(current, total) {
 .action-btn--cancel:hover { background: var(--warning-100); color: var(--warning-600); }
 
 .action-btn--danger:hover { background: var(--error-100); color: var(--error-600); }
+
+.action-btn--confirm { color: var(--success-600); }
+.action-btn--confirm:hover { background: #dcfce7; color: var(--success-700); }
 
 @media (max-width: 768px) {
   .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -454,4 +504,24 @@ function visiblePages(current, total) {
 .page-ellipsis {
   min-width: 24px; text-align: center; color: var(--slate-400); font-size: 0.9rem;
 }
+
+/* ── Skeleton loader ─────────────────────────────────────────────────────── */
+.row--skeleton td {
+  padding: var(--space-3) var(--space-4);
+}
+
+.skel {
+  display: inline-block;
+  height: 14px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--slate-200) 25%, var(--slate-100) 50%, var(--slate-200) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  vertical-align: middle;
+  width: 70%;
+}
+
+.skel--xs { width: 24px; }
+.skel--check { width: 18px; height: 18px; border-radius: 4px; }
+.skel--btn { width: 30px; height: 30px; border-radius: var(--radius-md); }
 </style>

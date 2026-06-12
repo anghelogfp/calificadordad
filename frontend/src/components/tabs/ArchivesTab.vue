@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { reactive, ref, computed } from 'vue'
 import { ARCHIVE_COLUMNS } from '@/constants'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import FileUploader from '@/components/shared/FileUploader.vue'
@@ -8,10 +8,8 @@ import DataTable from '@/components/shared/DataTable.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 
 const props = defineProps({
-  archives: {
-    type: Object,
-    required: true
-  }
+  archives:  { type: Object, required: true },
+  areaNames: { type: Array,  default: () => [] },
 })
 
 const archives = reactive(props.archives)
@@ -21,6 +19,22 @@ const tableColumns = ARCHIVE_COLUMNS.map(col => ({
   label: col.label,
   editable: true,
 }))
+
+// Preview para FileUploader (primeras 5 filas, columnas principales)
+const PREVIEW_COLS = ARCHIVE_COLUMNS.slice(0, 5).map(c => ({ key: c.key, label: c.label }))
+const previewRows = computed(() => (archives.rows?.value ?? []).slice(0, 5))
+
+// Validación de áreas: detecta áreas del padrón que no están en la DB
+const unknownAreas = computed(() => {
+  if (!props.areaNames.length || !archives.rows?.value?.length) return []
+  const knownNorm = new Set(props.areaNames.map(n => n.trim().toLowerCase()))
+  const unknown = new Set()
+  archives.rows.value.forEach(row => {
+    const a = (row.area || '').trim()
+    if (a && !knownNorm.has(a.toLowerCase())) unknown.add(a)
+  })
+  return Array.from(unknown).sort()
+})
 
 function getRowClass(row) { return {} }
 
@@ -53,6 +67,8 @@ function executePending() {
 function cancelPending() {
   pendingAction.value = null
 }
+
+const emit = defineEmits(['goConfig'])
 </script>
 
 <template>
@@ -78,6 +94,10 @@ function cancelPending() {
       accept=".xlsx"
       :is-dragging="archives.isDragging"
       :has-data="archives.hasData"
+      :file-name="archives.lastFileName?.value"
+      :row-count="archives.totalRows"
+      :preview-columns="PREVIEW_COLS"
+      :preview-rows="previewRows"
       title="Arrastra tu archivo Excel aquí"
       subtitle="o haz clic para seleccionar desde tu equipo"
       button-text="Seleccionar archivo .xlsx"
@@ -101,6 +121,19 @@ function cancelPending() {
         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
       </svg>
       <span>{{ archives.importError }}</span>
+    </div>
+
+    <!-- Advertencia de áreas no reconocidas -->
+    <div v-if="unknownAreas.length" class="alert alert--warn">
+      <svg class="alert__icon" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+      </svg>
+      <span>
+        El padrón contiene área(s) no configuradas en el sistema:
+        <strong v-for="(a, i) in unknownAreas" :key="a">{{ a }}<span v-if="i < unknownAreas.length - 1">, </span></strong>.
+        Las claves de respuestas del Paso 4 no podrán vincularse con estos postulantes.
+        <a class="alert__link" href="#" @click.prevent="$emit('goConfig')">Ir a Configuración →</a>
+      </span>
     </div>
 
     <!-- Banner de confirmación inline -->
@@ -260,6 +293,27 @@ function cancelPending() {
   background: linear-gradient(135deg, var(--error-50) 0%, var(--error-100) 100%);
   color: var(--error-600);
   border: 1px solid var(--error-100);
+}
+
+.alert--warn {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.alert--warn .alert__icon {
+  color: #d97706;
+}
+
+.alert__link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  margin-left: 4px;
+}
+
+.alert__link:hover {
+  opacity: 0.75;
 }
 
 .form-card {

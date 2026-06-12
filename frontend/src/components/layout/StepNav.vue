@@ -1,5 +1,5 @@
 <script setup>
-import { TAB_KEYS } from '@/constants'
+import { computed } from 'vue'
 
 const props = defineProps({
   tabs: {
@@ -29,37 +29,74 @@ const emit = defineEmits(['update:activeTab'])
 function selectTab(key) {
   emit('update:activeTab', key)
 }
+
+const completedCount = computed(() =>
+  props.tabs.filter(t => props.getStepStatus(t.key) === 'completed').length
+)
+
+const progressPercent = computed(() => {
+  const activeIndex = props.tabs.findIndex(t => t.key === props.activeTab)
+  const base = completedCount.value
+  const idx = activeIndex >= 0 ? activeIndex : base
+  return Math.round((Math.max(base, idx) / (props.tabs.length - 1)) * 100)
+})
 </script>
 
 <template>
   <nav class="step-nav" aria-label="Pasos del proceso">
-    <div class="step-nav-track">
-      <button
-        v-for="(tab, index) in tabs"
-        :key="tab.key"
-        type="button"
-        class="step-item"
-        :class="{
-          'step-item--active': activeTab === tab.key,
-          'step-item--completed': getStepStatus(tab.key) === 'completed',
-          'step-item--current': activeTab === tab.key
-        }"
-        @click="selectTab(tab.key)"
-      >
-        <span class="step-number">
-          <span v-if="getStepStatus(tab.key) === 'completed'" class="step-check">
-            <svg viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-            </svg>
+    <div class="step-nav-scroll">
+      <div class="step-nav-track">
+        <button
+          v-for="(tab, index) in tabs"
+          :key="tab.key"
+          type="button"
+          class="step-item"
+          :class="{
+            'step-item--active': activeTab === tab.key,
+            'step-item--completed': getStepStatus(tab.key) === 'completed',
+          }"
+          @click="selectTab(tab.key)"
+        >
+          <span class="step-number">
+            <span v-if="getStepStatus(tab.key) === 'completed'" class="step-check">
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+              </svg>
+            </span>
+            <span v-else>{{ index + 1 }}</span>
           </span>
-          <span v-else>{{ index + 1 }}</span>
-        </span>
-        <span class="step-content">
-          <span class="step-label">{{ getStepLabel(tab.key) }}</span>
-          <span class="step-desc">{{ getStepDescription(tab.key) }}</span>
-        </span>
-        <span v-if="index < tabs.length - 1" class="step-connector"></span>
-      </button>
+          <span class="step-content">
+            <span class="step-label">{{ getStepLabel(tab.key) }}</span>
+            <span class="step-desc">
+              <span
+                class="step-status-dot"
+                :class="{
+                  'step-status-dot--done':   getStepStatus(tab.key) === 'completed',
+                  'step-status-dot--active': activeTab === tab.key && getStepStatus(tab.key) !== 'completed',
+                  'step-status-dot--empty':  getStepStatus(tab.key) !== 'completed' && activeTab !== tab.key,
+                }"
+              ></span>
+              {{ getStepDescription(tab.key) }}
+            </span>
+          </span>
+          <span v-if="index < tabs.length - 1" class="step-connector"
+            :class="{ 'step-connector--done': getStepStatus(tab.key) === 'completed' }"
+          ></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Barra de progreso global — siempre full-width, fuera del scroll -->
+    <div class="progress-wrap">
+      <div class="progress-track">
+        <div
+          class="progress-fill"
+          :style="{ width: progressPercent + '%' }"
+        ></div>
+      </div>
+      <span class="progress-label">
+        {{ completedCount }} / {{ tabs.length }} pasos completados
+      </span>
     </div>
   </nav>
 </template>
@@ -68,9 +105,17 @@ function selectTab(key) {
 .step-nav {
   background: white;
   border-bottom: 1px solid var(--slate-200);
-  padding: var(--space-4) var(--space-8);
-  overflow-x: auto;
+  padding: var(--space-4) var(--space-8) 0;
   flex-shrink: 0;
+}
+
+.step-nav-scroll {
+  overflow-x: auto;
+  /* Ocultar scrollbar visualmente pero mantener funcionalidad */
+  scrollbar-width: none;
+}
+.step-nav-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .step-nav-track {
@@ -129,6 +174,7 @@ function selectTab(key) {
   border-color: var(--unap-blue-600);
   color: white;
   box-shadow: 0 0 0 4px rgba(0, 51, 102, 0.15);
+  animation: stepPulse 2s ease-in-out infinite;
 }
 
 .step-check svg {
@@ -158,7 +204,21 @@ function selectTab(key) {
 .step-desc {
   font-size: 0.75rem;
   color: var(--slate-500);
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
+
+.step-status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--slate-300);
+  transition: background 0.25s;
+}
+.step-status-dot--done   { background: var(--success-500); }
+.step-status-dot--active { background: var(--unap-blue-500); }
+.step-status-dot--empty  { background: var(--slate-300); }
 
 .step-connector {
   position: absolute;
@@ -168,10 +228,47 @@ function selectTab(key) {
   width: 24px;
   height: 2px;
   background: var(--slate-200);
+  transition: background var(--transition-slow);
 }
 
-.step-item--completed .step-connector {
+.step-connector--done {
   background: var(--success-400);
+}
+
+/* Barra de progreso global */
+.progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+
+.progress-track {
+  flex: 1;
+  height: 4px;
+  background: var(--slate-200);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--unap-blue-500), var(--success-500));
+  border-radius: var(--radius-full);
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.progress-label {
+  font-size: 0.7rem;
+  color: var(--slate-500);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+@keyframes stepPulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(0, 51, 102, 0.15); }
+  50% { box-shadow: 0 0 0 7px rgba(0, 51, 102, 0.08); }
 }
 
 @media (max-width: 1024px) {

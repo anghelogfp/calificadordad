@@ -1,8 +1,9 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import { useToast } from '@/composables/useToast'
 import { useUsuarios } from '@/composables/useUsuarios'
+import { useFocusTrap } from '@/composables/useFocusTrap'
 
 const { showToast } = useToast()
 const { users, loading, fetchUsuarios, createUsuario, updateUsuario, setPassword, toggleActivo } = useUsuarios()
@@ -25,6 +26,11 @@ const MODAL_EMPTY = {
 
 const showModal = ref(false)
 const modalMode = ref('create') // 'create' | 'edit'
+
+const mainModalRef = ref(null)
+const passwordModalRef = ref(null)
+useFocusTrap(mainModalRef, computed(() => showModal.value))
+useFocusTrap(passwordModalRef, computed(() => showPasswordModal.value))
 const form = reactive({ ...MODAL_EMPTY })
 const saving = ref(false)
 const formError = ref('')
@@ -202,12 +208,12 @@ async function handleToggleActivo(user) {
             </td>
             <td>
               <div class="actions">
-                <button type="button" class="btn-icon" title="Editar" @click="openEdit(user)">
+                <button type="button" class="btn-icon" title="Editar" aria-label="Editar usuario" @click="openEdit(user)">
                   <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
                     <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
                   </svg>
                 </button>
-                <button type="button" class="btn-icon" title="Cambiar contraseña" @click="openPasswordModal(user)">
+                <button type="button" class="btn-icon" title="Cambiar contraseña" aria-label="Cambiar contraseña" @click="openPasswordModal(user)">
                   <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
                     <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
                   </svg>
@@ -215,7 +221,8 @@ async function handleToggleActivo(user) {
                 <button
                   type="button"
                   class="btn-icon"
-                  :title="user.is_active ? 'Desactivar' : 'Activar'"
+                  :title="user.is_active ? 'Desactivar usuario' : 'Activar usuario'"
+                  :aria-label="user.is_active ? 'Desactivar usuario' : 'Activar usuario'"
                   :class="user.is_active ? 'btn-icon--danger' : 'btn-icon--success'"
                   @click="handleToggleActivo(user)"
                 >
@@ -239,7 +246,7 @@ async function handleToggleActivo(user) {
     <!-- ── Modal crear / editar ─────────────────────────────────────────── -->
     <Teleport to="body">
       <div v-if="showModal" class="modal-backdrop" @click.self="closeModal">
-        <div class="modal">
+        <div ref="mainModalRef" class="modal" role="dialog" aria-modal="true">
           <div class="modal__header">
             <h3 class="modal__title">{{ modalMode === 'create' ? 'Nuevo usuario' : 'Editar usuario' }}</h3>
             <button type="button" class="modal__close" @click="closeModal">
@@ -308,7 +315,7 @@ async function handleToggleActivo(user) {
     <!-- ── Modal cambiar contraseña ─────────────────────────────────────── -->
     <Teleport to="body">
       <div v-if="showPasswordModal" class="modal-backdrop" @click.self="showPasswordModal = false">
-        <div class="modal modal--sm">
+        <div ref="passwordModalRef" class="modal modal--sm" role="dialog" aria-modal="true">
           <div class="modal__header">
             <h3 class="modal__title">Cambiar contraseña</h3>
             <button type="button" class="modal__close" @click="showPasswordModal = false">
@@ -474,7 +481,7 @@ async function handleToggleActivo(user) {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.45);
   display: flex; align-items: center; justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
   padding: var(--space-4);
 }
 
