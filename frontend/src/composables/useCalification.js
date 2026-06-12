@@ -25,13 +25,11 @@ export function useCalification(
   archiveRows,
   responsesRows,
   answerKeyRows,
-  ponderationsComposable,      // resultado de usePonderations() — reemplaza los 3 parámetros anteriores
+  ponderationsComposable,
   responsesByDni,
   answerKeyLookupByAreaTipo,
   areaNames,
-  activeConvocatoriaId,
   formatConfig,
-  areaByName,
   vacantesPrograma
 ) {
   const effectiveAreaNames = computed(() =>
@@ -341,11 +339,11 @@ export function useCalification(
   // MÉTODOS — PROCESO
   // ═══════════════════════════════════════════════════════════════════════════
 
-  function startNewProcess() {
-    activeProcess.value = { id: null, name: '', type: 'simulacro', areas: {} }
+  function startNewProcess({ name = '', type = 'simulacro' } = {}) {
+    activeProcess.value = { id: null, name, type, areas: {} }
     calificationDisplayArea.value = null
-    processName.value = ''
-    processType.value = 'simulacro'
+    processName.value = name
+    processType.value = type
     calificationSearch.value = ''
   }
 
@@ -375,25 +373,6 @@ export function useCalification(
   // ═══════════════════════════════════════════════════════════════════════════
   // MÉTODOS — API
   // ═══════════════════════════════════════════════════════════════════════════
-
-  async function saveCalificationConfigToAPI(area, correctValue, incorrectValue, blankValue) {
-    if (!activeConvocatoriaId?.value) return
-    try {
-      await apiFetch(`/calification-configs/upsert/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          convocatoria: activeConvocatoriaId.value,
-          area_name: area,
-          correct_value: correctValue,
-          incorrect_value: incorrectValue,
-          blank_value: blankValue,
-        }),
-      })
-    } catch {
-      // No crítico, ya guardado localmente
-    }
-  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CALIFICACIÓN
@@ -576,7 +555,6 @@ export function useCalification(
 
     calificationDisplayArea.value = area
     calificationConfigStorage.value[area] = { correctValue, incorrectValue, blankValue }
-    saveCalificationConfigToAPI(area, correctValue, incorrectValue, blankValue)
 
     // Avanzar automáticamente a la siguiente área pendiente, o cerrar si ya no hay
     const nextPending = effectiveAreaNames.value.find(
@@ -660,7 +638,6 @@ export function useCalification(
         body: JSON.stringify({
           local_id: proceso.id,
           name: proceso.name,
-          convocatoria_id: activeConvocatoriaId?.value || null,
           areas: proceso.areas,
         }),
       })

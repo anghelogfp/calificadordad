@@ -16,7 +16,6 @@ import { usePonderations } from '@/composables/usePonderations'
 import { useCalification } from '@/composables/useCalification'
 import { useHistory } from '@/composables/useHistory'
 import { useBackup } from '@/composables/useBackup'
-import { useConvocatoria } from '@/composables/useConvocatoria'
 import { useAreas } from '@/composables/useAreas'
 import { useDatFormat } from '@/composables/useDatFormat'
 import { useScoreDashboard } from '@/composables/useScoreDashboard'
@@ -41,7 +40,6 @@ import PonderationsTab from '@/components/tabs/PonderationsTab.vue'
 import CalificationModal from '@/components/modals/CalificationModal.vue'
 import BackupModal from '@/components/modals/BackupModal.vue'
 import NuevoProcesoModal from '@/components/modals/NuevoProcesoModal.vue'
-import ConvocatoriaPanel from '@/components/panels/ConvocatoriaPanel.vue'
 import DashboardPanel from '@/components/panels/DashboardPanel.vue'
 
 // Views (sidebar)
@@ -82,9 +80,8 @@ const ponderations = usePonderations()
 const history = useHistory()
 const toast = useToast()
 const backup = useBackup()
-const convocatoria = useConvocatoria()
-const areas = useAreas(convocatoria.activeConvocatoria)
-const datFormat = useDatFormat(convocatoria.activeConvocatoria)
+const areas = useAreas()
+const datFormat = useDatFormat()
 const exporter = useExport()
 const vacantesPrograma = useVacantesPrograma()
 
@@ -96,13 +93,11 @@ const calification = useCalification(
   responses.responsesByDni,
   answerKeys.answerKeyLookupByAreaTipo,
   areas.areaNames,
-  convocatoria.activeConvocatoriaId,
   datFormat.formatConfig,
-  areas.areaByName,
   vacantesPrograma.vacantesPrograma
 )
 
-const dashboard = useScoreDashboard(calification.calificationAllResults, areas.areaByName)
+const dashboard = useScoreDashboard(calification.calificationAllResults)
 const showDashboardPanel = ref(false)
 const showNuevoProcesoModal = ref(false)
 
@@ -170,13 +165,12 @@ function startNewProcess() {
   showNuevoProcesoModal.value = true
 }
 
-function confirmNewProcess(selectedConvocatoria) {
-  convocatoria.setActiveConvocatoria(selectedConvocatoria)
+function confirmNewProcess({ name, type }) {
   archives.clearAll()
   identifiers.clearAllIdentifiers()
   responses.clearAllResponses()
   answerKeys.clearAllAnswerKeys()
-  calification.resetCalificationResults()
+  calification.startNewProcess({ name, type })
   showNuevoProcesoModal.value = false
   activeTab.value = TAB_KEYS.ARCHIVES
 }
@@ -255,7 +249,6 @@ onMounted(async () => {
     localStorage.removeItem('calificador-plantillas')
     localStorage.removeItem('calificador-historial')
     await ponderations.initializePonderations()
-    convocatoria.fetchConvocatorias()
   }
 })
 </script>
@@ -266,7 +259,6 @@ onMounted(async () => {
 
   <div v-else class="app-layout">
     <AppHeader
-      :convocatoria="convocatoria.activeConvocatoria.value"
       @go-home="activeTab = 'dashboard'"
     />
 
@@ -330,7 +322,6 @@ onMounted(async () => {
           <DashboardHomeView
             v-if="activeTab === 'dashboard'"
             :history="history"
-            :convocatoria="convocatoria"
             :areas="areas"
             :current-user="auth.user.value?.username ?? ''"
             @load-process="handleLoadProcess"
@@ -377,7 +368,7 @@ onMounted(async () => {
             :ponderations="ponderations"
             :dashboard="dashboard"
             :exporter="exporter"
-            :convocatoria-name="convocatoria.activeConvocatoriaName.value"
+            :convocatoria-name="calification.processName.value"
             :on-save-to-history="saveToHistory"
             @open-modal="calification.openCalificationModal"
             @open-dashboard="showDashboardPanel = true"
@@ -394,9 +385,6 @@ onMounted(async () => {
             :programas-by-area="programasByArea"
             :vacantes-programa="vacantesPrograma"
             :dat-format="datFormat"
-            :convocatoria-id="convocatoria.activeConvocatoriaId.value"
-            :convocatoria="convocatoria.activeConvocatoria.value"
-            @open-convocatoria="convocatoria.showPanel.value = true"
           />
 
           <VerificadorView
@@ -414,7 +402,6 @@ onMounted(async () => {
 
     <NuevoProcesoModal
       :show="showNuevoProcesoModal"
-      :convocatoria="convocatoria"
       :has-data="hasProcessData"
       @confirm="confirmNewProcess"
       @close="showNuevoProcesoModal = false"
@@ -431,11 +418,6 @@ onMounted(async () => {
       :show="backup.showModal.value"
       :backup="backup"
       @close="backup.showModal.value = false"
-    />
-
-    <ConvocatoriaPanel
-      :convocatoria="convocatoria"
-      @close="convocatoria.showPanel.value = false"
     />
 
     <DashboardPanel

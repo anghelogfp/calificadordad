@@ -1,7 +1,4 @@
-from collections import defaultdict
-
 from django.db import transaction
-from django.db.models import Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -22,20 +19,13 @@ class PonderacionViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = Ponderacion.objects.all()
         area = self.request.query_params.get('area')
-        convocatoria = self.request.query_params.get('convocatoria')
         if area:
             queryset = queryset.filter(area__iexact=area)
-        if convocatoria:
-            queryset = queryset.filter(convocatoria_id=convocatoria)
         return queryset.order_by('area', 'order', 'subject')
 
     @action(detail=False, methods=['get'])
     def areas(self, request):
-        convocatoria = request.query_params.get('convocatoria')
-        qs = Ponderacion.objects.all()
-        if convocatoria:
-            qs = qs.filter(convocatoria_id=convocatoria)
-        areas = qs.values_list('area', flat=True).distinct()
+        areas = Ponderacion.objects.values_list('area', flat=True).distinct()
         return Response(list(areas))
 
     @action(detail=False, methods=['post'])
@@ -49,22 +39,14 @@ class PonderacionViewSet(viewsets.ModelViewSet):
 
         created = []
         errors = []
-        convocatoria_id = request.query_params.get('convocatoria')
 
         for item in data:
-            if convocatoria_id:
-                item = {**item, 'convocatoria': convocatoria_id}
             serializer = PonderacionSerializer(data=item)
             if serializer.is_valid():
-                filter_kwargs = {
-                    'area__iexact': item.get('area', ''),
-                    'subject__iexact': item.get('subject', ''),
-                }
-                if convocatoria_id:
-                    filter_kwargs['convocatoria_id'] = convocatoria_id
-                else:
-                    filter_kwargs['convocatoria__isnull'] = True
-                existing = Ponderacion.objects.filter(**filter_kwargs).first()
+                existing = Ponderacion.objects.filter(
+                    area__iexact=item.get('area', ''),
+                    subject__iexact=item.get('subject', ''),
+                ).first()
                 if existing:
                     serializer = PonderacionSerializer(existing, data=item)
                     if serializer.is_valid():
@@ -95,12 +77,9 @@ class PlantillaPonderacionViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = PlantillaPonderacion.objects.prefetch_related('items').all()
         area = self.request.query_params.get('area')
-        convocatoria = self.request.query_params.get('convocatoria')
         if area:
-            # Específicas del área + globales (area=null)
+            from django.db.models import Q
             qs = qs.filter(Q(area__iexact=area) | Q(area__isnull=True))
-        if convocatoria:
-            qs = qs.filter(convocatoria_id=convocatoria)
         return qs.order_by('area', 'name')
 
     @action(detail=True, methods=['post'], url_path='items')
@@ -135,37 +114,19 @@ class PlantillaPonderacionViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def migrate_from_ponderaciones(self, request):
-        """
-        Migra Ponderacion → PlantillaPonderacion.
-        Agrupa por (convocatoria, area), crea una plantilla por cada grupo.
-        Idempotente: si ya existe la plantilla con mismo nombre+área, reemplaza sus items.
-        """
-        convocatoria_id = request.query_params.get('convocatoria')
+        """Migra Ponderacion → PlantillaPonderacion. Idempotente."""
+        from collections import defaultdict
         qs = Ponderacion.objects.all()
-        if convocatoria_id:
-            qs = qs.filter(convocatoria_id=convocatoria_id)
-
         groups = defaultdict(list)
         for pond in qs:
-            groups[(pond.convocatoria_id, pond.area)].append(pond)
+            groups[pond.area].append(pond)
 
         created_plantillas = []
         with transaction.atomic():
-            for (conv_id, area), rows in groups.items():
-                year_str = ''
-                if conv_id:
-                    try:
-                        from convocatorias.models import Convocatoria
-                        conv = Convocatoria.objects.get(pk=conv_id)
-                        year_str = f' {conv.year}' if conv.year else ''
-                    except Exception:
-                        pass
-                name = f'UNAP{year_str} — {area}'
+            for area, rows in groups.items():
+                name = f'UNAP — {area}'
                 plantilla, _ = PlantillaPonderacion.objects.get_or_create(
-                    name=name,
-                    area=area,
-                    convocatoria_id=conv_id,
-                    defaults={'question_total': 0},
+                    name=name, area=area, defaults={'question_total': 0},
                 )
                 plantilla.items.all().delete()
                 for row in sorted(rows, key=lambda r: (r.order, r.subject)):

@@ -4,7 +4,7 @@ import { computed } from 'vue'
  * Composable puramente computado para dashboard de resultados.
  * Sin API calls, sin localStorage. Solo derivaciones reactivas.
  */
-export function useScoreDashboard(calificationResults, areaByName) {
+export function useScoreDashboard(calificationResults) {
   /**
    * Resultados ordenados globalmente. isIngresante y positionInPrograma
    * ya vienen calculados por useCalification — no se recalculan aquí.

@@ -2,15 +2,7 @@ from django.db import models
 
 
 class Ponderacion(models.Model):
-    """Modelo legacy — mantenido para compatibilidad y migración."""
-
-    convocatoria = models.ForeignKey(
-        'convocatorias.Convocatoria',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='ponderaciones',
-    )
+    """Modelo legacy — mantenido para compatibilidad."""
     area = models.CharField(max_length=100)
     subject = models.CharField(max_length=200)
     question_count = models.IntegerField(default=1)
@@ -22,33 +14,22 @@ class Ponderacion(models.Model):
     class Meta:
         db_table = 'ponderaciones'
         ordering = ['area', 'order', 'subject']
-        unique_together = [['convocatoria', 'area', 'subject']]
+        unique_together = [['area', 'subject']]
         indexes = [
             models.Index(fields=['area', 'order']),
-            models.Index(fields=['convocatoria', 'area']),
         ]
 
     def __str__(self):
-        conv = f' [{self.convocatoria}]' if self.convocatoria_id else ''
-        return f'{self.area} - {self.subject} ({self.ponderation}){conv}'
+        return f'{self.area} - {self.subject} ({self.ponderation})'
 
 
 class PlantillaPonderacion(models.Model):
     """
-    Colección nombrada de pesos por asignatura, reutilizable entre convocatorias.
+    Colección nombrada de pesos por asignatura, reutilizable entre procesos.
 
     - area=null  → global, aparece en todas las áreas (ej: Modo Simple)
     - area=X     → específica de un área
-    - question_total es desnormalizado (suma de question_count de sus items)
     """
-
-    convocatoria = models.ForeignKey(
-        'convocatorias.Convocatoria',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='plantillas_ponderacion',
-    )
     name = models.CharField(max_length=200)
     area = models.CharField(max_length=100, blank=True, null=True)
     question_total = models.IntegerField(default=0)
@@ -60,7 +41,6 @@ class PlantillaPonderacion(models.Model):
         ordering = ['area', 'name']
         indexes = [
             models.Index(fields=['area']),
-            models.Index(fields=['convocatoria', 'area']),
         ]
 
     def update_question_total(self):
@@ -75,7 +55,6 @@ class PlantillaPonderacion(models.Model):
 
 class PlantillaItem(models.Model):
     """Una asignatura con su peso dentro de una PlantillaPonderacion."""
-
     plantilla = models.ForeignKey(
         PlantillaPonderacion,
         on_delete=models.CASCADE,

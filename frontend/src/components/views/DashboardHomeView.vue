@@ -2,10 +2,9 @@
 import { computed, onMounted } from 'vue'
 
 const props = defineProps({
-  history:      { type: Object, required: true },
-  convocatoria: { type: Object, required: true },
-  areas:        { type: Object, required: true },
-  currentUser:  { type: String, default: '' },
+  history:     { type: Object, required: true },
+  areas:       { type: Object, required: true },
+  currentUser: { type: String, default: '' },
 })
 
 const emit = defineEmits(['loadProcess', 'newProcess', 'openVerificador', 'openHistory'])
@@ -17,8 +16,7 @@ const recentProcesses = computed(() =>
     .slice(0, 5)
 )
 
-const convocatoriaActiva = computed(() => props.convocatoria.activeConvocatoria?.value ?? null)
-const areasList          = computed(() => props.areas.areas?.value ?? [])
+const areasList = computed(() => props.areas.areas?.value ?? [])
 
 const greeting = computed(() => {
   const h = new Date().getHours()
@@ -55,11 +53,8 @@ onMounted(() => {
         <p class="dash__greeting">{{ greeting }}<span v-if="currentUser">, {{ currentUser }}</span></p>
         <h1 class="dash__title">Dirección de Admisión — UNAP</h1>
       </div>
-      <div class="dash__meta" v-if="convocatoriaActiva">
-        <span class="dash__conv-badge" :class="convocatoriaActiva.status === 'active' ? 'badge--active' : 'badge--closed'">
-          {{ convocatoriaActiva.status === 'active' ? 'Activa' : 'Cerrada' }}
-        </span>
-        <span class="dash__conv-name">{{ convocatoriaActiva.name }}</span>
+      <div class="dash__meta" v-if="areasList.length">
+        <span class="dash__conv-badge badge--active">{{ areasList.length }} área(s)</span>
       </div>
     </div>
 
@@ -154,43 +149,30 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Convocatoria activa -->
+      <!-- Áreas configuradas -->
       <div class="dash-card">
         <div class="dash-card__header">
-          <h2 class="dash-card__title">Convocatoria activa</h2>
+          <h2 class="dash-card__title">Áreas configuradas</h2>
         </div>
 
-        <div v-if="!convocatoriaActiva" class="dash-empty">
+        <div v-if="!areasList.length" class="dash-empty">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
           </svg>
-          <p>Sin convocatoria configurada</p>
+          <p>Sin áreas configuradas</p>
         </div>
 
-        <div v-else class="conv-detail">
-          <div class="conv-detail__name">{{ convocatoriaActiva.name }}</div>
-          <div class="conv-detail__status">
-            <span :class="convocatoriaActiva.status === 'active' ? 'badge--active' : 'badge--closed'" class="dash__conv-badge">
-              {{ convocatoriaActiva.status === 'active' ? 'Activa' : 'Cerrada' }}
-            </span>
-          </div>
-
-          <div v-if="areasList.length" class="areas-list">
-            <div class="areas-list__label">Áreas configuradas</div>
-            <div
-              v-for="area in areasList"
-              :key="area.id ?? area.name"
-              class="area-row"
-            >
-              <span class="area-row__name">{{ area.name }}</span>
-              <div class="area-row__right">
-                <span class="area-row__q">{{ area.question_count }} pregs.</span>
-                <span class="area-row__vac">{{ area.vacantes ?? '—' }} vacantes</span>
-              </div>
+        <div v-else class="areas-list">
+          <div
+            v-for="area in areasList"
+            :key="area.id ?? area.name"
+            class="area-row"
+          >
+            <span class="area-row__name">{{ area.name }}</span>
+            <div class="area-row__right">
+              <span class="area-row__q">{{ area.question_count }} pregs.</span>
+              <span class="area-row__vac">{{ area.vacantes ?? '—' }} vacantes</span>
             </div>
-          </div>
-          <div v-else class="dash-empty dash-empty--sm">
-            Sin áreas configuradas
           </div>
         </div>
       </div>

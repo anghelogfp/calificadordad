@@ -147,6 +147,8 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
         <span v-if="expanded" class="sidebar-item__label">Verificador</span>
       </button>
 
+      <div class="sidebar-divider" />
+
       <!-- Backup -->
       <button
         type="button"

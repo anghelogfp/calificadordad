@@ -1,5 +1,5 @@
 <script setup>
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 import { ARCHIVE_COLUMNS } from '@/constants'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import FileUploader from '@/components/shared/FileUploader.vue'
@@ -24,18 +24,34 @@ const tableColumns = ARCHIVE_COLUMNS.map(col => ({
 
 function getRowClass(row) { return {} }
 
+// ── Confirmación inline ──────────────────────────────────────────────────────
+
+const pendingAction = ref(null)
+
 function confirmRemoveSelected() {
   const count = archives.totalSelected
   if (!count) return
-  if (confirm(`¿Eliminar ${count} registro(s) seleccionado(s)? Esta acción no se puede deshacer.`)) {
-    archives.removeSelected()
+  pendingAction.value = {
+    type: 'remove',
+    message: `¿Eliminar ${count} registro(s) seleccionado(s)? Esta acción no se puede deshacer.`,
   }
 }
 
 function confirmClearAll() {
-  if (confirm('¿Limpiar todos los registros? Esta acción no se puede deshacer.')) {
-    archives.clearAll()
+  pendingAction.value = {
+    type: 'clear',
+    message: '¿Limpiar todos los registros? Esta acción no se puede deshacer.',
   }
+}
+
+function executePending() {
+  if (pendingAction.value?.type === 'remove') archives.removeSelected()
+  if (pendingAction.value?.type === 'clear') archives.clearAll()
+  pendingAction.value = null
+}
+
+function cancelPending() {
+  pendingAction.value = null
 }
 </script>
 
@@ -85,6 +101,18 @@ function confirmClearAll() {
         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
       </svg>
       <span>{{ archives.importError }}</span>
+    </div>
+
+    <!-- Banner de confirmación inline -->
+    <div v-if="pendingAction" class="confirm-banner">
+      <svg viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+      </svg>
+      <span>{{ pendingAction.message }}</span>
+      <div class="confirm-banner__actions">
+        <button type="button" class="btn btn--ghost btn--sm" @click="cancelPending">Cancelar</button>
+        <button type="button" class="btn btn--danger btn--sm" @click="executePending">Confirmar</button>
+      </div>
     </div>
 
     <Toolbar
@@ -197,6 +225,20 @@ function confirmClearAll() {
     transform: translateY(0);
   }
 }
+
+/* Confirm banner */
+.confirm-banner {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  background: #fff8e1; border: 1px solid #f59e0b;
+  border-radius: var(--radius-lg);
+  font-size: 0.875rem; color: #92400e; flex-wrap: wrap;
+}
+.confirm-banner svg { width: 18px; height: 18px; flex-shrink: 0; color: #f59e0b; }
+.confirm-banner span { flex: 1; min-width: 200px; }
+.confirm-banner__actions { display: flex; gap: var(--space-2); }
+
+.btn--sm { padding: var(--space-1) var(--space-3); font-size: 0.8rem; }
 
 .alert {
   display: flex;

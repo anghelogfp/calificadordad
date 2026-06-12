@@ -3,10 +3,6 @@ import { useAuth } from '@/composables/useAuth'
 
 const auth = useAuth()
 
-const props = defineProps({
-  convocatoria: { type: Object, default: null },
-})
-
 const emit = defineEmits(['goHome'])
 </script>
 
@@ -21,14 +17,6 @@ const emit = defineEmits(['goHome'])
         <span class="brand-division">Dirección de Admisión</span>
         <span class="brand-sub">
           <span class="brand-system">Sistema de Calificación</span>
-          <template v-if="convocatoria">
-            <span class="brand-sep">·</span>
-            <span class="brand-conv">{{ convocatoria.name }}</span>
-            <span
-              class="brand-dot"
-              :class="convocatoria.status === 'active' ? 'brand-dot--active' : 'brand-dot--closed'"
-            />
-          </template>
         </span>
       </div>
     </div>

@@ -56,12 +56,6 @@ class ProcesoCalificacion(models.Model):
     """
     local_id = models.CharField(max_length=64, unique=True)
     name = models.CharField(max_length=200)
-    convocatoria = models.ForeignKey(
-        'convocatorias.Convocatoria',
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name='procesos',
-    )
     created_by = models.ForeignKey(
         User,
         on_delete=models.PROTECT,

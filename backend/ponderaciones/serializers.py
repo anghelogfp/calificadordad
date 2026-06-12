@@ -6,7 +6,7 @@ class PonderacionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ponderacion
         fields = [
-            'id', 'convocatoria', 'area', 'subject',
+            'id', 'area', 'subject',
             'question_count', 'ponderation', 'order',
             'created_at', 'updated_at',
         ]
@@ -26,7 +26,7 @@ class PlantillaPonderacionSerializer(serializers.ModelSerializer):
     class Meta:
         model = PlantillaPonderacion
         fields = [
-            'id', 'convocatoria', 'name', 'area',
+            'id', 'name', 'area',
             'question_total', 'items', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'question_total', 'created_at', 'updated_at']
@@ -38,7 +38,7 @@ class PlantillaPonderacionWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PlantillaPonderacion
-        fields = ['id', 'convocatoria', 'name', 'area', 'items']
+        fields = ['id', 'name', 'area', 'items']
         read_only_fields = ['id']
 
     def create(self, validated_data):

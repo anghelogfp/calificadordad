@@ -27,7 +27,6 @@ function plantillaFromApi(p) {
     id: p.id,
     name: p.name,
     area: p.area || null,
-    convocatoriaId: p.convocatoria || null,
     questionTotal: p.question_total,
     items: (p.items || []).map(itemFromApi),
   }
@@ -35,7 +34,7 @@ function plantillaFromApi(p) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function usePonderations(areaNames, activeConvocatoriaId) {
+export function usePonderations(areaNames) {
   const effectiveAreaNames = computed(() =>
     areaNames?.value?.length ? areaNames.value : ANSWER_KEY_AREAS
   )
@@ -141,7 +140,6 @@ export function usePonderations(areaNames, activeConvocatoriaId) {
         body: JSON.stringify({
           name: trimmed,
           area: area || null,
-          convocatoria: activeConvocatoriaId?.value || null,
         }),
       })
       if (!res.ok) { editorError.value = 'Error al crear la plantilla.'; return null }
@@ -314,7 +312,6 @@ export function usePonderations(areaNames, activeConvocatoriaId) {
 
   async function _seedDefaultsToApi() {
     const areas = effectiveAreaNames.value.length ? effectiveAreaNames.value : ANSWER_KEY_AREAS
-    const convocatoriaId = activeConvocatoriaId?.value || null
 
     const toCreate = []
 
@@ -328,7 +325,7 @@ export function usePonderations(areaNames, activeConvocatoriaId) {
           order: d.order,
         }))
       if (items.length) {
-        toCreate.push({ name: `UNAP \u2014 ${area}`, area, convocatoria: convocatoriaId, items })
+        toCreate.push({ name: `UNAP \u2014 ${area}`, area, items })
       }
     })
 
@@ -336,7 +333,6 @@ export function usePonderations(areaNames, activeConvocatoriaId) {
     toCreate.push({
       name: 'Modo Simple',
       area: null,
-      convocatoria: null,
       items: [{ subject: 'General', question_count: DEFAULT_DAT_FORMAT.answersLength, ponderation: '1', order: 1 }],
     })
 
@@ -423,7 +419,6 @@ export function usePonderations(areaNames, activeConvocatoriaId) {
         const payload = {
           name: p.name,
           area: p.area || null,
-          convocatoria: activeConvocatoriaId?.value || null,
           items: (p.items || []).map((i, idx) => ({
             subject: i.subject,
             question_count: i.questionCount,

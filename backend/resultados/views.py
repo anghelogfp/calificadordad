@@ -37,8 +37,6 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
         local_id = data.get('local_id', '').strip()
         name = data.get('name', '').strip()
         areas_payload = data.get('areas', {})
-        convocatoria_id = data.get('convocatoria_id') or None
-
         if not local_id:
             return Response({'detail': 'local_id es requerido.'}, status=status.HTTP_400_BAD_REQUEST)
         if not name:
@@ -49,7 +47,6 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                 local_id=local_id,
                 defaults={
                     'name': name,
-                    'convocatoria_id': convocatoria_id,
                     'created_by': request.user,
                 },
             )

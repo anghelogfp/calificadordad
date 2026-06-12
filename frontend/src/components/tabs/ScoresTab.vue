@@ -29,7 +29,7 @@ const savingName = ref(false)
 const saveNameInput = ref('')
 
 function handleSaveToHistory() {
-  saveNameInput.value = props.convocatoriaName || calification.activeProcessName || ''
+  saveNameInput.value = props.convocatoriaName || calification.processName || ''
   savingName.value = true
 }
 

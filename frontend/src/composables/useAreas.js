@@ -1,21 +1,16 @@
-import { ref, computed, watch } from 'vue'
-import { API_BASE_URL, ANSWER_KEY_AREAS } from '@/constants'
+import { ref, computed, onMounted } from 'vue'
+import { ANSWER_KEY_AREAS } from '@/constants'
 import { apiFetch } from '@/utils/apiFetch'
 
-/**
- * Composable para áreas dinámicas desde la API
- */
-export function useAreas(activeConvocatoria) {
-  // Fallback: áreas como objetos ligeros con defaults
-  const defaultAreas = ANSWER_KEY_AREAS.map((name, i) => ({
-    id: null,
-    name,
-    question_count: 60,
-    vacantes: 0,
-    order: i + 1,
-    convocatoria: null,
-  }))
+const defaultAreas = ANSWER_KEY_AREAS.map((name, i) => ({
+  id: null,
+  name,
+  question_count: 60,
+  vacantes: 0,
+  order: i + 1,
+}))
 
+export function useAreas() {
   const areas = ref([...defaultAreas])
   const loading = ref(false)
   const error = ref('')
@@ -36,20 +31,14 @@ export function useAreas(activeConvocatoria) {
     return areaByName.value.get(areaName)?.vacantes ?? 0
   }
 
-  async function fetchAreas(convocatoriaId) {
-    if (!convocatoriaId) return
+  async function fetchAreas() {
     try {
       loading.value = true
       error.value = ''
-      const res = await apiFetch(`/areas/?convocatoria=${convocatoriaId}`)
+      const res = await apiFetch('/areas/')
       if (!res.ok) throw new Error(res.statusText)
       const data = await res.json()
-      if (data.length > 0) {
-        areas.value = data
-      } else {
-        // Usar defaults si el servidor no tiene áreas para esta convocatoria
-        areas.value = [...defaultAreas]
-      }
+      areas.value = data.length > 0 ? data : [...defaultAreas]
     } catch (e) {
       error.value = e.message
       areas.value = [...defaultAreas]
@@ -59,7 +48,7 @@ export function useAreas(activeConvocatoria) {
   }
 
   async function createArea(data) {
-    const res = await apiFetch(`/areas/`, {
+    const res = await apiFetch('/areas/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -86,7 +75,6 @@ export function useAreas(activeConvocatoria) {
   async function updateVacantes(areaName, vacantes) {
     const area = areas.value.find((a) => a.name === areaName)
     if (!area?.id) {
-      // Fallback local
       const idx = areas.value.findIndex((a) => a.name === areaName)
       if (idx >= 0) areas.value[idx] = { ...areas.value[idx], vacantes }
       return
@@ -101,8 +89,7 @@ export function useAreas(activeConvocatoria) {
       const updated = await res.json()
       const idx = areas.value.findIndex((a) => a.id === area.id)
       if (idx >= 0) areas.value[idx] = updated
-    } catch (e) {
-      // Actualizar localmente aunque falle la API
+    } catch {
       const idx = areas.value.findIndex((a) => a.name === areaName)
       if (idx >= 0) areas.value[idx] = { ...areas.value[idx], vacantes }
     }
@@ -114,20 +101,7 @@ export function useAreas(activeConvocatoria) {
     areas.value = areas.value.filter((a) => a.id !== id)
   }
 
-  // Recargar áreas cuando cambia la convocatoria
-  if (activeConvocatoria) {
-    watch(
-      activeConvocatoria,
-      (conv) => {
-        if (conv?.id) {
-          fetchAreas(conv.id)
-        } else {
-          areas.value = [...defaultAreas]
-        }
-      },
-      { immediate: true }
-    )
-  }
+  onMounted(fetchAreas)
 
   return {
     areas,
