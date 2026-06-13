@@ -6,17 +6,18 @@ const user = ref(null)
 const loading = ref(false)
 const error = ref('')
 const initialized = ref(false)
+const initializing = ref(true)
 
 // Estado global reactivo compartido entre todas las instancias
 export function useAuth() {
   const isAuthenticated = computed(() => !!user.value)
 
   async function initialize() {
-    if (initialized.value) return
+    if (initialized.value) { initializing.value = false; return }
     initialized.value = true
 
     const access = tokenStorage.getAccess()
-    if (!access) return
+    if (!access) { initializing.value = false; return }
 
     try {
       const res = await fetch(`${API_BASE_URL}/auth/me/`, {
@@ -52,6 +53,8 @@ export function useAuth() {
     } catch {
       // Si el servidor no responde, limpiar tokens
       tokenStorage.clear()
+    } finally {
+      initializing.value = false
     }
   }
 
@@ -100,8 +103,11 @@ export function useAuth() {
     initialized.value = false
   }
 
-  // Registrar el handler de sesión expirada
+  // Registrar el handler de sesión expirada.
+  // Guard: si el usuario ya no está autenticado, ignorar (evita que 401s de fondo
+  // antes del login reseteen el estado de inicialización).
   setUnauthorizedHandler(() => {
+    if (!user.value) return
     tokenStorage.clear()
     user.value = null
     initialized.value = false
@@ -112,6 +118,7 @@ export function useAuth() {
     loading,
     error,
     isAuthenticated,
+    initializing,
     initialize,
     login,
     logout,

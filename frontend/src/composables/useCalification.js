@@ -43,15 +43,46 @@ export function useCalification(
   // PROCESO ACTIVO
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const activeProcess = useStorage(STORAGE_KEYS.ACTIVE_PROCESS, {
+  // Migration: strip large areas data from persisted metadata to prevent localStorage overflows
+  try {
+    const _raw = localStorage.getItem(STORAGE_KEYS.ACTIVE_PROCESS)
+    if (_raw) {
+      const _stored = JSON.parse(_raw)
+      if (_stored?.areas) {
+        const { areas: _ignored, ...meta } = _stored
+        localStorage.setItem(STORAGE_KEYS.ACTIVE_PROCESS, JSON.stringify(meta))
+      }
+    }
+  } catch {}
+
+  // Only metadata persists — areas/results live in memory only
+  const _processMeta = useStorage(STORAGE_KEYS.ACTIVE_PROCESS, {
     id: null,
     name: '',
     type: 'simulacro',
-    areas: {},
+  })
+  const _areasData = ref({})
+
+  // Composite proxy with same interface as the old useStorage ref
+  const activeProcess = computed({
+    get: () => ({
+      id: _processMeta.value.id,
+      name: _processMeta.value.name,
+      type: _processMeta.value.type,
+      areas: _areasData.value,
+    }),
+    set: (val) => {
+      _processMeta.value = {
+        id: val?.id ?? null,
+        name: val?.name ?? '',
+        type: val?.type ?? 'simulacro',
+      }
+      _areasData.value = val?.areas ?? {}
+    },
   })
 
-  const processName = ref(activeProcess.value.name || '')
-  const processType = ref(activeProcess.value.type || 'simulacro')
+  const processName = ref(_processMeta.value.name || '')
+  const processType = ref(_processMeta.value.type || 'simulacro')
 
   const calificationDisplayArea = ref(
     Object.keys(activeProcess.value.areas || {})[0] || null

@@ -260,7 +260,13 @@ onMounted(async () => {
 
 <template>
   <ToastContainer />
-  <LoginPage v-if="!auth.isAuthenticated.value" />
+
+  <!-- Verificando token — evita el flash del login al recargar -->
+  <div v-if="auth.initializing.value" class="auth-splash">
+    <div class="auth-splash__spinner"></div>
+  </div>
+
+  <LoginPage v-else-if="!auth.isAuthenticated.value" />
 
   <div v-else class="app-layout">
     <AppHeader
@@ -442,6 +448,27 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.auth-splash {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--unap-blue-900, #0a2a5e);
+}
+
+.auth-splash__spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255,255,255,0.2);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .app-layout {
   height: 100vh;
   overflow: hidden;
