@@ -122,6 +122,7 @@ export const STORAGE_KEYS = Object.freeze({
   HISTORY: 'calificador-historial',
   ACTIVE_PROCESS: 'calificador-proceso-activo',
   PLANTILLAS: 'calificador-plantillas',
+  CALIFICATION_CONFIG: 'calificador-calification-config',
 })
 
 // Formato DAT por defecto

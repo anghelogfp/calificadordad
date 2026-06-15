@@ -1,5 +1,5 @@
-import { computed } from 'vue'
-import { useStorage } from '@vueuse/core'
+import { computed, ref } from 'vue'
+import { useStorage, watchDebounced } from '@vueuse/core'
 import ExcelJS from 'exceljs'
 import { saveAs } from 'file-saver'
 import jsPDF from 'jspdf'
@@ -12,6 +12,7 @@ import {
   buildIdentifierObservation,
   parseIdentifierLine,
 } from '@/utils/parsers'
+import { apiFetch } from '@/utils/apiFetch'
 
 export { createIdentifierRow, buildIdentifierObservation }
 
@@ -39,6 +40,10 @@ export function useIdentifiers() {
   if (!Array.isArray(sources.value)) {
     sources.value = []
   }
+  const apiLoading = ref(false)
+  const apiSyncing = ref(false)
+  const apiReady = ref(false)
+  let skipNextApiSync = false
 
   // Computed
   const identifierHasData = computed(() => tableState.rows.value.length > 0)
@@ -72,6 +77,67 @@ export function useIdentifiers() {
     })
     return map
   })
+
+  async function initializeIdentifiers() {
+    apiLoading.value = true
+    try {
+      const [rowsRes, sourcesRes] = await Promise.all([
+        apiFetch('/identificadores/'),
+        apiFetch('/identifier-sources/'),
+      ])
+      if (!rowsRes.ok || !sourcesRes.ok) throw new Error('No se pudieron cargar los identificadores.')
+
+      const [rowsData, sourcesData] = await Promise.all([
+        rowsRes.json(),
+        sourcesRes.json(),
+      ])
+
+      apiReady.value = true
+      if (rowsData.length > 0 || sourcesData.length > 0) {
+        skipNextApiSync = true
+        tableState.setRows(rowsData)
+        sources.value = sourcesData
+      } else if (tableState.rows.value.length > 0 || sources.value.length > 0) {
+        await syncIdentifiersToApi()
+      }
+    } catch (error) {
+      console.warn('[identifiers] API no disponible, usando localStorage:', error)
+      apiReady.value = false
+    } finally {
+      apiLoading.value = false
+    }
+  }
+
+  async function syncIdentifiersToApi() {
+    if (!apiReady.value) return
+    apiSyncing.value = true
+    try {
+      const res = await apiFetch('/identificadores/bulk_replace/', {
+        method: 'POST',
+        body: JSON.stringify({
+          rows: tableState.rows.value,
+          sources: sources.value,
+        }),
+      })
+      if (!res.ok) throw new Error('No se pudieron guardar los identificadores.')
+    } catch (error) {
+      console.warn('[identifiers] No se pudo sincronizar con API:', error)
+    } finally {
+      apiSyncing.value = false
+    }
+  }
+
+  watchDebounced(
+    [tableState.rows, sources],
+    () => {
+      if (skipNextApiSync) {
+        skipNextApiSync = false
+        return
+      }
+      syncIdentifiersToApi()
+    },
+    { debounce: 800, deep: true },
+  )
 
   /**
    * Lee archivos de identificadores
@@ -261,6 +327,9 @@ export function useIdentifiers() {
 
     // Estado específico
     sources,
+    apiLoading,
+    apiSyncing,
+    apiReady,
     identifierHasData,
     observations,
     observationCount,
@@ -268,6 +337,8 @@ export function useIdentifiers() {
     identifierLookupByLitho,
 
     // Métodos específicos
+    initializeIdentifiers,
+    syncIdentifiersToApi,
     readIdentifierFiles,
     onIdentifierDrop,
     onIdentifierFileChange,

@@ -26,6 +26,12 @@ const MODAL_EMPTY = {
 
 const showModal = ref(false)
 const modalMode = ref('create') // 'create' | 'edit'
+const showPasswordModal = ref(false)
+const passwordTarget = ref(null)
+const newPassword = ref('')
+const newPasswordConfirm = ref('')
+const passwordError = ref('')
+const savingPassword = ref(false)
 
 const mainModalRef = ref(null)
 const passwordModalRef = ref(null)
@@ -104,13 +110,6 @@ async function submitForm() {
 }
 
 // ── Modal cambiar contraseña ────────────────────────────────────────────────
-
-const showPasswordModal = ref(false)
-const passwordTarget = ref(null)
-const newPassword = ref('')
-const newPasswordConfirm = ref('')
-const passwordError = ref('')
-const savingPassword = ref(false)
 
 function openPasswordModal(user) {
   passwordTarget.value = user

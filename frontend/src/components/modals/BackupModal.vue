@@ -15,6 +15,7 @@ useFocusTrap(modalRef, computed(() => props.show))
 function handleFileChange(e) {
   const file = e.target.files?.[0]
   if (file) props.backup.importSessionBackup(file)
+  e.target.value = ''
 }
 </script>
 
@@ -25,7 +26,7 @@ function handleFileChange(e) {
         <header class="modal__header">
           <div class="modal__title">
             <h2>Backup de Sesión</h2>
-            <p>Exporta o importa todos los datos cargados</p>
+            <p>Exporta o restaura los datos del usuario actual</p>
           </div>
           <button type="button" class="modal__close" @click="emit('close')">
             <svg viewBox="0 0 20 20" fill="currentColor">
@@ -44,9 +45,17 @@ function handleFileChange(e) {
             </div>
             <div class="section__content">
               <h3>Exportar sesión</h3>
-              <p>Descarga un archivo JSON con todos los datos: padrón, identificadores, respuestas, claves y ponderaciones.</p>
-              <button type="button" class="btn btn--primary" @click="backup.exportSessionBackup">
-                Exportar backup (.json)
+              <p>Descarga un JSON con los datos guardados en servidor: padrón, identificadores, respuestas, claves, ponderaciones, procesos y configuración.</p>
+              <div v-if="backup.exportError" class="alert alert--error">
+                {{ backup.exportError }}
+              </div>
+              <button
+                type="button"
+                class="btn btn--primary"
+                :disabled="backup.exportLoading"
+                @click="backup.exportSessionBackup"
+              >
+                {{ backup.exportLoading ? 'Exportando...' : 'Exportar backup (.json)' }}
               </button>
             </div>
           </div>
@@ -71,9 +80,9 @@ function handleFileChange(e) {
                 {{ backup.importError }}
               </div>
 
-              <label class="file-btn">
-                <input type="file" accept=".json" @change="handleFileChange" />
-                Seleccionar backup (.json)
+              <label class="file-btn" :class="{ 'is-disabled': backup.importLoading }">
+                <input type="file" accept=".json" :disabled="backup.importLoading" @change="handleFileChange" />
+                {{ backup.importLoading ? 'Importando...' : 'Seleccionar backup (.json)' }}
               </label>
             </div>
           </div>
@@ -89,9 +98,9 @@ function handleFileChange(e) {
             </div>
             <div class="section__content">
               <h3>Limpiar todos los datos</h3>
-              <p>Elimina permanentemente todos los datos del navegador. No se puede deshacer.</p>
+              <p>Limpia caché y preferencias locales de este navegador. Los datos guardados en servidor se mantienen.</p>
               <button type="button" class="btn btn--danger" @click="backup.clearAllData">
-                Limpiar todo y recargar
+                Limpiar navegador y recargar
               </button>
             </div>
           </div>
@@ -187,6 +196,10 @@ function handleFileChange(e) {
   background: var(--error-600); color: white;
 }
 .btn--danger:hover { background: var(--error-700); }
+.btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
 
 .file-btn {
   display: inline-flex; align-items: center; gap: var(--space-2);
@@ -199,6 +212,10 @@ function handleFileChange(e) {
 
 .file-btn input { display: none; }
 .file-btn:hover { background: var(--slate-200); }
+.file-btn.is-disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
 
 .alert {
   padding: var(--space-2) var(--space-3);

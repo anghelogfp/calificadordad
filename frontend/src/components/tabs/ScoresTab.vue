@@ -516,7 +516,7 @@ function handleExportIngresantesPdf() {
     </section>
 
     <!-- ── Tabla AGRUPADA por carrera (Convocatoria Real) ──────────────────── -->
-    <template v-if="calification.calificationHasResults && isRealMode">
+    <template v-else-if="calification.calificationHasResults && isRealMode">
       <div
         v-for="group in groupedResults"
         :key="group.programa"

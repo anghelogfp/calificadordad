@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import { useStorage } from '@vueuse/core'
+import { useStorage, watchDebounced } from '@vueuse/core'
 import ExcelJS from 'exceljs'
 import { saveAs } from 'file-saver'
 import jsPDF from 'jspdf'
@@ -15,6 +15,7 @@ import {
   buildAreaTipoKey,
 } from '@/utils/helpers'
 import { parseIdentifierLine, parseResponseLine, readLinesFromFile } from '@/utils/parsers'
+import { apiFetch } from '@/utils/apiFetch'
 
 /**
  * Crea una fila de clave de respuesta
@@ -91,6 +92,10 @@ export function useAnswerKeys(archiveRows) {
   if (!Array.isArray(sources.value)) {
     sources.value = []
   }
+  const apiLoading = ref(false)
+  const apiSyncing = ref(false)
+  const apiReady = ref(false)
+  let skipNextApiSync = false
 
   // Estado para formulario de importación
   const answerKeyArea = ref(ANSWER_KEY_AREAS[0])
@@ -139,6 +144,67 @@ export function useAnswerKeys(archiveRows) {
     })
     return map
   })
+
+  async function initializeAnswerKeys() {
+    apiLoading.value = true
+    try {
+      const [rowsRes, sourcesRes] = await Promise.all([
+        apiFetch('/answer-keys/'),
+        apiFetch('/answer-key-sources/'),
+      ])
+      if (!rowsRes.ok || !sourcesRes.ok) throw new Error('No se pudieron cargar las claves.')
+
+      const [rowsData, sourcesData] = await Promise.all([
+        rowsRes.json(),
+        sourcesRes.json(),
+      ])
+
+      apiReady.value = true
+      if (rowsData.length > 0 || sourcesData.length > 0) {
+        skipNextApiSync = true
+        tableState.setRows(rowsData)
+        sources.value = sourcesData
+      } else if (tableState.rows.value.length > 0 || sources.value.length > 0) {
+        await syncAnswerKeysToApi()
+      }
+    } catch (error) {
+      console.warn('[answerKeys] API no disponible, usando localStorage:', error)
+      apiReady.value = false
+    } finally {
+      apiLoading.value = false
+    }
+  }
+
+  async function syncAnswerKeysToApi() {
+    if (!apiReady.value) return
+    apiSyncing.value = true
+    try {
+      const res = await apiFetch('/answer-keys/bulk_replace/', {
+        method: 'POST',
+        body: JSON.stringify({
+          rows: tableState.rows.value,
+          sources: sources.value,
+        }),
+      })
+      if (!res.ok) throw new Error('No se pudieron guardar las claves.')
+    } catch (error) {
+      console.warn('[answerKeys] No se pudo sincronizar con API:', error)
+    } finally {
+      apiSyncing.value = false
+    }
+  }
+
+  watchDebounced(
+    [tableState.rows, sources],
+    () => {
+      if (skipNextApiSync) {
+        skipNextApiSync = false
+        return
+      }
+      syncAnswerKeysToApi()
+    },
+    { debounce: 800, deep: true },
+  )
 
   /**
    * Lee archivos de claves de respuestas
@@ -370,6 +436,9 @@ export function useAnswerKeys(archiveRows) {
 
     // Estado específico
     sources,
+    apiLoading,
+    apiSyncing,
+    apiReady,
     answerKeyArea,
     identificationFile,
     responsesFile,
@@ -384,6 +453,8 @@ export function useAnswerKeys(archiveRows) {
     answerKeyLookupByAreaTipo,
 
     // Métodos específicos
+    initializeAnswerKeys,
+    syncAnswerKeysToApi,
     readAnswerKeyFiles,
     onAnswerKeyIdentificationChange,
     onAnswerKeyResponsesChange,

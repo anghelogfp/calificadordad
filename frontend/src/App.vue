@@ -100,6 +100,9 @@ const calification = useCalification(
 const dashboard = useScoreDashboard(calification.calificationAllResults)
 const showDashboardPanel = ref(false)
 const showNuevoProcesoModal = ref(false)
+const appBootstrapping = ref(true)
+const authenticatedDataInitialized = ref(false)
+let authenticatedDataPromise = null
 
 // Responses vinculadas con identificadores (aula viene solo del identificador)
 const linkedResponsesCount = computed(() =>
@@ -247,28 +250,68 @@ function getStepDescription(key) {
 // LIFECYCLE
 // ═══════════════════════════════════════════════════════════════════════════
 
+async function initializeAuthenticatedData() {
+  if (authenticatedDataInitialized.value) return authenticatedDataPromise
+  if (authenticatedDataPromise) return authenticatedDataPromise
+
+  appBootstrapping.value = true
+  authenticatedDataPromise = (async () => {
+    localStorage.removeItem('calificador-plantillas')
+    localStorage.removeItem('calificador-historial')
+    await archives.initializeArchives()
+    await identifiers.initializeIdentifiers()
+    await responses.initializeResponses()
+    await answerKeys.initializeAnswerKeys()
+    await vacantesPrograma.initializeVacantesPrograma()
+    await calification.initializeCalificationConfig()
+    await ponderations.initializePonderations()
+    authenticatedDataInitialized.value = true
+  })()
+
+  try {
+    await authenticatedDataPromise
+  } finally {
+    appBootstrapping.value = false
+  }
+
+  return authenticatedDataPromise
+}
+
 onMounted(async () => {
   await auth.initialize()
   if (auth.isAuthenticated.value) {
-    // Limpiar localStorage legacy (ahora viven en la BD)
-    localStorage.removeItem('calificador-plantillas')
-    localStorage.removeItem('calificador-historial')
-    await ponderations.initializePonderations()
+    await initializeAuthenticatedData()
+  } else {
+    appBootstrapping.value = false
   }
 })
+
+watch(
+  () => auth.isAuthenticated.value,
+  async (isAuthenticated) => {
+    if (auth.initializing.value) return
+    if (isAuthenticated) {
+      await initializeAuthenticatedData()
+    } else {
+      authenticatedDataInitialized.value = false
+      authenticatedDataPromise = null
+      appBootstrapping.value = false
+    }
+  }
+)
 </script>
 
 <template>
   <ToastContainer />
 
   <!-- Verificando token — evita el flash del login al recargar -->
-  <div v-if="auth.initializing.value" class="auth-splash">
+  <div v-if="auth.initializing.value || appBootstrapping" key="auth-splash" class="auth-splash">
     <div class="auth-splash__spinner"></div>
   </div>
 
   <LoginPage v-else-if="!auth.isAuthenticated.value" />
 
-  <div v-else class="app-layout">
+  <div v-else key="app-layout" class="app-layout">
     <AppHeader
       @go-home="activeTab = 'dashboard'"
     />

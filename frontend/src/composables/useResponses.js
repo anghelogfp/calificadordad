@@ -1,5 +1,5 @@
-import { computed } from 'vue'
-import { useStorage } from '@vueuse/core'
+import { computed, ref } from 'vue'
+import { useStorage, watchDebounced } from '@vueuse/core'
 import ExcelJS from 'exceljs'
 import { saveAs } from 'file-saver'
 import jsPDF from 'jspdf'
@@ -12,6 +12,7 @@ import {
   buildResponseObservation,
   parseResponseLine,
 } from '@/utils/parsers'
+import { apiFetch } from '@/utils/apiFetch'
 
 export { createResponseRow, buildResponseObservation }
 
@@ -40,6 +41,10 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
   if (!Array.isArray(sources.value)) {
     sources.value = []
   }
+  const apiLoading = ref(false)
+  const apiSyncing = ref(false)
+  const apiReady = ref(false)
+  let skipNextApiSync = false
 
   // Computed
   const responsesHasData = computed(() => tableState.rows.value.length > 0)
@@ -66,6 +71,67 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
     })
     return map
   })
+
+  async function initializeResponses() {
+    apiLoading.value = true
+    try {
+      const [rowsRes, sourcesRes] = await Promise.all([
+        apiFetch('/respuestas/'),
+        apiFetch('/response-sources/'),
+      ])
+      if (!rowsRes.ok || !sourcesRes.ok) throw new Error('No se pudieron cargar las respuestas.')
+
+      const [rowsData, sourcesData] = await Promise.all([
+        rowsRes.json(),
+        sourcesRes.json(),
+      ])
+
+      apiReady.value = true
+      if (rowsData.length > 0 || sourcesData.length > 0) {
+        skipNextApiSync = true
+        tableState.setRows(rowsData)
+        sources.value = sourcesData
+      } else if (tableState.rows.value.length > 0 || sources.value.length > 0) {
+        await syncResponsesToApi()
+      }
+    } catch (error) {
+      console.warn('[responses] API no disponible, usando localStorage:', error)
+      apiReady.value = false
+    } finally {
+      apiLoading.value = false
+    }
+  }
+
+  async function syncResponsesToApi() {
+    if (!apiReady.value) return
+    apiSyncing.value = true
+    try {
+      const res = await apiFetch('/respuestas/bulk_replace/', {
+        method: 'POST',
+        body: JSON.stringify({
+          rows: tableState.rows.value,
+          sources: sources.value,
+        }),
+      })
+      if (!res.ok) throw new Error('No se pudieron guardar las respuestas.')
+    } catch (error) {
+      console.warn('[responses] No se pudo sincronizar con API:', error)
+    } finally {
+      apiSyncing.value = false
+    }
+  }
+
+  watchDebounced(
+    [tableState.rows, sources],
+    () => {
+      if (skipNextApiSync) {
+        skipNextApiSync = false
+        return
+      }
+      syncResponsesToApi()
+    },
+    { debounce: 800, deep: true },
+  )
 
   /**
    * Aplica datos de identificador a una fila de respuesta
@@ -281,6 +347,9 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
 
     // Estado específico
     sources,
+    apiLoading,
+    apiSyncing,
+    apiReady,
     responsesHasData,
     sourcesCount,
     observations,
@@ -288,6 +357,8 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
     responsesByDni,
 
     // Métodos específicos
+    initializeResponses,
+    syncResponsesToApi,
     applyIdentifierDataToResponseRow,
     readResponseFiles,
     onResponseDrop,

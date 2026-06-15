@@ -1,5 +1,5 @@
 import { ref, computed, watch } from 'vue'
-import { useStorage } from '@vueuse/core'
+import { useStorage, watchDebounced } from '@vueuse/core'
 import { STORAGE_KEYS, ANSWER_KEY_AREAS, API_BASE_URL, DEFAULT_DAT_FORMAT } from '@/constants'
 import { apiFetch } from '@/utils/apiFetch'
 import {
@@ -98,7 +98,11 @@ export function useCalification(
   const calificationError = ref('')
   const calificationSearch = ref('')
 
-  const calificationConfigStorage = useStorage('calificador-calification-config', {})
+  const calificationConfigStorage = useStorage(STORAGE_KEYS.CALIFICATION_CONFIG, {})
+  const calificationConfigApiLoading = ref(false)
+  const calificationConfigApiSyncing = ref(false)
+  const calificationConfigApiReady = ref(false)
+  let skipNextCalificationConfigSync = false
 
   function getConfigForArea(area) {
     const stored = calificationConfigStorage.value[area]
@@ -114,6 +118,74 @@ export function useCalification(
       calificationConfigStorage.value[area] = { correctValue: 10, incorrectValue: 0, blankValue: 2 }
     }
   }
+
+  async function initializeCalificationConfig() {
+    calificationConfigApiLoading.value = true
+    try {
+      const res = await apiFetch('/calification-configs/')
+      if (!res.ok) throw new Error('No se pudo cargar la configuración de calificación.')
+
+      const data = await res.json()
+      calificationConfigApiReady.value = true
+
+      if (data.length > 0) {
+        skipNextCalificationConfigSync = true
+        calificationConfigStorage.value = Object.fromEntries(
+          data.map((row) => [
+            row.area,
+            {
+              correctValue: Number(row.correctValue),
+              incorrectValue: Number(row.incorrectValue),
+              blankValue: Number(row.blankValue),
+            },
+          ]),
+        )
+      } else if (Object.keys(calificationConfigStorage.value || {}).length > 0) {
+        await syncCalificationConfigToApi()
+      }
+    } catch (error) {
+      console.warn('[calification] API no disponible para configuración, usando localStorage:', error)
+      calificationConfigApiReady.value = false
+    } finally {
+      calificationConfigApiLoading.value = false
+    }
+  }
+
+  async function syncCalificationConfigToApi() {
+    if (!calificationConfigApiReady.value) return
+
+    calificationConfigApiSyncing.value = true
+    try {
+      const configs = Object.entries(calificationConfigStorage.value || {}).map(([area, cfg]) => ({
+        area,
+        correctValue: cfg?.correctValue ?? 10,
+        incorrectValue: cfg?.incorrectValue ?? 0,
+        blankValue: cfg?.blankValue ?? 2,
+      }))
+
+      const res = await apiFetch('/calification-configs/bulk_replace/', {
+        method: 'POST',
+        body: JSON.stringify({ configs }),
+      })
+      if (!res.ok) throw new Error('No se pudo guardar la configuración de calificación.')
+    } catch (error) {
+      console.warn('[calification] No se pudo sincronizar configuración:', error)
+    } finally {
+      calificationConfigApiSyncing.value = false
+    }
+  }
+
+  watchDebounced(
+    calificationConfigStorage,
+    () => {
+      if (skipNextCalificationConfigSync) {
+        skipNextCalificationConfigSync = false
+        return
+      }
+      syncCalificationConfigToApi()
+    },
+    { debounce: 800, deep: true },
+  )
 
   const calificationCorrectValue = ref(10)
   const calificationIncorrectValue = ref(0)
@@ -672,12 +744,15 @@ export function useCalification(
           areas: proceso.areas,
         }),
       })
-    } catch { /* no crítico — el proceso ya está en localStorage */ }
+    } catch { /* no crítico para la UI actual; el usuario puede reintentar guardar desde historial */ }
   }
 
   return {
     // Modal state
     showCalificationModal,
+    calificationConfigApiLoading,
+    calificationConfigApiSyncing,
+    calificationConfigApiReady,
     calificationArea,
     calificationPlantillaId,
     calificationCorrectValue,
@@ -708,6 +783,8 @@ export function useCalification(
     programasForCurrentArea,
 
     // Methods
+    initializeCalificationConfig,
+    syncCalificationConfigToApi,
     openCalificationModal,
     closeCalificationModal,
     runCalification,

@@ -1,5 +1,5 @@
-import { reactive, computed } from 'vue'
-import { useStorage } from '@vueuse/core'
+import { reactive, computed, ref } from 'vue'
+import { watchDebounced } from '@vueuse/core'
 import ExcelJS from 'exceljs'
 import { saveAs } from 'file-saver'
 import { useTableState } from './useTableState'
@@ -9,6 +9,7 @@ import {
   ARCHIVE_KEY_ALIASES,
 } from '@/constants'
 import { generateId, normalize, normalizeArea } from '@/utils/helpers'
+import { apiFetch } from '@/utils/apiFetch'
 
 /**
  * Crea una fila de archivo (padrón)
@@ -78,6 +79,10 @@ export function useArchives() {
   })
 
   const lastFileName = reactive({ value: '' })
+  const apiLoading = ref(false)
+  const apiSyncing = ref(false)
+  const apiReady = ref(false)
+  let skipNextApiSync = false
 
   // Fila pendiente para agregar manualmente
   const pendingRow = reactive(createEmptyArchiveRow())
@@ -95,6 +100,55 @@ export function useArchives() {
     })
     return map
   })
+
+  async function initializeArchives() {
+    apiLoading.value = true
+    try {
+      const res = await apiFetch('/candidatos/')
+      if (!res.ok) throw new Error('No se pudo cargar el padrón.')
+      const data = await res.json()
+      apiReady.value = true
+      if (data.length > 0) {
+        skipNextApiSync = true
+        tableState.setRows(data)
+      } else if (tableState.rows.value.length > 0) {
+        await syncArchivesToApi()
+      }
+    } catch (error) {
+      console.warn('[archives] API no disponible, usando localStorage:', error)
+      apiReady.value = false
+    } finally {
+      apiLoading.value = false
+    }
+  }
+
+  async function syncArchivesToApi() {
+    if (!apiReady.value) return
+    apiSyncing.value = true
+    try {
+      const res = await apiFetch('/candidatos/bulk_replace/', {
+        method: 'POST',
+        body: JSON.stringify({ rows: tableState.rows.value }),
+      })
+      if (!res.ok) throw new Error('No se pudo guardar el padrón.')
+    } catch (error) {
+      console.warn('[archives] No se pudo sincronizar con API:', error)
+    } finally {
+      apiSyncing.value = false
+    }
+  }
+
+  watchDebounced(
+    tableState.rows,
+    () => {
+      if (skipNextApiSync) {
+        skipNextApiSync = false
+        return
+      }
+      syncArchivesToApi()
+    },
+    { debounce: 800, deep: true },
+  )
 
   /**
    * Lee un archivo Excel de padrón
@@ -241,8 +295,13 @@ export function useArchives() {
     archiveHasData,
     archiveByDni,
     lastFileName,
+    apiLoading,
+    apiSyncing,
+    apiReady,
 
     // Métodos específicos
+    initializeArchives,
+    syncArchivesToApi,
     readArchiveWorkbook,
     exportArchiveToExcel,
     onArchiveDrop,
