@@ -30,7 +30,8 @@ export function useCalification(
   answerKeyLookupByAreaTipo,
   areaNames,
   formatConfig,
-  vacantesPrograma
+  vacantesPrograma,
+  answerKeyFallbackByArea
 ) {
   const effectiveAreaNames = computed(() =>
     areaNames?.value?.length ? areaNames.value : ANSWER_KEY_AREAS
@@ -514,7 +515,8 @@ export function useCalification(
       const matchForArea = responseList
         .map((row) => {
           const key = buildAreaTipoKey(area, row.tipo, effectiveAreaNames.value)
-          const answer = key ? answerKeyLookupByAreaTipo.value.get(key) : undefined
+          const answer = (key ? answerKeyLookupByAreaTipo.value.get(key) : undefined)
+            ?? answerKeyFallbackByArea?.value?.get(normalizeArea(area, effectiveAreaNames.value))
           return { row, answer }
         })
         .find((item) => item.answer)

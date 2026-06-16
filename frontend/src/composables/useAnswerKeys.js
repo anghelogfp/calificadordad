@@ -145,6 +145,17 @@ export function useAnswerKeys(archiveRows) {
     return map
   })
 
+  // Fallback: primera clave por área (cuando no hay match por tipo)
+  const answerKeyFallbackByArea = computed(() => {
+    const map = new Map()
+    tableState.rows.value.forEach((row) => {
+      const area = normalizeArea(row.area)
+      if (!area || map.has(area)) return
+      map.set(area, row)
+    })
+    return map
+  })
+
   async function initializeAnswerKeys() {
     apiLoading.value = true
     try {
@@ -451,6 +462,7 @@ export function useAnswerKeys(archiveRows) {
     answerKeyAreaOptions,
     answerKeyLookupByMatch,
     answerKeyLookupByAreaTipo,
+    answerKeyFallbackByArea,
 
     // Métodos específicos
     initializeAnswerKeys,

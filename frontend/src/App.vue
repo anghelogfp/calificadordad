@@ -94,7 +94,8 @@ const calification = useCalification(
   answerKeys.answerKeyLookupByAreaTipo,
   areas.areaNames,
   datFormat.formatConfig,
-  vacantesPrograma.vacantesPrograma
+  vacantesPrograma.vacantesPrograma,
+  answerKeys.answerKeyFallbackByArea
 )
 
 const dashboard = useScoreDashboard(calification.calificationAllResults)
@@ -106,7 +107,7 @@ let authenticatedDataPromise = null
 
 // Responses vinculadas con identificadores (aula viene solo del identificador)
 const linkedResponsesCount = computed(() =>
-  responses.rows.value.filter(r => r.aula && r.aula !== '').length
+  responses.rows.value.filter(r => r.dni && r.dni !== '').length
 )
 
 const hasProcessData = computed(() =>

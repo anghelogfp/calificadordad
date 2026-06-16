@@ -17,7 +17,7 @@ const props = defineProps({
 })
 
 const matchPercent = computed(() => {
-  const total = props.responses.totalRows
+  const total = responses.totalRows
   if (!total) return 0
   return Math.round((props.linkedCount / total) * 100)
 })
