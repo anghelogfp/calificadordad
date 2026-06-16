@@ -16,7 +16,17 @@ export default defineConfig({
     hmr: false  // Deshabilitar HMR para compatibilidad
   },
   build: {
-    target: 'es2015'
+    target: 'es2015',
+    rolldownOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/vue') || id.includes('node_modules/@vueuse')) return 'vendor-vue'
+          if (id.includes('node_modules/radix-vue')) return 'vendor-ui'
+          if (id.includes('node_modules/exceljs') || id.includes('node_modules/file-saver')) return 'vendor-excel'
+          if (id.includes('node_modules/jspdf')) return 'vendor-pdf'
+        }
+      }
+    }
   },
   optimizeDeps: {
     include: ['vue']
