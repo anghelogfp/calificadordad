@@ -10,21 +10,52 @@ const props = defineProps({
   activeHistory: { type: Boolean, default: false },
   activeConfig: { type: Boolean, default: false },
   activeVerificador: { type: Boolean, default: false },
+  activeBackup: { type: Boolean, default: false },
   activeUsuarios: { type: Boolean, default: false },
   isStaff: { type: Boolean, default: false },
+  mobileOpen: { type: Boolean, default: false },
+  lastProcessTab: { type: String, default: '' },
 })
 
-const emit = defineEmits(['newProcess', 'openDashboard', 'openPonderations', 'openHistory', 'openConfig', 'openBackup', 'openVerificador', 'openUsuarios'])
+const emit = defineEmits(['newProcess', 'continueProcess', 'openDashboard', 'openPonderations', 'openHistory', 'openConfig', 'openBackup', 'openVerificador', 'openUsuarios', 'closeMobile'])
 
 // El proceso está activo cuando el tab es uno de los 5 pasos
 const PROCESS_TABS = ['archives', 'identifiers', 'responses', 'answer_keys', 'results']
 const activeProcess = computed(() => PROCESS_TABS.includes(props.activeTab))
 
+const STEP_LABELS = {
+  archives: 'Padrón',
+  identifiers: 'Identificadores',
+  responses: 'Respuestas',
+  answer_keys: 'Claves',
+  results: 'Resultados',
+}
+const continueLabel = computed(() => STEP_LABELS[props.lastProcessTab] || '')
+const showContinue = computed(() => !!props.lastProcessTab && !activeProcess.value)
+
 const expanded = useStorage('calificador-sidebar-expanded', true)
+
+function runAction(eventName) {
+  emit(eventName)
+  emit('closeMobile')
+}
 </script>
 
 <template>
-  <aside class="app-sidebar" :class="{ 'app-sidebar--collapsed': !expanded }">
+  <div
+    v-if="mobileOpen"
+    class="sidebar-mobile-backdrop"
+    aria-hidden="true"
+    @click="emit('closeMobile')"
+  ></div>
+
+  <aside
+    class="app-sidebar"
+    :class="{
+      'app-sidebar--collapsed': !expanded,
+      'app-sidebar--mobile-open': mobileOpen,
+    }"
+  >
 
     <!-- Toggle -->
     <button
@@ -41,19 +72,32 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
       </svg>
     </button>
 
-    <!-- Nuevo proceso -->
+    <!-- Nuevo proceso / Continuar -->
     <div class="sidebar-new">
       <button
         type="button"
         class="btn-new-process"
         :class="{ 'btn-new-process--active': activeProcess }"
-        @click="emit('newProcess')"
+        @click="runAction('newProcess')"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span v-if="expanded">Nuevo proceso</span>
-        <span v-if="!expanded" class="sidebar-tooltip">Nuevo proceso</span>
+        <span v-if="expanded || mobileOpen">Nuevo proceso</span>
+        <span v-if="!expanded && !mobileOpen" class="sidebar-tooltip">Nuevo proceso</span>
+      </button>
+
+      <button
+        v-if="showContinue"
+        type="button"
+        class="btn-continue-process"
+        @click="runAction('continueProcess')"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+          <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span v-if="expanded || mobileOpen">Continuar: {{ continueLabel }}</span>
+        <span v-if="!expanded && !mobileOpen" class="sidebar-tooltip">Continuar: {{ continueLabel }}</span>
       </button>
     </div>
 
@@ -64,7 +108,7 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
         type="button"
         class="sidebar-item"
         :class="{ 'sidebar-item--active': activeDashboard }"
-        @click="emit('openDashboard')"
+        @click="runAction('openDashboard')"
       >
         <span class="sidebar-item__icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -72,8 +116,8 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
             <polyline points="9 22 9 12 15 12 15 22" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </span>
-        <span v-if="expanded" class="sidebar-item__label">Inicio</span>
-        <span v-if="!expanded" class="sidebar-tooltip">Inicio</span>
+        <span v-if="expanded || mobileOpen" class="sidebar-item__label">Inicio</span>
+        <span v-if="!expanded && !mobileOpen" class="sidebar-tooltip">Inicio</span>
       </button>
 
       <!-- Ponderaciones -->
@@ -81,15 +125,32 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
         type="button"
         class="sidebar-item"
         :class="{ 'sidebar-item--active': activePonderations }"
-        @click="emit('openPonderations')"
+        @click="runAction('openPonderations')"
       >
         <span class="sidebar-item__icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </span>
-        <span v-if="expanded" class="sidebar-item__label">Ponderaciones</span>
-        <span v-if="!expanded" class="sidebar-tooltip">Ponderaciones</span>
+        <span v-if="expanded || mobileOpen" class="sidebar-item__label">Ponderaciones</span>
+        <span v-if="!expanded && !mobileOpen" class="sidebar-tooltip">Ponderaciones</span>
+      </button>
+
+      <!-- Configuración -->
+      <button
+        type="button"
+        class="sidebar-item"
+        :class="{ 'sidebar-item--active': activeConfig }"
+        @click="runAction('openConfig')"
+      >
+        <span class="sidebar-item__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.07 4.93A10 10 0 0 1 21 12a10 10 0 0 1-1.93 7.07M4.93 4.93A10 10 0 0 0 3 12a10 10 0 0 0 1.93 7.07M12 3v2M12 19v2M3 12H1M23 12h-2" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span v-if="expanded || mobileOpen" class="sidebar-item__label">Configuración</span>
+        <span v-if="!expanded && !mobileOpen" class="sidebar-tooltip">Configuración</span>
       </button>
 
       <div class="sidebar-divider" />
@@ -99,7 +160,7 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
         type="button"
         class="sidebar-item"
         :class="{ 'sidebar-item--active': activeHistory }"
-        @click="emit('openHistory')"
+        @click="runAction('openHistory')"
       >
         <span class="sidebar-item__icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -108,28 +169,11 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
           </svg>
           <span v-if="historyCount > 0" class="sidebar-badge">{{ historyCount > 99 ? '99+' : historyCount }}</span>
         </span>
-        <span v-if="expanded" class="sidebar-item__label">
+        <span v-if="expanded || mobileOpen" class="sidebar-item__label">
           Historial
           <span v-if="historyCount > 0" class="sidebar-item__count">{{ historyCount }}</span>
         </span>
-        <span v-if="!expanded" class="sidebar-tooltip">Historial{{ historyCount > 0 ? ` (${historyCount})` : '' }}</span>
-      </button>
-
-      <!-- Configuración -->
-      <button
-        type="button"
-        class="sidebar-item"
-        :class="{ 'sidebar-item--active': activeConfig }"
-        @click="emit('openConfig')"
-      >
-        <span class="sidebar-item__icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.07 4.93A10 10 0 0 1 21 12a10 10 0 0 1-1.93 7.07M4.93 4.93A10 10 0 0 0 3 12a10 10 0 0 0 1.93 7.07M12 3v2M12 19v2M3 12H1M23 12h-2" stroke-linecap="round"/>
-          </svg>
-        </span>
-        <span v-if="expanded" class="sidebar-item__label">Configuración</span>
-        <span v-if="!expanded" class="sidebar-tooltip">Configuración</span>
+        <span v-if="!expanded && !mobileOpen" class="sidebar-tooltip">Historial{{ historyCount > 0 ? ` (${historyCount})` : '' }}</span>
       </button>
 
       <!-- Verificador -->
@@ -137,7 +181,7 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
         type="button"
         class="sidebar-item"
         :class="{ 'sidebar-item--active': activeVerificador }"
-        @click="emit('openVerificador')"
+        @click="runAction('openVerificador')"
       >
         <span class="sidebar-item__icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -145,8 +189,8 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
             <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </span>
-        <span v-if="expanded" class="sidebar-item__label">Verificador</span>
-        <span v-if="!expanded" class="sidebar-tooltip">Verificador</span>
+        <span v-if="expanded || mobileOpen" class="sidebar-item__label">Verificador</span>
+        <span v-if="!expanded && !mobileOpen" class="sidebar-tooltip">Verificador</span>
       </button>
 
       <div class="sidebar-divider" />
@@ -155,15 +199,16 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
       <button
         type="button"
         class="sidebar-item"
-        @click="emit('openBackup')"
+        :class="{ 'sidebar-item--active': activeBackup }"
+        @click="runAction('openBackup')"
       >
         <span class="sidebar-item__icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </span>
-        <span v-if="expanded" class="sidebar-item__label">Backup</span>
-        <span v-if="!expanded" class="sidebar-tooltip">Backup</span>
+        <span v-if="expanded || mobileOpen" class="sidebar-item__label">Backup</span>
+        <span v-if="!expanded && !mobileOpen" class="sidebar-tooltip">Backup</span>
       </button>
 
       <!-- Usuarios (solo admin) -->
@@ -173,7 +218,7 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
           type="button"
           class="sidebar-item"
           :class="{ 'sidebar-item--active': activeUsuarios }"
-          @click="emit('openUsuarios')"
+          @click="runAction('openUsuarios')"
         >
           <span class="sidebar-item__icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -182,8 +227,8 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
               <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </span>
-          <span v-if="expanded" class="sidebar-item__label">Usuarios</span>
-          <span v-if="!expanded" class="sidebar-tooltip">Usuarios</span>
+          <span v-if="expanded || mobileOpen" class="sidebar-item__label">Usuarios</span>
+          <span v-if="!expanded && !mobileOpen" class="sidebar-tooltip">Usuarios</span>
         </button>
       </template>
     </nav>
@@ -244,6 +289,34 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
 
 .app-sidebar--collapsed .btn-new-process {
   padding: var(--space-2);
+}
+
+.btn-continue-process {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  background: none;
+  border: 1px solid var(--unap-blue-200);
+  border-radius: var(--radius-md);
+  color: var(--unap-blue-600);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.btn-continue-process:hover {
+  background: var(--unap-blue-50);
+  border-color: var(--unap-blue-400);
+}
+.app-sidebar--collapsed .btn-continue-process {
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
 }
 
 /* Toggle */
@@ -397,8 +470,51 @@ const expanded = useStorage('calificador-sidebar-expanded', true)
   padding: 0 var(--space-1);
 }
 
+.sidebar-mobile-backdrop {
+  display: none;
+}
+
 @media (max-width: 768px) {
+  .sidebar-mobile-backdrop {
+    position: fixed;
+    inset: 64px 0 0;
+    display: block;
+    background: rgba(15, 23, 42, 0.42);
+    z-index: calc(var(--z-header) - 1);
+  }
+
   .app-sidebar {
+    position: fixed;
+    top: 64px;
+    bottom: 0;
+    left: 0;
+    width: min(82vw, 300px);
+    display: flex;
+    z-index: var(--z-header);
+    box-shadow: var(--shadow-xl);
+    transform: translateX(-105%);
+    transition: transform 0.2s ease;
+  }
+
+  .app-sidebar--mobile-open {
+    transform: translateX(0);
+  }
+
+  .app-sidebar--collapsed {
+    width: min(82vw, 300px);
+  }
+
+  .app-sidebar--collapsed .sidebar-item {
+    justify-content: flex-start;
+    padding: var(--space-2) var(--space-3);
+    margin: 0 var(--space-2);
+  }
+
+  .app-sidebar--collapsed .btn-new-process {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .app-sidebar--collapsed .sidebar-tooltip {
     display: none;
   }
 }

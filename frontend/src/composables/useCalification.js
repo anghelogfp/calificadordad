@@ -2,6 +2,7 @@ import { ref, computed, watch } from 'vue'
 import { useStorage, watchDebounced } from '@vueuse/core'
 import { STORAGE_KEYS, ANSWER_KEY_AREAS, API_BASE_URL, DEFAULT_DAT_FORMAT } from '@/constants'
 import { apiFetch } from '@/utils/apiFetch'
+import { useToast } from '@/composables/useToast'
 import {
   normalize,
   normalizeArea,
@@ -33,6 +34,7 @@ export function useCalification(
   vacantesPrograma,
   answerKeyFallbackByArea
 ) {
+  const { showToast } = useToast()
   const effectiveAreaNames = computed(() =>
     areaNames?.value?.length ? areaNames.value : ANSWER_KEY_AREAS
   )
@@ -83,7 +85,10 @@ export function useCalification(
   })
 
   const processName = ref(_processMeta.value.name || '')
-  const processType = ref(_processMeta.value.type || 'simulacro')
+  const processType = computed({
+    get: () => _processMeta.value.type || 'simulacro',
+    set: (val) => { _processMeta.value = { ..._processMeta.value, type: val } },
+  })
 
   const calificationDisplayArea = ref(
     Object.keys(activeProcess.value.areas || {})[0] || null
@@ -270,8 +275,13 @@ export function useCalification(
       r => normalizeArea(r.area, effectiveAreaNames.value) === area
     )
 
+    // Simulacro sin columna área: si no hay candidatos con área, usar los sin área asignada
+    const unassignedCandidates = archiveRows.value.filter(r => !r.area?.trim())
+    const usingFallback = candidates.length === 0 && unassignedCandidates.length > 0
+    const effectiveCandidates = usingFallback ? unassignedCandidates : candidates
+
     // 2. Candidatos sin respuesta .dat
-    const withoutResponse = candidates.filter(c => {
+    const withoutResponse = effectiveCandidates.filter(c => {
       const dni = stripDigits(c.dni)
       return !responsesByDni.value.has(dni) || responsesByDni.value.get(dni).length === 0
     })
@@ -283,7 +293,7 @@ export function useCalification(
     // 4. Claves de respuesta para el área
     const hasAnswerKeys = answerKeyRows.value.some(
       k => normalizeArea(k.area, effectiveAreaNames.value) === area
-    )
+    ) || answerKeyRows.value.some(k => !k.area?.trim())
 
     // 5. Respuestas .dat sin DNI vinculado
     const unlinked = archiveRows.value.length > 0
@@ -294,16 +304,29 @@ export function useCalification(
       {
         key: 'candidates',
         label: 'Postulantes en el padrón',
-        value: candidates.length,
-        status: candidates.length > 0 ? 'ok' : 'error',
-        detail: candidates.length === 0 ? 'No hay postulantes para esta área en el padrón.' : null,
+        value: effectiveCandidates.length,
+        status: effectiveCandidates.length > 0 ? 'ok' : 'error',
+        detail: effectiveCandidates.length === 0 ? 'No hay postulantes para esta área en el padrón.' : null,
       },
+    ]
+
+    if (usingFallback) {
+      items.push({
+        key: 'noArea',
+        label: 'Sin área asignada',
+        value: unassignedCandidates.length,
+        status: 'warn',
+        detail: `El padrón no tiene columna de área — se incluirán los ${unassignedCandidates.length} postulante(s) sin área en el cálculo.`,
+      })
+    }
+
+    items.push(
       {
         key: 'answerKeys',
         label: 'Claves de respuestas',
         value: hasAnswerKeys ? 'Disponibles' : 'No encontradas',
-        status: hasAnswerKeys ? 'ok' : 'warn',
-        detail: !hasAnswerKeys ? 'No se encontraron claves para esta área. Las respuestas sin clave no se calificarán.' : null,
+        status: hasAnswerKeys ? 'ok' : 'error',
+        detail: !hasAnswerKeys ? 'No se encontraron claves para esta área. Sin claves no es posible calificar.' : null,
       },
       {
         key: 'withoutResponse',
@@ -323,7 +346,7 @@ export function useCalification(
           ? `${orphanResponses.length} respuesta(s) .dat no coinciden con ningún DNI del padrón.`
           : null,
       },
-    ]
+    )
 
     if (unlinked > 0) {
       items.push({
@@ -337,22 +360,22 @@ export function useCalification(
 
     // Modo Real: advertir si ningún candidato tiene programa asignado
     if (processType.value === 'real') {
-      const sinPrograma = candidates.filter(c => !c.programa?.trim()).length
+      const sinPrograma = effectiveCandidates.filter(c => !c.programa?.trim()).length
       if (sinPrograma > 0) {
         items.push({
           key: 'sinPrograma',
           label: 'Sin programa de estudios',
           value: sinPrograma,
-          status: sinPrograma === candidates.length ? 'warn' : 'warn',
-          detail: sinPrograma === candidates.length
+          status: 'warn',
+          detail: sinPrograma === effectiveCandidates.length
             ? 'Ningún postulante tiene programa asignado. El ranking será global.'
             : `${sinPrograma} postulante(s) sin programa. Se agruparán en "(Sin programa)".`,
         })
       }
     }
 
-    // Solo bloquea si no hay candidatos para el área — lo demás es informativo
-    const hasBlockers = candidates.length === 0
+    const hasBlockers = effectiveCandidates.length === 0 || !hasAnswerKeys
+    console.log('[preflight] área:', area, '| candidatos:', effectiveCandidates.length, '| hasAnswerKeys:', hasAnswerKeys, '| answerKeyRows:', answerKeyRows.value.length, '| hasBlockers:', hasBlockers)
     const hasWarnings = items.some(i => i.status === 'warn')
 
     return { items, hasBlockers, hasWarnings }
@@ -495,9 +518,16 @@ export function useCalification(
 
     const totalWeight = plan.reduce((acc, item) => acc + (Number(item.weight) || 0), 0)
 
-    const candidates = archiveRows.value.filter(
+    let candidates = archiveRows.value.filter(
       (row) => normalizeArea(row.area, effectiveAreaNames.value) === area
     )
+
+    // Simulacro sin columna área: si no hay candidatos con área, usar los sin área asignada
+    if (candidates.length === 0) {
+      const unassigned = archiveRows.value.filter(r => !r.area?.trim())
+      if (unassigned.length > 0) candidates = unassigned
+    }
+
     if (!candidates.length) {
       throw new Error('No hay postulantes registrados para el área seleccionada.')
     }
@@ -517,6 +547,7 @@ export function useCalification(
           const key = buildAreaTipoKey(area, row.tipo, effectiveAreaNames.value)
           const answer = (key ? answerKeyLookupByAreaTipo.value.get(key) : undefined)
             ?? answerKeyFallbackByArea?.value?.get(normalizeArea(area, effectiveAreaNames.value))
+            ?? answerKeyRows.value.find(k => !k.area?.trim())  // simulacro: clave sin área
           return { row, answer }
         })
         .find((item) => item.answer)
@@ -548,7 +579,7 @@ export function useCalification(
           contribution = blankValue * weight
         }
 
-        total += Math.round(contribution * 100) / 100
+        total += contribution
       }
 
       processedResults.push({
@@ -559,7 +590,7 @@ export function useCalification(
         nombres: candidate.nombres || '',
         area,
         programa: candidate.programa || '',
-        score: Math.round(total * 100) / 100,
+        score: Math.round(total * 1000) / 1000,
         position: 0,
         positionInPrograma: 0,
         isIngresante: false,
@@ -627,21 +658,28 @@ export function useCalification(
 
     const area = normalizeArea(calificationArea.value, effectiveAreaNames.value)
     const plantilla = ponderationsComposable.getPlantillaById(calificationPlantillaId.value)
-    if (!plantilla) { calificationError.value = 'Selecciona una plantilla de ponderación.'; return }
+    if (!plantilla) {
+      const msg = 'Selecciona una plantilla de ponderación.'
+      calificationError.value = msg
+      showToast(msg, 'error')
+      return
+    }
 
     const correctValue = Number(calificationCorrectValue.value)
     const incorrectValue = Number(calificationIncorrectValue.value)
     const blankValue = Number(calificationBlankValue.value)
 
-    if (!Number.isFinite(correctValue)) { calificationError.value = 'El valor para respuesta correcta no es válido.'; return }
-    if (!Number.isFinite(incorrectValue)) { calificationError.value = 'El valor para respuesta incorrecta no es válido.'; return }
-    if (!Number.isFinite(blankValue)) { calificationError.value = 'El valor para respuesta en blanco no es válido.'; return }
+    if (!Number.isFinite(correctValue)) { calificationError.value = 'El valor para respuesta correcta no es válido.'; showToast(calificationError.value, 'error'); return }
+    if (!Number.isFinite(incorrectValue)) { calificationError.value = 'El valor para respuesta incorrecta no es válido.'; showToast(calificationError.value, 'error'); return }
+    if (!Number.isFinite(blankValue)) { calificationError.value = 'El valor para respuesta en blanco no es válido.'; showToast(calificationError.value, 'error'); return }
 
     let areaResult
     try {
       areaResult = _calcForArea(area, plantilla, correctValue, incorrectValue, blankValue)
     } catch (e) {
-      calificationError.value = e.message
+      console.error('[runCalification] error:', e)
+      calificationError.value = e?.message || String(e)
+      showToast(calificationError.value, 'error', 8000)
       return
     }
 
@@ -682,33 +720,27 @@ export function useCalification(
   function runAllAreas() {
     calificationError.value = ''
 
-    const correctValue = Number(calificationCorrectValue.value)
-    const incorrectValue = Number(calificationIncorrectValue.value)
-    const blankValue = Number(calificationBlankValue.value)
-
-    if (!Number.isFinite(correctValue) || !Number.isFinite(incorrectValue) || !Number.isFinite(blankValue)) {
-      calificationError.value = 'Revisa los valores de calificación antes de continuar.'
-      return null
-    }
-
     const calculated = []
-    const skipped = []
+    const skippedDetails = []
     const newAreas = { ...activeProcess.value.areas }
 
     for (const areaName of effectiveAreaNames.value) {
       const area = normalizeArea(areaName, effectiveAreaNames.value)
       const available = ponderationsComposable.getPlantillasForCalification(area)
 
-      if (!available.length) { skipped.push(areaName); continue }
+      if (!available.length) {
+        skippedDetails.push({ area: areaName, reason: 'Sin plantilla configurada' })
+        continue
+      }
 
       const plantilla = available.find(p => p.questionTotal === effectiveAnswersLength.value) || available[0]
+      const { correctValue, incorrectValue, blankValue } = getConfigForArea(area)
 
       try {
         newAreas[area] = _calcForArea(area, plantilla, correctValue, incorrectValue, blankValue)
-        calificationConfigStorage.value[area] = { correctValue, incorrectValue, blankValue }
         calculated.push(areaName)
-      } catch {
-        skipped.push(areaName)
+      } catch (e) {
+        skippedDetails.push({ area: areaName, reason: e?.message || 'Error desconocido' })
       }
     }
 
@@ -731,14 +763,19 @@ export function useCalification(
     showCalificationModal.value = false
     _saveProcesoToApi()
 
-    return { calculated, skipped }
+    if (skippedDetails.length > 0) {
+      const detail = skippedDetails.map(s => `${s.area}: ${s.reason}`).join(' · ')
+      showToast(`Áreas no calculadas — ${detail}`, 'warning', 8000)
+    }
+
+    return { calculated, skipped: skippedDetails.map(s => s.area) }
   }
 
   async function _saveProcesoToApi() {
     const proceso = activeProcess.value
     if (!proceso?.id || !Object.keys(proceso.areas || {}).length) return
     try {
-      await apiFetch('/procesos/', {
+      const res = await apiFetch('/procesos/', {
         method: 'POST',
         body: JSON.stringify({
           local_id: proceso.id,
@@ -746,7 +783,10 @@ export function useCalification(
           areas: proceso.areas,
         }),
       })
-    } catch { /* no crítico para la UI actual; el usuario puede reintentar guardar desde historial */ }
+      if (!res.ok) throw new Error()
+    } catch {
+      showToast('No se pudo guardar el proceso en el historial. Intenta desde el botón "Guardar".', 'warning', 5000)
+    }
   }
 
   return {

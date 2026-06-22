@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 
@@ -26,7 +26,7 @@ function handleLoad(process) {
   emit('loadProcess', process)
 }
 
-const pendingDelete = defineModel('pendingDelete', { default: null })
+const pendingDelete = ref(null)
 
 function askDelete(id) { pendingDelete.value = id }
 function cancelDelete() { pendingDelete.value = null }

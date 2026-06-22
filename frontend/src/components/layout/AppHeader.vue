@@ -3,11 +3,29 @@ import { useAuth } from '@/composables/useAuth'
 
 const auth = useAuth()
 
-const emit = defineEmits(['goHome'])
+defineProps({
+  mobileMenuOpen: { type: Boolean, default: false },
+})
+
+const emit = defineEmits(['goHome', 'toggleMobileMenu'])
 </script>
 
 <template>
   <header class="app-header">
+    <button
+      type="button"
+      class="mobile-menu-btn"
+      :aria-label="mobileMenuOpen ? 'Cerrar menú' : 'Abrir menú'"
+      :aria-expanded="mobileMenuOpen"
+      @click="emit('toggleMobileMenu')"
+    >
+      <svg v-if="!mobileMenuOpen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M4 6h16M4 12h16M4 18h16" stroke-linecap="round"/>
+      </svg>
+      <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/>
+      </svg>
+    </button>
 
     <!-- Marca institucional -->
     <button type="button" class="header-brand" aria-label="Ir al inicio" @click="emit('goHome')">
@@ -62,6 +80,25 @@ const emit = defineEmits(['goHome'])
   bottom: 0; left: 0; right: 0;
   height: 2px;
   background: linear-gradient(90deg, transparent, var(--unap-gold-400), transparent);
+}
+
+.mobile-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.08);
+  color: white;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.mobile-menu-btn svg {
+  width: 20px;
+  height: 20px;
 }
 
 /* ── Marca ───────────────────────────────────────────────────────────────────── */
@@ -216,9 +253,21 @@ const emit = defineEmits(['goHome'])
 .logout-btn:hover { background: rgba(239,68,68,0.45); color: white; }
 
 @media (max-width: 768px) {
+  .app-header {
+    height: 64px;
+    padding: 0 var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .mobile-menu-btn { display: inline-flex; }
   .brand-university { font-size: 0.82rem; }
   .brand-division   { display: none; }
   .brand-conv       { max-width: 120px; }
   .user-name        { display: none; }
+
+  .brand-logo {
+    width: 40px;
+    height: 40px;
+  }
 }
 </style>

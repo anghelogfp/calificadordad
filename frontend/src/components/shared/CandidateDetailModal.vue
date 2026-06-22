@@ -7,7 +7,7 @@ import { useFocusTrap } from '@/composables/useFocusTrap'
 
 const props = defineProps({
   candidate: { type: Object, required: true },
-  summary:   { type: Object, required: true },
+  summary:   { type: Object, default: null },
   convocatoriaName: { type: String, default: '' },
   currentUser: { type: String, default: '' },
 })
@@ -19,7 +19,7 @@ useFocusTrap(modalRef, ref(true))
 
 // ── Plan de preguntas (materia + peso por índice) ─────────────────────────────
 const questionPlan = computed(() =>
-  buildQuestionPlan(props.summary.plantillaSnapshot || [])
+  buildQuestionPlan(props.summary?.plantillaSnapshot || [])
 )
 
 // ── Detalle pregunta × pregunta ───────────────────────────────────────────────
@@ -27,9 +27,9 @@ const rows = computed(() => {
   const plan = questionPlan.value
   const candidateAnswers = (props.candidate.answersRaw || '').toUpperCase()
   const correctAnswers   = (props.candidate.correctAnswersRaw || '').toUpperCase()
-  const correctVal   = Number(props.summary.correctValue ?? 10)
-  const incorrectVal = Number(props.summary.incorrectValue ?? 0)
-  const blankVal     = Number(props.summary.blankValue ?? 2)
+  const correctVal   = Number(props.summary?.correctValue ?? 10)
+  const incorrectVal = Number(props.summary?.incorrectValue ?? 0)
+  const blankVal     = Number(props.summary?.blankValue ?? 2)
 
   let acum = 0
   return plan.map((item, i) => {

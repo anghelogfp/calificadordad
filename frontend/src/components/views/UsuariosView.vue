@@ -179,67 +179,69 @@ async function handleToggleActivo(user) {
 
       <div v-if="loading" class="empty-msg">Cargando usuarios…</div>
 
-      <table v-else class="users-table">
-        <thead>
-          <tr>
-            <th>Usuario</th>
-            <th>Nombre</th>
-            <th>Email</th>
-            <th>Rol</th>
-            <th>Estado</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="user in users" :key="user.id" :class="{ 'row--inactive': !user.is_active }">
-            <td class="cell-username">{{ user.username }}</td>
-            <td>{{ [user.first_name, user.last_name].filter(Boolean).join(' ') || '—' }}</td>
-            <td>{{ user.email || '—' }}</td>
-            <td>
-              <span class="badge" :class="user.is_staff ? 'badge--admin' : 'badge--operator'">
-                {{ user.is_staff ? 'Admin' : 'Operador' }}
-              </span>
-            </td>
-            <td>
-              <span class="badge" :class="user.is_active ? 'badge--active' : 'badge--inactive'">
-                {{ user.is_active ? 'Activo' : 'Inactivo' }}
-              </span>
-            </td>
-            <td>
-              <div class="actions">
-                <button type="button" class="btn-icon" title="Editar" aria-label="Editar usuario" @click="openEdit(user)">
-                  <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
-                    <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
-                  </svg>
-                </button>
-                <button type="button" class="btn-icon" title="Cambiar contraseña" aria-label="Cambiar contraseña" @click="openPasswordModal(user)">
-                  <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
-                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  class="btn-icon"
-                  :title="user.is_active ? 'Desactivar usuario' : 'Activar usuario'"
-                  :aria-label="user.is_active ? 'Desactivar usuario' : 'Activar usuario'"
-                  :class="user.is_active ? 'btn-icon--danger' : 'btn-icon--success'"
-                  @click="handleToggleActivo(user)"
-                >
-                  <svg v-if="user.is_active" viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
-                    <path fill-rule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524L13.477 14.89zm1.414-1.414L6.524 5.11A6 6 0 0114.89 13.476zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clip-rule="evenodd"/>
-                  </svg>
-                  <svg v-else viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                  </svg>
-                </button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="users.length === 0">
-            <td colspan="6" class="empty-row">No hay usuarios registrados.</td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-else class="users-table-wrap">
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Nombre</th>
+              <th>Email</th>
+              <th>Rol</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="user in users" :key="user.id" :class="{ 'row--inactive': !user.is_active }">
+              <td class="cell-username">{{ user.username }}</td>
+              <td>{{ [user.first_name, user.last_name].filter(Boolean).join(' ') || '—' }}</td>
+              <td>{{ user.email || '—' }}</td>
+              <td>
+                <span class="badge" :class="user.is_staff ? 'badge--admin' : 'badge--operator'">
+                  {{ user.is_staff ? 'Admin' : 'Operador' }}
+                </span>
+              </td>
+              <td>
+                <span class="badge" :class="user.is_active ? 'badge--active' : 'badge--inactive'">
+                  {{ user.is_active ? 'Activo' : 'Inactivo' }}
+                </span>
+              </td>
+              <td>
+                <div class="actions">
+                  <button type="button" class="btn-icon" title="Editar" aria-label="Editar usuario" @click="openEdit(user)">
+                    <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
+                    </svg>
+                  </button>
+                  <button type="button" class="btn-icon" title="Cambiar contraseña" aria-label="Cambiar contraseña" @click="openPasswordModal(user)">
+                    <svg viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
+                      <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-icon"
+                    :title="user.is_active ? 'Desactivar usuario' : 'Activar usuario'"
+                    :aria-label="user.is_active ? 'Desactivar usuario' : 'Activar usuario'"
+                    :class="user.is_active ? 'btn-icon--danger' : 'btn-icon--success'"
+                    @click="handleToggleActivo(user)"
+                  >
+                    <svg v-if="user.is_active" viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
+                      <path fill-rule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524L13.477 14.89zm1.414-1.414L6.524 5.11A6 6 0 0114.89 13.476zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clip-rule="evenodd"/>
+                    </svg>
+                    <svg v-else viewBox="0 0 20 20" fill="currentColor" width="15" height="15">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                    </svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="users.length === 0">
+              <td colspan="6" class="empty-row">No hay usuarios registrados.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- ── Modal crear / editar ─────────────────────────────────────────── -->
@@ -383,8 +385,15 @@ async function handleToggleActivo(user) {
 .card-desc { font-size: 0.82rem; color: var(--slate-500); margin: 4px 0 0; }
 
 /* Table */
+.users-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .users-table {
   width: 100%;
+  min-width: 590px;
   border-collapse: collapse;
   font-size: 0.85rem;
 }

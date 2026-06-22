@@ -620,7 +620,7 @@ function handleExportIngresantesPdf() {
   <CandidateDetailModal
     v-if="detailCandidate"
     :candidate="detailCandidate"
-    :summary="calification.calificationSummary"
+    :summary="calification.activeProcess?.areas?.[detailCandidate.area]?.summary ?? null"
     :convocatoria-name="convocatoriaName"
     @close="closeDetail"
   />

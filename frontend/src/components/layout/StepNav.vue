@@ -85,6 +85,9 @@ const progressPercent = computed(() => {
         </button>
       </div>
     </div>
+    <div class="step-nav-hint" aria-hidden="true">
+      Desliza para ver más pasos
+    </div>
 
     <!-- Barra de progreso global — siempre full-width, fuera del scroll -->
     <div class="progress-wrap">
@@ -110,6 +113,7 @@ const progressPercent = computed(() => {
 }
 
 .step-nav-scroll {
+  position: relative;
   overflow-x: auto;
   /* Ocultar scrollbar visualmente pero mantener funcionalidad */
   scrollbar-width: none;
@@ -123,6 +127,10 @@ const progressPercent = computed(() => {
   align-items: stretch;
   gap: 0;
   min-width: max-content;
+}
+
+.step-nav-hint {
+  display: none;
 }
 
 .step-item {
@@ -283,6 +291,39 @@ const progressPercent = computed(() => {
 }
 
 @media (max-width: 768px) {
+  .step-nav {
+    position: relative;
+  }
+
+  .step-nav-scroll {
+    scrollbar-width: thin;
+    padding-bottom: 2px;
+  }
+
+  .step-nav-scroll::-webkit-scrollbar {
+    display: block;
+    height: 4px;
+  }
+
+  .step-nav::after {
+    content: '';
+    position: absolute;
+    top: var(--space-3);
+    right: 0;
+    width: 34px;
+    height: 76px;
+    background: linear-gradient(90deg, rgba(255,255,255,0), white);
+    pointer-events: none;
+  }
+
+  .step-nav-hint {
+    display: block;
+    margin-top: var(--space-1);
+    font-size: 0.68rem;
+    color: var(--slate-400);
+    text-align: right;
+  }
+
   .step-nav-track {
     gap: 0;
   }

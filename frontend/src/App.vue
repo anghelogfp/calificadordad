@@ -38,7 +38,6 @@ import PonderationsTab from '@/components/tabs/PonderationsTab.vue'
 
 // Modals & Panels
 import CalificationModal from '@/components/modals/CalificationModal.vue'
-import BackupModal from '@/components/modals/BackupModal.vue'
 import NuevoProcesoModal from '@/components/modals/NuevoProcesoModal.vue'
 import DashboardPanel from '@/components/panels/DashboardPanel.vue'
 
@@ -48,6 +47,7 @@ import HistoryView from '@/components/views/HistoryView.vue'
 import ConfigView from '@/components/views/ConfigView.vue'
 import VerificadorView from '@/components/views/VerificadorView.vue'
 import UsuariosView from '@/components/views/UsuariosView.vue'
+import BackupView from '@/components/views/BackupView.vue'
 import ToastContainer from '@/components/shared/ToastContainer.vue'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -64,6 +64,12 @@ const answerKeySubTab = useStorage('calificador-claves-subtab', ANSWER_KEY_SUBTA
 // Vistas del sidebar — history y config renderizan en el área central sin StepNav
 const PROCESS_TABS = [TAB_KEYS.ARCHIVES, TAB_KEYS.IDENTIFIERS, TAB_KEYS.RESPONSES, TAB_KEYS.ANSWER_KEYS, TAB_KEYS.RESULTS]
 const showStepNav = computed(() => PROCESS_TABS.includes(activeTab.value))
+
+// Último paso del stepper visitado — permite volver desde vistas secundarias
+const lastStepperTab = useStorage('calificador-last-stepper-tab', '')
+watch(activeTab, (tab) => {
+  if (PROCESS_TABS.includes(tab)) lastStepperTab.value = tab
+}, { immediate: true })
 
 // ═══════════════════════════════════════════════════════════════════════════
 // COMPOSABLES
@@ -101,6 +107,7 @@ const calification = useCalification(
 const dashboard = useScoreDashboard(calification.calificationAllResults)
 const showDashboardPanel = ref(false)
 const showNuevoProcesoModal = ref(false)
+const mobileMenuOpen = ref(false)
 const appBootstrapping = ref(true)
 const authenticatedDataInitialized = ref(false)
 let authenticatedDataPromise = null
@@ -149,6 +156,10 @@ watch(
   },
   { deep: true }
 )
+
+watch(activeTab, () => {
+  mobileMenuOpen.value = false
+})
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HISTORIAL
@@ -314,7 +325,9 @@ watch(
 
   <div v-else key="app-layout" class="app-layout">
     <AppHeader
-      @go-home="activeTab = 'dashboard'"
+      :mobile-menu-open="mobileMenuOpen"
+      @go-home="activeTab = 'dashboard'; mobileMenuOpen = false"
+      @toggle-mobile-menu="mobileMenuOpen = !mobileMenuOpen"
     />
 
     <div class="app-body">
@@ -326,16 +339,21 @@ watch(
         :active-history="activeTab === 'history'"
         :active-config="activeTab === 'config'"
         :active-verificador="activeTab === 'verificador'"
+        :active-backup="activeTab === 'backup'"
         :active-usuarios="activeTab === 'usuarios'"
         :is-staff="auth.user.value?.is_staff ?? false"
+        :mobile-open="mobileMenuOpen"
+        :last-process-tab="lastStepperTab"
         @new-process="startNewProcess"
+        @continue-process="activeTab = lastStepperTab"
         @open-dashboard="activeTab = 'dashboard'"
         @open-ponderations="activeTab = TAB_KEYS.PONDERATIONS"
         @open-history="navigateToHistory"
         @open-config="activeTab = 'config'"
-        @open-backup="backup.showModal.value = true"
+        @open-backup="activeTab = 'backup'"
         @open-verificador="activeTab = 'verificador'"
         @open-usuarios="activeTab = 'usuarios'"
+        @close-mobile="mobileMenuOpen = false"
       />
 
       <div class="app-content">
@@ -370,7 +388,8 @@ watch(
               activeTab === 'history'    ? 'Historial de procesos' :
               activeTab === 'config'     ? 'Configuración' :
               activeTab === 'verificador' ? 'Verificador' :
-              activeTab === 'usuarios'   ? 'Usuarios' : activeTab
+              activeTab === 'usuarios'   ? 'Usuarios' :
+              activeTab === 'backup'     ? 'Backup' : activeTab
             }}</span>
           </nav>
 
@@ -379,10 +398,12 @@ watch(
             :history="history"
             :areas="areas"
             :current-user="auth.user.value?.username ?? ''"
+            :last-process-tab="lastStepperTab"
             @load-process="handleLoadProcess"
             @new-process="startNewProcess"
             @open-verificador="activeTab = 'verificador'"
             @open-history="navigateToHistory"
+            @continue-process="activeTab = lastStepperTab"
           />
 
           <ArchivesTab
@@ -427,6 +448,7 @@ watch(
             :ponderations="ponderations"
             :dashboard="dashboard"
             :exporter="exporter"
+            :vacantes-programa="vacantesPrograma"
             :convocatoria-name="calification.processName.value"
             :on-save-to-history="saveToHistory"
             @open-modal="calification.openCalificationModal"
@@ -456,6 +478,11 @@ watch(
           <UsuariosView
             v-else-if="activeTab === 'usuarios'"
           />
+
+          <BackupView
+            v-else-if="activeTab === 'backup'"
+            :backup="backup"
+          />
         </main>
       </div>
     </div>
@@ -474,12 +501,6 @@ watch(
       :calification="calification"
       :vacantes-programa="vacantesPrograma"
       @close="calification.closeCalificationModal"
-    />
-
-    <BackupModal
-      :show="backup.showModal.value"
-      :backup="backup"
-      @close="backup.showModal.value = false"
     />
 
     <DashboardPanel

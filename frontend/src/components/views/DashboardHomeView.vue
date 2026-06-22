@@ -2,12 +2,21 @@
 import { computed, onMounted, ref, watch } from 'vue'
 
 const props = defineProps({
-  history:     { type: Object, required: true },
-  areas:       { type: Object, required: true },
-  currentUser: { type: String, default: '' },
+  history:        { type: Object, required: true },
+  areas:          { type: Object, required: true },
+  currentUser:    { type: String, default: '' },
+  lastProcessTab: { type: String, default: '' },
 })
 
-const emit = defineEmits(['loadProcess', 'newProcess', 'openVerificador', 'openHistory'])
+const STEP_LABELS = {
+  archives: 'Padrón',
+  identifiers: 'Identificadores',
+  responses: 'Respuestas',
+  answer_keys: 'Claves',
+  results: 'Resultados',
+}
+
+const emit = defineEmits(['loadProcess', 'newProcess', 'openVerificador', 'openHistory', 'continueProcess'])
 
 // ── Datos ──────────────────────────────────────────────────────────────────────
 const recentProcesses = computed(() =>
@@ -122,6 +131,19 @@ onMounted(() => {
 
     <!-- ── Acciones rápidas ───────────────────────────────────────────────────── -->
     <div class="dash__actions">
+      <!-- Continuar proceso — aparece cuando hay un paso guardado -->
+      <button
+        v-if="lastProcessTab"
+        type="button"
+        class="quick-btn quick-btn--continue"
+        @click="emit('continueProcess')"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Continuar: {{ STEP_LABELS[lastProcessTab] || lastProcessTab }}
+      </button>
+
       <button type="button" class="quick-btn quick-btn--primary" @click="emit('newProcess')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round"/>
@@ -389,6 +411,17 @@ onMounted(() => {
 .quick-btn--sm {
   padding: var(--space-1) var(--space-3);
   font-size: 0.8rem;
+}
+
+.quick-btn--continue {
+  background: linear-gradient(135deg, var(--unap-blue-50) 0%, white 100%);
+  border-color: var(--unap-blue-300);
+  color: var(--unap-blue-700);
+  order: -1;
+}
+.quick-btn--continue:hover {
+  background: var(--unap-blue-50);
+  border-color: var(--unap-blue-500);
 }
 
 /* ── Cuerpo ──────────────────────────────────────────────────────────────────── */
