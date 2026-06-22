@@ -1,10 +1,11 @@
 <script setup>
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, watch } from 'vue'
 import { formatTimestamp } from '@/utils/helpers'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import CandidateDetailModal from '@/components/shared/CandidateDetailModal.vue'
+import PaginationBar from '@/components/shared/PaginationBar.vue'
 
 const props = defineProps({
   calification: { type: Object, required: true },
@@ -82,6 +83,14 @@ const hasIngresanteData = computed(() =>
   (currentAreaStats.value?.ingresantes ?? 0) > 0
 )
 
+const issueCount = computed(() => {
+  const summary = calification.calificationSummary
+  if (!summary) return 0
+  return (summary.missingResponses || 0) +
+    (summary.missingKeys || 0) +
+    (summary.unlinkedResponses || 0)
+})
+
 // ── Filtros locales ──────────────────────────────────────────────────────────
 
 const filterPrograma = ref('')
@@ -109,6 +118,37 @@ const localFilteredResults = computed(() => {
 })
 
 const hasActiveFilters = computed(() => filterPrograma.value || filterEstado.value !== 'todos')
+const resultsPage = ref(1)
+const resultsPageSize = ref(10)
+const groupPages = ref(new Map())
+
+const pagedResults = computed(() => {
+  const start = (resultsPage.value - 1) * resultsPageSize.value
+  return localFilteredResults.value.slice(start, start + resultsPageSize.value)
+})
+
+watch(
+  [localFilteredResults, () => calification.calificationDisplayArea, resultsPageSize],
+  () => {
+    resultsPage.value = 1
+    groupPages.value = new Map()
+  },
+)
+
+function getGroupPage(programa) {
+  return groupPages.value.get(programa) || 1
+}
+
+function setGroupPage(programa, page) {
+  const next = new Map(groupPages.value)
+  next.set(programa, page)
+  groupPages.value = next
+}
+
+function pagedGroupResults(group) {
+  const start = (getGroupPage(group.programa) - 1) * resultsPageSize.value
+  return group.results.slice(start, start + resultsPageSize.value)
+}
 
 function clearFilters() {
   filterPrograma.value = ''
@@ -142,6 +182,18 @@ const groupedResults = computed(() => {
 
 // ── Acordeón carreras (modo real) ────────────────────────────────────────────
 const collapsedCarreras = ref(new Set())
+const initializedCarreras = new Set()
+
+watch(groupedResults, (groups) => {
+  const next = new Set(collapsedCarreras.value)
+  groups.forEach(({ programa }) => {
+    if (!initializedCarreras.has(programa)) {
+      initializedCarreras.add(programa)
+      next.add(programa)
+    }
+  })
+  collapsedCarreras.value = next
+}, { immediate: true })
 
 function toggleCarrera(programa) {
   const s = new Set(collapsedCarreras.value)
@@ -151,6 +203,14 @@ function toggleCarrera(programa) {
 
 function isCollapsed(programa) {
   return collapsedCarreras.value.has(programa)
+}
+
+function collapseAllCarreras() {
+  collapsedCarreras.value = new Set(groupedResults.value.map((group) => group.programa))
+}
+
+function expandAllCarreras() {
+  collapsedCarreras.value = new Set()
 }
 
 // ── Detalle candidato ────────────────────────────────────────────────────────
@@ -193,6 +253,7 @@ function handleExportIngresantesPdf() {
 <template>
   <section class="tab-content">
     <StepInfoCard
+      v-if="!calification.calificationHasResults"
       title="Calificación Final"
       description="Genera los puntajes aplicando las ponderaciones a las respuestas de los postulantes."
       variant="gold"
@@ -212,6 +273,7 @@ function handleExportIngresantesPdf() {
 
     <!-- Toolbar -->
     <Toolbar
+      v-if="!calification.calificationHasResults"
       v-model:search-value="calification.calificationSearch"
       search-placeholder="Buscar por DNI o nombres"
       :total-rows="calification.calificationResults.length"
@@ -322,8 +384,136 @@ function handleExportIngresantesPdf() {
       </template>
     </Toolbar>
 
+    <!-- Cabecera operativa compacta -->
+    <section v-if="calification.calificationHasResults" class="results-shell">
+      <header class="results-header">
+        <div class="results-header__identity">
+          <span class="results-header__eyebrow">Resultados de calificación</span>
+          <h2>{{ calification.processName || 'Proceso sin nombre' }}</h2>
+          <div class="results-header__context">
+            <span>{{ calification.calificationDisplayArea }}</span>
+            <span>·</span>
+            <span>{{ isRealMode ? 'Convocatoria real' : 'Simulacro' }}</span>
+            <span>·</span>
+            <span>{{ formatTimestamp(calification.calificationSummary?.timestamp) }}</span>
+          </div>
+        </div>
+
+        <div class="results-header__actions">
+          <button type="button" class="btn btn--ghost" @click="openModal" :disabled="!calification.canCalify">
+            Recalcular
+          </button>
+          <button
+            v-if="onSaveToHistory && !savingName"
+            type="button"
+            class="btn btn--primary"
+            @click="handleSaveToHistory"
+          >
+            Guardar
+          </button>
+
+          <details class="action-menu">
+            <summary class="btn btn--ghost">Exportar <span aria-hidden="true">▾</span></summary>
+            <div class="action-menu__panel">
+              <button type="button" @click="handleExportExcel">Exportar Excel</button>
+              <button type="button" @click="handleExportPdf">Exportar PDF completo</button>
+              <button v-if="hasIngresanteData" type="button" @click="handleExportIngresantesPdf">PDF de ingresantes</button>
+            </div>
+          </details>
+
+          <details class="action-menu action-menu--right">
+            <summary class="btn btn--ghost btn--icon" aria-label="Más acciones">•••</summary>
+            <div class="action-menu__panel">
+              <button type="button" @click="emit('openDashboard')">Ver estadísticas completas</button>
+              <button type="button" @click="handleNewProcess">Iniciar nuevo proceso</button>
+              <button type="button" class="action-menu__danger" @click="handleReset">Limpiar resultados</button>
+            </div>
+          </details>
+        </div>
+      </header>
+
+      <div v-if="savingName" class="save-inline">
+        <label for="result-save-name">Nombre para el historial</label>
+        <input
+          id="result-save-name"
+          v-model="saveNameInput"
+          type="text"
+          class="save-name-input"
+          @keyup.enter="confirmSaveName"
+          @keyup.escape="cancelSaveName"
+          autofocus
+        />
+        <button type="button" class="btn btn--primary" @click="confirmSaveName">Confirmar</button>
+        <button type="button" class="btn btn--ghost" @click="cancelSaveName">Cancelar</button>
+      </div>
+
+      <nav v-if="calification.processAreas.length > 1" class="area-tabs area-tabs--compact" aria-label="Áreas calificadas">
+        <button
+          v-for="area in calification.processAreas"
+          :key="area"
+          type="button"
+          class="area-tab"
+          :class="{ 'area-tab--active': calification.calificationDisplayArea === area }"
+          @click="calification.switchDisplayArea(area)"
+        >
+          {{ area }}
+          <span class="area-tab__count">{{ calification.activeProcess?.areas?.[area]?.results?.length ?? 0 }}</span>
+        </button>
+      </nav>
+
+      <div class="summary-strip">
+        <div class="summary-item">
+          <strong>{{ calification.calificationSummary?.totalCandidates ?? 0 }}</strong>
+          <span>Postulantes</span>
+        </div>
+        <div class="summary-item summary-item--success" v-if="currentAreaStats">
+          <strong>{{ currentAreaStats.ingresantes }}</strong>
+          <span>Ingresantes</span>
+        </div>
+        <div class="summary-item" v-if="currentAreaStats">
+          <strong class="mono">{{ currentAreaStats.avg.toFixed(3) }}</strong>
+          <span>Promedio</span>
+        </div>
+        <div class="summary-item" :class="{ 'summary-item--warning': issueCount > 0 }">
+          <strong>{{ issueCount }}</strong>
+          <span>Observaciones</span>
+        </div>
+      </div>
+
+      <details class="calculation-details">
+        <summary>Detalles del cálculo</summary>
+        <div class="calculation-details__grid">
+          <span><strong>Puntaje máximo:</strong> {{ currentAreaStats?.max?.toFixed(3) ?? '—' }}</span>
+          <span><strong>Puntaje mínimo:</strong> {{ currentAreaStats?.min?.toFixed(3) ?? '—' }}</span>
+          <span><strong>Peso total:</strong> {{ calification.calificationSummary?.totalWeight?.toFixed(3) }}</span>
+          <span><strong>Preguntas:</strong> {{ calification.calificationSummary?.answersLength }}</span>
+          <span v-if="calification.calificationSummary?.missingResponses" class="meta-warn">Sin respuesta: {{ calification.calificationSummary.missingResponses }}</span>
+          <span v-if="calification.calificationSummary?.missingKeys" class="meta-warn">Sin clave: {{ calification.calificationSummary.missingKeys }}</span>
+          <span v-if="calification.calificationSummary?.unlinkedResponses" class="meta-warn">Sin DNI vinculado: {{ calification.calificationSummary.unlinkedResponses }}</span>
+        </div>
+      </details>
+
+      <div class="results-filters">
+        <div class="results-search">
+          <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M9 3a6 6 0 104.472 10.001l3.264 3.263a1 1 0 001.414-1.414l-3.263-3.264A6 6 0 009 3zm-4 6a4 4 0 118 0 4 4 0 01-8 0z" clip-rule="evenodd"/></svg>
+          <input v-model="calification.calificationSearch" type="search" placeholder="Buscar por DNI o nombre" />
+        </div>
+        <select v-model="filterPrograma" class="filter-select" aria-label="Filtrar por programa">
+          <option value="">Todos los programas</option>
+          <option v-for="prog in programasEnArea" :key="prog" :value="prog">{{ prog }}</option>
+        </select>
+        <div v-if="hasIngresanteData" class="filter-toggle" aria-label="Filtrar por estado">
+          <button type="button" class="filter-toggle__btn" :class="{ active: filterEstado === 'todos' }" @click="filterEstado = 'todos'">Todos</button>
+          <button type="button" class="filter-toggle__btn filter-toggle__btn--green" :class="{ active: filterEstado === 'ingresante' }" @click="filterEstado = 'ingresante'">Ingresantes</button>
+          <button type="button" class="filter-toggle__btn filter-toggle__btn--red" :class="{ active: filterEstado === 'no-ingresante' }" @click="filterEstado = 'no-ingresante'">No ingresantes</button>
+        </div>
+        <span class="results-count"><strong>{{ localFilteredResults.length }}</strong> de {{ calification.calificationResults.length }}</span>
+        <button v-if="hasActiveFilters" type="button" class="btn-clear-filters" @click="clearFilters">Limpiar</button>
+      </div>
+    </section>
+
     <!-- Nombre del proceso activo -->
-    <div v-if="calification.calificationHasResults" class="process-name-bar">
+    <div v-if="false" class="process-name-bar">
       <svg viewBox="0 0 20 20" fill="currentColor">
         <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v6a1 1 0 102 0V8z" clip-rule="evenodd"/>
       </svg>
@@ -344,7 +534,7 @@ function handleExportIngresantesPdf() {
     </div>
 
     <!-- Tabs de áreas calculadas -->
-    <div v-if="calification.processAreas.length > 1" class="area-tabs">
+    <div v-if="false" class="area-tabs">
       <button
         v-for="area in calification.processAreas"
         :key="area"
@@ -361,7 +551,7 @@ function handleExportIngresantesPdf() {
     </div>
 
     <!-- Panel de estadísticas del área actual -->
-    <div v-if="calification.calificationSummary" class="stats-panel">
+    <div v-if="false" class="stats-panel">
       <!-- Fila 1: stats numéricas -->
       <div class="stats-grid">
         <div class="stat-card">
@@ -418,7 +608,7 @@ function handleExportIngresantesPdf() {
     </div>
 
     <!-- Filtros -->
-    <div v-if="calification.calificationHasResults" class="filter-bar">
+    <div v-if="false" class="filter-bar">
       <div class="filter-bar__left">
         <!-- Filtro programa -->
         <div class="filter-group">
@@ -452,7 +642,7 @@ function handleExportIngresantesPdf() {
     </div>
 
     <!-- Badge modo real -->
-    <div v-if="isRealMode && calification.calificationHasResults" class="mode-badge">
+    <div v-if="false" class="mode-badge">
       <svg viewBox="0 0 20 20" fill="currentColor">
         <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v6a1 1 0 102 0V8z" clip-rule="evenodd"/>
       </svg>
@@ -477,7 +667,7 @@ function handleExportIngresantesPdf() {
         </thead>
         <tbody>
           <tr
-            v-for="row in localFilteredResults"
+            v-for="row in pagedResults"
             :key="row.id"
             :class="{ 'row--ingresante': row.isIngresante }"
           >
@@ -514,9 +704,20 @@ function handleExportIngresantesPdf() {
         </tbody>
       </table>
     </section>
+    <PaginationBar
+      v-if="calification.calificationHasResults && !isRealMode"
+      v-model:page="resultsPage"
+      v-model:page-size="resultsPageSize"
+      :total-items="localFilteredResults.length"
+    />
 
     <!-- ── Tabla AGRUPADA por carrera (Convocatoria Real) ──────────────────── -->
-    <template v-else-if="calification.calificationHasResults && isRealMode">
+    <template v-if="calification.calificationHasResults && isRealMode">
+      <div class="group-view-actions">
+        <span>{{ groupedResults.length }} programas</span>
+        <button type="button" @click="expandAllCarreras">Expandir todos</button>
+        <button type="button" @click="collapseAllCarreras">Colapsar todos</button>
+      </div>
       <div
         v-for="group in groupedResults"
         :key="group.programa"
@@ -554,7 +755,8 @@ function handleExportIngresantesPdf() {
         </div>
 
         <!-- Tabla de la carrera (colapsable) -->
-        <table v-show="!isCollapsed(group.programa)" class="carrera-table">
+        <div v-show="!isCollapsed(group.programa)" class="carrera-table-wrap">
+        <table class="carrera-table">
           <thead>
             <tr>
               <th class="col-number">#</th>
@@ -569,7 +771,7 @@ function handleExportIngresantesPdf() {
           </thead>
           <tbody>
             <tr
-              v-for="row in group.results"
+              v-for="row in pagedGroupResults(group)"
               :key="row.id"
               :class="{ 'row--ingresante': row.isIngresante }"
             >
@@ -604,6 +806,15 @@ function handleExportIngresantesPdf() {
             </tr>
           </tbody>
         </table>
+        </div>
+        <PaginationBar
+          v-if="!isCollapsed(group.programa)"
+          :page="getGroupPage(group.programa)"
+          :page-size="resultsPageSize"
+          :total-items="group.results.length"
+          @update:page="setGroupPage(group.programa, $event)"
+          @update:page-size="resultsPageSize = $event"
+        />
       </div>
     </template>
 
@@ -630,7 +841,120 @@ function handleExportIngresantesPdf() {
 .tab-content {
   display: flex; flex-direction: column; gap: var(--space-6);
   animation: slideUp 0.4s ease-out;
+  min-width: 0;
 }
+
+/* Compact results workspace */
+.results-shell {
+  display: flex; flex-direction: column; gap: var(--space-4);
+  background: white; border: 1px solid var(--slate-200);
+  border-radius: var(--radius-xl); padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+  min-width: 0; max-width: 100%;
+}
+.results-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--space-5);
+}
+.results-header__identity { min-width: 0; }
+.results-header__eyebrow {
+  display: block; margin-bottom: var(--space-1); color: var(--unap-blue-600);
+  font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.results-header h2 {
+  margin: 0; color: var(--slate-900); font-size: 1.35rem; line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.results-header__context {
+  display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2);
+  color: var(--slate-500); font-size: 0.8rem;
+}
+.results-header__actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.btn--icon { min-width: 40px; justify-content: center; letter-spacing: 0.08em; }
+
+.action-menu { position: relative; }
+.action-menu summary { list-style: none; cursor: pointer; user-select: none; }
+.action-menu summary::-webkit-details-marker { display: none; }
+.action-menu__panel {
+  position: absolute; z-index: 30; top: calc(100% + 6px); left: 0;
+  min-width: 220px; padding: var(--space-2); background: white;
+  border: 1px solid var(--slate-200); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+.action-menu--right .action-menu__panel { left: auto; right: 0; }
+.action-menu__panel button {
+  display: block; width: 100%; padding: var(--space-2) var(--space-3);
+  border: 0; border-radius: var(--radius-md); background: transparent;
+  color: var(--slate-700); text-align: left; font-size: 0.85rem; cursor: pointer;
+}
+.action-menu__panel button:hover { background: var(--slate-100); }
+.action-menu__panel .action-menu__danger { color: #dc2626; }
+.action-menu__panel .action-menu__danger:hover { background: #fef2f2; }
+
+.save-inline {
+  display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+  padding: var(--space-3); background: var(--unap-blue-50); border-radius: var(--radius-lg);
+}
+.save-inline label { font-size: 0.8rem; font-weight: 700; color: var(--unap-blue-800); }
+.save-inline .save-name-input { flex: 1; min-width: 220px; }
+
+.area-tabs--compact { padding: var(--space-1); border: 0; box-shadow: none; background: var(--slate-50); }
+.area-tabs--compact .area-tab { flex: 1; justify-content: center; }
+
+.summary-strip {
+  display: grid; grid-template-columns: repeat(4, minmax(110px, 1fr));
+  border: 1px solid var(--slate-200); border-radius: var(--radius-lg); overflow: hidden;
+}
+.summary-item {
+  display: flex; flex-direction: column; gap: 2px; padding: var(--space-3) var(--space-4);
+  border-right: 1px solid var(--slate-200); background: var(--slate-50);
+}
+.summary-item:last-child { border-right: 0; }
+.summary-item strong { color: var(--slate-900); font-size: 1.15rem; }
+.summary-item span { color: var(--slate-500); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
+.summary-item--success strong { color: #15803d; }
+.summary-item--warning { background: #fffbeb; }
+.summary-item--warning strong, .summary-item--warning span { color: #b45309; }
+
+.calculation-details { border-top: 1px solid var(--slate-100); padding-top: var(--space-3); }
+.calculation-details summary {
+  width: fit-content; color: var(--unap-blue-700); font-size: 0.82rem;
+  font-weight: 700; cursor: pointer;
+}
+.calculation-details__grid {
+  display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6);
+  margin-top: var(--space-3); padding: var(--space-3); background: var(--slate-50);
+  border-radius: var(--radius-lg); color: var(--slate-600); font-size: 0.82rem;
+}
+
+.results-filters {
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+  padding-top: var(--space-4); border-top: 1px solid var(--slate-200);
+}
+.results-search {
+  display: flex; align-items: center; gap: var(--space-2); flex: 1; min-width: 240px;
+  padding: 0 var(--space-3); border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md); background: var(--slate-50);
+}
+.results-search:focus-within { border-color: var(--unap-blue-400); background: white; }
+.results-search svg { width: 17px; color: var(--slate-400); }
+.results-search input {
+  width: 100%; padding: var(--space-2) 0; border: 0; outline: 0;
+  background: transparent; color: var(--slate-800); font-size: 0.875rem;
+}
+.results-filters .filter-select { min-width: 180px; max-width: 240px; }
+.results-count { margin-left: auto; color: var(--slate-500); font-size: 0.82rem; white-space: nowrap; }
+.results-count strong { color: var(--unap-blue-700); }
+
+.group-view-actions {
+  display: flex; justify-content: flex-end; align-items: center; gap: var(--space-3);
+  margin-top: calc(var(--space-2) * -1); color: var(--slate-500); font-size: 0.8rem;
+}
+.group-view-actions button {
+  border: 0; background: transparent; color: var(--unap-blue-700);
+  font-weight: 700; cursor: pointer;
+}
+.group-view-actions button:hover { text-decoration: underline; }
 
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(10px); }
@@ -809,9 +1133,11 @@ function handleExportIngresantesPdf() {
 /* Table */
 .table-wrapper {
   background: white; border: 1px solid var(--slate-200);
-  border-radius: var(--radius-xl); overflow: hidden; box-shadow: var(--shadow-md);
+  border-radius: var(--radius-xl); overflow-x: auto; overflow-y: hidden;
+  box-shadow: var(--shadow-md); width: 100%; max-width: 100%; min-width: 0;
+  overscroll-behavior-inline: contain; scrollbar-gutter: stable;
 }
-table { width: 100%; border-collapse: collapse; }
+table { width: 100%; min-width: max-content; border-collapse: collapse; }
 thead { background: linear-gradient(135deg, var(--unap-blue-700) 0%, var(--unap-blue-800) 100%); }
 th {
   padding: var(--space-4); text-align: left; font-weight: 600; color: white;
@@ -905,7 +1231,17 @@ tbody tr.row--ingresante:hover { background: #dcfce7; }
 .metric__label { font-size: 0.75rem; color: var(--slate-500); }
 
 @media (max-width: 768px) {
-  .table-wrapper { overflow-x: auto; }
+  .results-shell { padding: var(--space-4); }
+  .results-header { flex-direction: column; }
+  .results-header__actions { width: 100%; }
+  .results-header__actions > .btn { flex: 1; }
+  .summary-strip { grid-template-columns: repeat(2, 1fr); }
+  .summary-item:nth-child(2) { border-right: 0; }
+  .summary-item:nth-child(-n+2) { border-bottom: 1px solid var(--slate-200); }
+  .results-search { flex-basis: 100%; }
+  .results-filters .filter-select { flex: 1; max-width: none; }
+  .results-count { margin-left: 0; }
+  .area-tabs--compact .area-tab { flex: 1 1 140px; }
   table { min-width: 600px; }
   .stats-grid { grid-template-columns: repeat(3, 1fr); }
 }
@@ -999,6 +1335,11 @@ tbody tr.row--ingresante:hover { background: #dcfce7; }
 
 .carrera-table {
   width: 100%; border-collapse: collapse; font-size: 0.9rem;
+}
+.carrera-table-wrap {
+  width: 100%; max-width: 100%; min-width: 0;
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-inline: contain; scrollbar-gutter: stable;
 }
 .carrera-table thead {
   background: var(--slate-100);

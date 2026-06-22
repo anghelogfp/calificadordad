@@ -643,7 +643,8 @@ function formatFecha(iso) {
         </div>
 
         <!-- Datos candidato -->
-        <div class="candidate-fields">
+        <details class="candidate-fields candidate-fields--optional">
+          <summary>Datos opcionales del candidato</summary>
           <!-- Fila 1: Proceso + Tipo de prueba -->
           <div class="candidate-row candidate-row--top">
             <div class="cfield cfield--proceso">
@@ -687,7 +688,7 @@ function formatFecha(iso) {
               <input v-model="candidatoPosicion" type="text" maxlength="10" placeholder="Ej: 42" class="cfield__input cfield__input--center" />
             </div>
           </div>
-        </div>
+        </details>
       </div>
 
       <!-- Grids de respuestas -->
@@ -1028,6 +1029,15 @@ function formatFecha(iso) {
   border-top: 1px solid var(--slate-100);
 }
 
+.candidate-fields--optional > summary {
+  color: var(--unap-blue-700); font-size: 0.8rem; font-weight: 700;
+  cursor: pointer; list-style: none;
+}
+.candidate-fields--optional > summary::-webkit-details-marker { display: none; }
+.candidate-fields--optional > summary::after { content: '＋'; margin-left: var(--space-2); }
+.candidate-fields--optional[open] > summary { margin-bottom: var(--space-3); }
+.candidate-fields--optional[open] > summary::after { content: '−'; }
+
 .candidate-row {
   display: grid;
   gap: var(--space-3);
@@ -1035,13 +1045,13 @@ function formatFecha(iso) {
 }
 
 /* Fila 1: Proceso (3fr) + Tipo (1fr) */
-.candidate-row--top { grid-template-columns: 3fr 1fr; }
+.candidate-row--top { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); }
 
 /* Fila 2: Nombre (2fr) + DNI (1fr) + Aula (1fr) */
-.candidate-row--mid { grid-template-columns: 2fr 1fr 1fr; }
+.candidate-row--mid { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); }
 
 /* Fila 3: Área (1fr) + Programa (2fr) + Posición (1fr) */
-.candidate-row--bot { grid-template-columns: 1fr 2fr 1fr; }
+.candidate-row--bot { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr); }
 
 .cfield {
   display: flex;
@@ -1090,7 +1100,7 @@ function formatFecha(iso) {
 /* ── Grids ──────────────────────────────────────────────────────────────────── */
 .grids-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
 }
 
@@ -1172,8 +1182,8 @@ function formatFecha(iso) {
 /* ── Tabla detalle ──────────────────────────────────────────────────────────── */
 .detail-table-wrap {
   overflow-x: auto;
-  max-height: 400px;
-  overflow-y: auto;
+  max-height: none;
+  overflow-y: visible;
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-md);
 }

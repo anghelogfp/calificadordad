@@ -570,6 +570,10 @@ export function useCalification(
         const isCorrectCharValid = /^[A-E]$/.test(correctChar)
         const isResponseCharValid = /^[A-E]$/.test(responseChar)
 
+        if (!isCorrectCharValid) {
+          throw new Error(`La clave oficial contiene una respuesta inválida en la pregunta ${index + 1}.`)
+        }
+
         let contribution = 0
         if (isCorrectCharValid && isResponseCharValid && responseChar === correctChar) {
           contribution = correctValue * weight
@@ -733,7 +737,13 @@ export function useCalification(
         continue
       }
 
-      const plantilla = available.find(p => p.questionTotal === effectiveAnswersLength.value) || available[0]
+      // Respetar la plantilla elegida por el usuario si aplica a este área
+      const userSelected = calificationPlantillaId.value &&
+        available.find(p => p.id === calificationPlantillaId.value)
+      const readyFirst = available.find(
+        p => p.area === area && p.questionTotal === effectiveAnswersLength.value
+      ) || available.find(p => p.questionTotal === effectiveAnswersLength.value)
+      const plantilla = userSelected || readyFirst || available[0]
       const { correctValue, incorrectValue, blankValue } = getConfigForArea(area)
 
       try {

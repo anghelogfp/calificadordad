@@ -20,6 +20,7 @@ const props = defineProps({
   // Skeleton loader
   loading: { type: Boolean, default: false },
   skeletonRows: { type: Number, default: 8 },
+  pageSizeOptions: { type: Array, default: () => [10, 25, 50, 100] },
 })
 
 const emit = defineEmits([
@@ -29,6 +30,7 @@ const emit = defineEmits([
   'cancelEdit',
   'removeRow',
   'changePage',
+  'changePageSize',
 ])
 
 // Snapshot de valores originales para cancel
@@ -78,6 +80,14 @@ function getRowClasses(row) {
   }
 }
 
+function getColumnStyle(column) {
+  return {
+    width: column.width || undefined,
+    minWidth: column.minWidth || undefined,
+    maxWidth: column.maxWidth || undefined,
+  }
+}
+
 watch(() => props.isIndeterminate, (val) => {
   if (checkboxRef.value) checkboxRef.value.indeterminate = val
 }, { immediate: true })
@@ -124,7 +134,12 @@ function visiblePages(current, total) {
                 <span class="checkbox__mark"></span>
               </label>
             </th>
-            <th v-for="column in columns" :key="column.key">{{ column.label }}</th>
+            <th
+              v-for="column in columns"
+              :key="column.key"
+              :class="column.class"
+              :style="getColumnStyle(column)"
+            >{{ column.label }}</th>
             <th v-if="showActions" class="col-actions">Acciones</th>
           </tr>
         </thead>
@@ -134,7 +149,7 @@ function visiblePages(current, total) {
             <tr v-for="i in skeletonRows" :key="`sk-${i}`" class="row--skeleton">
               <td v-if="showIndex" class="col-index"><span class="skel skel--xs"></span></td>
               <td v-if="showCheckbox" class="col-check"><span class="skel skel--check"></span></td>
-              <td v-for="col in columns" :key="col.key"><span class="skel" :style="{ width: col.tight ? '50px' : `${55 + (i * 13 + col.key.length * 7) % 35}%` }"></span></td>
+              <td v-for="col in columns" :key="col.key" :class="col.class" :style="getColumnStyle(col)"><span class="skel" :style="{ width: col.tight ? '50px' : `${55 + (i * 13 + col.key.length * 7) % 35}%` }"></span></td>
               <td v-if="showActions" class="col-actions">
                 <div class="row-actions">
                   <span class="skel skel--btn"></span>
@@ -159,7 +174,7 @@ function visiblePages(current, total) {
                 <span class="checkbox__mark"></span>
               </label>
             </td>
-            <td v-for="column in columns" :key="column.key">
+            <td v-for="column in columns" :key="column.key" :class="column.class" :style="getColumnStyle(column)">
               <textarea
                 v-if="column.type === 'textarea'"
                 v-model="row[column.key]"
@@ -269,12 +284,18 @@ function visiblePages(current, total) {
     </div>
 
     <!-- Paginación -->
-    <div v-if="pagination && pagination.total > 1" class="pagination-bar">
+    <div v-if="pagination && pagination.totalFiltered > 0" class="pagination-bar">
       <span class="pagination-info">
         Mostrando
         <strong>{{ (pagination.current - 1) * pagination.pageSize + 1 }}–{{ Math.min(pagination.current * pagination.pageSize, pagination.totalFiltered) }}</strong>
         de <strong>{{ pagination.totalFiltered }}</strong> registros
       </span>
+      <label class="page-size-control">
+        Filas
+        <select :value="pagination.pageSize" @change="emit('changePageSize', Number($event.target.value))">
+          <option v-for="size in pageSizeOptions" :key="size" :value="size">{{ size }}</option>
+        </select>
+      </label>
       <div class="pagination-controls">
         <button
           class="page-btn"
@@ -323,6 +344,9 @@ function visiblePages(current, total) {
   border-radius: var(--radius-xl);
   overflow: hidden;
   box-shadow: var(--shadow-md);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Barra de selección */
@@ -335,7 +359,12 @@ function visiblePages(current, total) {
 }
 .selection-bar svg { width: 14px; height: 14px; color: var(--unap-gold-600); }
 
-.table-container { overflow-x: auto; }
+.table-container {
+  width: 100%; max-width: 100%; min-width: 0;
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
 
 .data-table {
   width: 100%; border-collapse: collapse; font-size: 0.9rem;
@@ -371,7 +400,7 @@ function visiblePages(current, total) {
   font-weight: 600; color: var(--slate-400); font-size: 0.8rem;
 }
 .col-check { width: 40px; text-align: center; }
-.col-actions { width: 110px; }
+.col-actions { width: 84px; min-width: 84px; }
 
 /* Checkbox */
 .checkbox { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -402,6 +431,20 @@ function visiblePages(current, total) {
 }
 .cell-input--locked { color: var(--slate-700); cursor: default; }
 .cell-input--tight { max-width: 60px; }
+.column--dni .cell-input {
+  min-width: 9ch; font-family: var(--font-mono); font-weight: 650;
+  letter-spacing: 0.02em; white-space: nowrap;
+}
+.column--name .cell-input { min-width: 150px; }
+.column--program .cell-input { min-width: 210px; }
+.column--code .cell-input {
+  font-family: var(--font-mono); white-space: nowrap; text-align: center;
+}
+.column--answers .cell-textarea {
+  min-width: 440px; font-family: var(--font-mono); letter-spacing: 0.04em;
+  white-space: pre; resize: horizontal;
+}
+.column--observations { min-width: 220px; }
 
 .cell-textarea {
   width: 100%; padding: var(--space-2); border: 1px solid transparent;
@@ -424,11 +467,11 @@ function visiblePages(current, total) {
 .badge--warn { background: var(--warning-100); color: var(--warning-600); }
 
 /* Row actions — aparecen al hover */
-.col-actions { width: 110px; }
+.col-actions { width: 84px; min-width: 84px; }
 
 .row-actions {
   display: flex; gap: var(--space-1);
-  opacity: 0;
+  opacity: 0.45;
   transition: opacity var(--transition-fast);
 }
 
@@ -478,6 +521,15 @@ function visiblePages(current, total) {
 
 .pagination-controls {
   display: flex; align-items: center; gap: var(--space-1);
+}
+
+.page-size-control {
+  display: flex; align-items: center; gap: var(--space-2);
+  margin-left: auto; font-size: 0.8rem; color: var(--slate-500);
+}
+.page-size-control select {
+  padding: var(--space-1) var(--space-2); border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md); background: white; color: var(--slate-700);
 }
 
 .page-btn {

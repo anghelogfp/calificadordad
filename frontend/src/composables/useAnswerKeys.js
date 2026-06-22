@@ -74,6 +74,7 @@ export function buildAnswerKeyObservation(row) {
 export function useAnswerKeys(archiveRows) {
   const tableState = useTableState({
     storageKey: STORAGE_KEYS.ANSWER_KEYS,
+    pageSize: 10,
     createRow: createAnswerKeyRow,
     filterFn: (row, searchValue) => {
       const needle = normalize(searchValue)

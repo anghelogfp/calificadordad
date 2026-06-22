@@ -1,45 +1,14 @@
 <script setup>
-import { computed } from 'vue'
-
 const props = defineProps({
-  tabs: {
-    type: Array,
-    required: true
-  },
-  activeTab: {
-    type: String,
-    required: true
-  },
-  getStepStatus: {
-    type: Function,
-    required: true
-  },
-  getStepLabel: {
-    type: Function,
-    required: true
-  },
-  getStepDescription: {
-    type: Function,
-    required: true
-  }
+  tabs: { type: Array, required: true },
+  activeTab: { type: String, required: true },
+  getStepStatus: { type: Function, required: true },
+  getStepLabel: { type: Function, required: true },
+  getStepDescription: { type: Function, required: true },
 })
 
 const emit = defineEmits(['update:activeTab'])
-
-function selectTab(key) {
-  emit('update:activeTab', key)
-}
-
-const completedCount = computed(() =>
-  props.tabs.filter(t => props.getStepStatus(t.key) === 'completed').length
-)
-
-const progressPercent = computed(() => {
-  const activeIndex = props.tabs.findIndex(t => t.key === props.activeTab)
-  const base = completedCount.value
-  const idx = activeIndex >= 0 ? activeIndex : base
-  return Math.round((Math.max(base, idx) / (props.tabs.length - 1)) * 100)
-})
+function selectTab(key) { emit('update:activeTab', key) }
 </script>
 
 <template>
@@ -55,292 +24,91 @@ const progressPercent = computed(() => {
             'step-item--active': activeTab === tab.key,
             'step-item--completed': getStepStatus(tab.key) === 'completed',
           }"
+          :aria-current="activeTab === tab.key ? 'step' : undefined"
           @click="selectTab(tab.key)"
         >
           <span class="step-number">
-            <span v-if="getStepStatus(tab.key) === 'completed'" class="step-check">
-              <svg viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-              </svg>
-            </span>
+            <svg v-if="getStepStatus(tab.key) === 'completed'" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+            </svg>
             <span v-else>{{ index + 1 }}</span>
           </span>
+
           <span class="step-content">
             <span class="step-label">{{ getStepLabel(tab.key) }}</span>
-            <span class="step-desc">
-              <span
-                class="step-status-dot"
-                :class="{
-                  'step-status-dot--done':   getStepStatus(tab.key) === 'completed',
-                  'step-status-dot--active': activeTab === tab.key && getStepStatus(tab.key) !== 'completed',
-                  'step-status-dot--empty':  getStepStatus(tab.key) !== 'completed' && activeTab !== tab.key,
-                }"
-              ></span>
-              {{ getStepDescription(tab.key) }}
-            </span>
+            <span v-if="activeTab === tab.key" class="step-desc">{{ getStepDescription(tab.key) }}</span>
           </span>
-          <span v-if="index < tabs.length - 1" class="step-connector"
-            :class="{ 'step-connector--done': getStepStatus(tab.key) === 'completed' }"
-          ></span>
         </button>
       </div>
     </div>
-    <div class="step-nav-hint" aria-hidden="true">
-      Desliza para ver más pasos
-    </div>
-
-    <!-- Barra de progreso global — siempre full-width, fuera del scroll -->
-    <div class="progress-wrap">
-      <div class="progress-track">
-        <div
-          class="progress-fill"
-          :style="{ width: progressPercent + '%' }"
-        ></div>
-      </div>
-      <span class="progress-label">
-        {{ completedCount }} / {{ tabs.length }} pasos completados
-      </span>
-    </div>
+    <div class="step-nav-hint" aria-hidden="true">Desliza para ver todos los pasos</div>
   </nav>
 </template>
 
 <style scoped>
 .step-nav {
-  background: white;
-  border-bottom: 1px solid var(--slate-200);
-  padding: var(--space-4) var(--space-8) 0;
-  flex-shrink: 0;
+  flex-shrink: 0; padding: var(--space-2) var(--space-6);
+  background: white; border-bottom: 1px solid var(--slate-200);
 }
-
-.step-nav-scroll {
-  position: relative;
-  overflow-x: auto;
-  /* Ocultar scrollbar visualmente pero mantener funcionalidad */
-  scrollbar-width: none;
-}
-.step-nav-scroll::-webkit-scrollbar {
-  display: none;
-}
-
+.step-nav-scroll { overflow-x: auto; scrollbar-width: none; }
+.step-nav-scroll::-webkit-scrollbar { display: none; }
 .step-nav-track {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  min-width: max-content;
+  display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr));
+  align-items: start; width: 100%; min-width: 680px;
 }
-
-.step-nav-hint {
-  display: none;
-}
-
 .step-item {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-5);
-  background: none;
-  border: none;
-  cursor: pointer;
-  transition: all var(--transition-base);
-  flex: 1;
-  min-width: 180px;
+  position: relative; z-index: 1; display: flex; align-items: center;
+  flex-direction: row; justify-content: center; gap: var(--space-2); min-width: 0;
+  padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-lg);
+  background: transparent; color: var(--slate-500); cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
-
-.step-item:hover {
-  background: var(--slate-50);
-}
-
-.step-item--active {
-  background: var(--unap-blue-50);
-}
-
-.step-item--completed .step-number {
-  background: var(--success-500);
-  border-color: var(--success-500);
-  color: white;
-}
-
+.step-item:hover { background: var(--slate-50); color: var(--slate-700); }
 .step-number {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-full);
-  border: 2px solid var(--slate-300);
-  background: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: var(--slate-500);
+  position: relative; z-index: 2; width: 30px; height: 30px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--slate-300); border-radius: 50%; background: white;
+  color: var(--slate-500); font: 700 0.78rem/1 var(--font-mono);
   transition: all var(--transition-base);
-  flex-shrink: 0;
 }
-
+.step-number svg { width: 16px; height: 16px; }
+.step-item--completed .step-number {
+  border-color: var(--success-500); background: var(--success-500); color: white;
+}
+.step-item--active { background: var(--unap-blue-50); }
 .step-item--active .step-number {
-  background: var(--unap-blue-600);
-  border-color: var(--unap-blue-600);
-  color: white;
-  box-shadow: 0 0 0 4px rgba(0, 51, 102, 0.15);
-  animation: stepPulse 2s ease-in-out infinite;
+  border-color: var(--unap-blue-600); background: var(--unap-blue-600); color: white;
+  box-shadow: 0 0 0 3px rgba(0, 64, 128, 0.12);
 }
-
-.step-check svg {
-  width: 18px;
-  height: 18px;
-}
-
-.step-content {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  text-align: left;
-}
-
+.step-content { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; text-align: left; }
 .step-label {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--slate-700);
-  transition: color var(--transition-fast);
-}
-
-.step-item--active .step-label {
-  color: var(--unap-blue-700);
-}
-
-.step-desc {
-  font-size: 0.75rem;
-  color: var(--slate-500);
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.step-status-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: var(--slate-300);
-  transition: background 0.25s;
-}
-.step-status-dot--done   { background: var(--success-500); }
-.step-status-dot--active { background: var(--unap-blue-500); }
-.step-status-dot--empty  { background: var(--slate-300); }
-
-.step-connector {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 24px;
-  height: 2px;
-  background: var(--slate-200);
-  transition: background var(--transition-slow);
-}
-
-.step-connector--done {
-  background: var(--success-400);
-}
-
-/* Barra de progreso global */
-.progress-wrap {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-}
-
-.progress-track {
-  flex: 1;
-  height: 4px;
-  background: var(--slate-200);
-  border-radius: var(--radius-full);
-  overflow: hidden;
-  position: relative;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--unap-blue-500), var(--success-500));
-  border-radius: var(--radius-full);
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.progress-label {
-  font-size: 0.7rem;
-  color: var(--slate-500);
+  color: var(--slate-600); font-size: 0.82rem; font-weight: 700;
   white-space: nowrap;
-  flex-shrink: 0;
 }
-
-@keyframes stepPulse {
-  0%, 100% { box-shadow: 0 0 0 4px rgba(0, 51, 102, 0.15); }
-  50% { box-shadow: 0 0 0 7px rgba(0, 51, 102, 0.08); }
+.step-item--active .step-label { color: var(--unap-blue-700); }
+.step-item--completed .step-label { color: var(--success-600); }
+.step-desc {
+  max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--slate-500); font-size: 0.68rem; font-weight: 500;
 }
+.step-nav-hint { display: none; }
 
 @media (max-width: 1024px) {
-  .step-nav {
-    padding: var(--space-3) var(--space-4);
-  }
-
-  .step-item {
-    min-width: 140px;
-    padding: var(--space-2) var(--space-3);
-  }
+  .step-nav { padding-inline: var(--space-4); }
+  .step-nav-track { grid-template-columns: repeat(5, minmax(115px, 1fr)); min-width: 610px; }
+  .step-desc { display: none; }
 }
-
-@media (max-width: 768px) {
-  .step-nav {
-    position: relative;
-  }
-
-  .step-nav-scroll {
-    scrollbar-width: thin;
-    padding-bottom: 2px;
-  }
-
-  .step-nav-scroll::-webkit-scrollbar {
-    display: block;
-    height: 4px;
-  }
-
-  .step-nav::after {
-    content: '';
-    position: absolute;
-    top: var(--space-3);
-    right: 0;
-    width: 34px;
-    height: 76px;
-    background: linear-gradient(90deg, rgba(255,255,255,0), white);
-    pointer-events: none;
-  }
-
+@media (max-width: 700px) {
+  .step-nav { position: relative; padding: var(--space-2) var(--space-3) var(--space-1); }
+  .step-nav-scroll { scrollbar-width: thin; padding-bottom: 2px; }
+  .step-nav-scroll::-webkit-scrollbar { display: block; height: 3px; }
+  .step-nav-track { min-width: 560px; grid-template-columns: repeat(5, 112px); }
+  .step-item { flex-direction: column; gap: 3px; padding: var(--space-1) var(--space-2); }
+  .step-content { align-items: center; text-align: center; }
+  .step-label { font-size: 0.72rem; }
   .step-nav-hint {
-    display: block;
-    margin-top: var(--space-1);
-    font-size: 0.68rem;
-    color: var(--slate-400);
-    text-align: right;
-  }
-
-  .step-nav-track {
-    gap: 0;
-  }
-
-  .step-item {
-    min-width: 100px;
-    flex-direction: column;
-    text-align: center;
-    gap: var(--space-2);
-  }
-
-  .step-content {
-    align-items: center;
-  }
-
-  .step-connector {
-    display: none;
+    display: block; padding-top: 2px; color: var(--slate-400);
+    font-size: 0.62rem; text-align: right;
   }
 }
 </style>

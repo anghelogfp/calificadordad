@@ -331,7 +331,7 @@ onMounted(() => {
 /* ── Métricas ────────────────────────────────────────────────────────────────── */
 .dash__metrics {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-4);
 }
 
@@ -427,7 +427,7 @@ onMounted(() => {
 /* ── Cuerpo ──────────────────────────────────────────────────────────────────── */
 .dash__body {
   display: grid;
-  grid-template-columns: 1fr 340px;
+  grid-template-columns: minmax(0, 1fr) 340px;
   gap: var(--space-5);
   align-items: start;
 }
@@ -662,6 +662,6 @@ onMounted(() => {
 }
 
 @media (min-width: 600px) and (max-width: 960px) {
-  .dash__metrics { grid-template-columns: repeat(3, 1fr); }
+  .dash__metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 </style>

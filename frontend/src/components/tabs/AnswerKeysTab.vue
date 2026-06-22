@@ -1,7 +1,7 @@
 <script setup>
 import { reactive, computed } from 'vue'
 import { ANSWER_KEY_SUBTABS } from '@/constants'
-import StepInfoCard from '@/components/shared/StepInfoCard.vue'
+import WorkflowIntroCard from '@/components/shared/WorkflowIntroCard.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
 import SubTabs from '@/components/shared/SubTabs.vue'
 import DataTable from '@/components/shared/DataTable.vue'
@@ -24,21 +24,21 @@ const emit = defineEmits(['update:subTab'])
 const answerKeys = reactive(props.answerKeys)
 
 const tableColumns = [
-  { key: 'area', label: 'Área', type: 'select' },
-  { key: 'tipo', label: 'Tip', maxlength: 1, tight: true },
-  { key: 'litho', label: 'Litho', maxlength: 6 },
-  { key: 'answers', label: 'Respuestas', type: 'textarea', rows: 2 },
-  { key: 'observaciones', label: 'Observaciones', badge: true },
+  { key: 'area', label: 'Área', type: 'select', minWidth: '170px' },
+  { key: 'tipo', label: 'Tip', maxlength: 1, tight: true, class: 'column--code', width: '65px', minWidth: '65px' },
+  { key: 'litho', label: 'Litho', maxlength: 6, class: 'column--code', width: '105px', minWidth: '105px' },
+  { key: 'answers', label: 'Respuestas', type: 'textarea', rows: 2, class: 'column--answers', minWidth: '470px' },
+  { key: 'observaciones', label: 'Observaciones', badge: true, class: 'column--observations', minWidth: '240px' },
 ]
 
 const sourcesColumns = [
-  { key: 'area', label: 'Área' },
-  { key: 'name', label: 'Respuestas' },
-  { key: 'identificationName', label: 'Identificación' },
-  { key: 'timestamp', label: 'Fecha y hora', format: 'timestamp' },
-  { key: 'validRows', label: 'Registros válidos' },
-  { key: 'responseErrors', label: 'Errores resp.', badge: true },
-  { key: 'identificationErrors', label: 'Errores id.', badge: true },
+  { key: 'area', label: 'Área', minWidth: '150px' },
+  { key: 'name', label: 'Respuestas', minWidth: '220px' },
+  { key: 'identificationName', label: 'Identificación', minWidth: '220px' },
+  { key: 'timestamp', label: 'Fecha y hora', format: 'timestamp', minWidth: '175px' },
+  { key: 'validRows', label: 'Registros válidos', width: '130px' },
+  { key: 'responseErrors', label: 'Errores resp.', badge: true, width: '110px' },
+  { key: 'identificationErrors', label: 'Errores id.', badge: true, width: '100px' },
 ]
 
 function getRowClass(row) {
@@ -61,20 +61,20 @@ const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).len
 
 <template>
   <section class="tab-content">
-    <StepInfoCard
-      title="Importar Claves de Respuestas"
-      description="Carga los archivos .dat con las respuestas correctas oficiales para cada área."
-      :stats="answerKeys.answerKeyHasData ? [
-        { value: answerKeys.totalRows, label: 'Claves' },
-        ...(answerKeys.sourcesCount ? [{ value: answerKeys.sourcesCount, label: 'Archivos' }] : [])
-      ] : []"
+    <WorkflowIntroCard
+      eyebrow="Paso 4 · Claves oficiales"
+      title="Claves de respuestas"
+      description="Registra las respuestas correctas oficiales para cada área y tipo de prueba."
+      :count="answerKeys.totalRows"
+      count-label="claves cargadas"
+      :ready="answerKeys.answerKeyHasData"
     >
       <template #icon>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
         </svg>
       </template>
-    </StepInfoCard>
+    </WorkflowIntroCard>
 
     <!-- Cobertura de áreas -->
     <div v-if="areaCoverage.length" class="area-coverage">
@@ -102,11 +102,16 @@ const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).len
       </div>
     </div>
 
-    <section class="upload-form-card">
-      <header class="upload-form-card__header">
-        <h3>Cargar archivos de claves</h3>
-        <p>Selecciona el área y adjunta los archivos .dat de identificación y respuestas oficiales.</p>
-      </header>
+    <details class="upload-form-card" :open="!answerKeys.answerKeyHasData">
+      <summary class="upload-form-card__header">
+        <span class="upload-form-card__icon">
+          <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+        </span>
+        <span class="upload-form-card__title">
+          <strong>Cargar claves</strong>
+          <small>Área + identificación + respuestas oficiales</small>
+        </span>
+      </summary>
       <form class="upload-form-grid" @submit.prevent="answerKeys.importAnswerKeyFiles">
         <div class="form-field">
           <label for="answer-key-area" class="form-field__label">Área</label>
@@ -175,11 +180,11 @@ const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).len
             <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
             </svg>
-            Importar claves para el área
+            Importar claves
           </button>
         </div>
       </form>
-    </section>
+    </details>
 
     <div v-if="answerKeys.importError" class="alert alert--error">
       {{ answerKeys.importError }}
@@ -192,6 +197,9 @@ const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).len
       :filtered-count="answerKeys.filteredRows.length"
     >
       <template #actions>
+        <details class="toolbar-menu">
+          <summary class="btn btn--ghost">Acciones ▾</summary>
+          <div class="toolbar-menu__panel">
         <button type="button" class="btn" @click="answerKeys.exportAnswerKeysToExcel" :disabled="!answerKeys.answerKeyHasData">
           Exportar a Excel
         </button>
@@ -222,6 +230,8 @@ const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).len
         >
           Eliminar seleccionados ({{ answerKeys.totalSelected }})
         </button>
+          </div>
+        </details>
       </template>
     </Toolbar>
 
@@ -251,6 +261,7 @@ const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).len
         @toggle-edit="answerKeys.toggleEdit"
         @remove-row="answerKeys.removeRow"
         @change-page="answerKeys.goToPage"
+        @change-page-size="answerKeys.setPageSize"
       />
 
       <EmptyState
@@ -279,6 +290,7 @@ const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).len
   flex-direction: column;
   gap: var(--space-6);
   animation: slideUp 0.4s ease-out;
+  min-width: 0;
 }
 
 @keyframes slideUp {
@@ -368,41 +380,44 @@ const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).len
 .upload-form-card {
   background: white;
   border: 1px solid var(--slate-200);
-  border-radius: var(--radius-xl);
-  padding: var(--space-6);
-  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-sm);
 }
 
 .upload-form-card__header {
-  margin-bottom: var(--space-5);
-  padding-bottom: var(--space-4);
+  display: flex; align-items: center; gap: var(--space-3);
+  cursor: pointer;
+  list-style: none;
+}
+.upload-form-card__header::-webkit-details-marker { display: none; }
+.upload-form-card__header::after { content: '＋'; margin-left: auto; color: var(--unap-blue-600); font-size: 1.1rem; }
+.upload-form-card[open] .upload-form-card__header {
+  margin-bottom: var(--space-4); padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--slate-100);
 }
-
-.upload-form-card__header h3 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--slate-800);
-  margin: 0 0 var(--space-1);
+.upload-form-card[open] .upload-form-card__header::after { content: '−'; }
+.upload-form-card__icon {
+  width: 34px; height: 34px; flex-shrink: 0; display: flex;
+  align-items: center; justify-content: center; border-radius: var(--radius-md);
+  background: var(--unap-blue-50); color: var(--unap-blue-600);
 }
-
-.upload-form-card__header p {
-  font-size: 0.9rem;
-  color: var(--slate-500);
-  margin: 0;
-}
+.upload-form-card__icon svg { width: 17px; height: 17px; }
+.upload-form-card__title { display: flex; flex-direction: column; line-height: 1.25; }
+.upload-form-card__title strong { color: var(--slate-800); font-size: 0.9rem; }
+.upload-form-card__title small { color: var(--slate-500); font-size: 0.73rem; }
 
 .upload-form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: var(--space-5);
-  align-items: start;
+  grid-template-columns: minmax(140px, 0.65fr) minmax(220px, 1fr) minmax(220px, 1fr) auto;
+  gap: var(--space-3);
+  align-items: end;
 }
 
 .form-field {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
 .form-field__label {
@@ -415,7 +430,7 @@ const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).len
 
 .form-field__select {
   width: 100%;
-  padding: var(--space-3);
+  height: 40px; padding: var(--space-2) var(--space-3);
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-md);
   font-size: 0.9rem;
@@ -444,8 +459,9 @@ const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).len
 
 .file-input-display {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .file-input-button {
@@ -453,7 +469,7 @@ const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).len
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  height: 40px; padding: var(--space-2) var(--space-3);
   background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
   color: white;
   font-weight: 600;
@@ -476,9 +492,10 @@ const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).len
 }
 
 .file-input-name {
+  flex: 1; min-width: 0;
   font-size: 0.8rem;
   color: var(--slate-500);
-  padding: var(--space-2);
+  height: 40px; padding: var(--space-2);
   background: var(--slate-50);
   border-radius: var(--radius-sm);
   text-overflow: ellipsis;
@@ -487,13 +504,18 @@ const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).len
 }
 
 .form-field--action {
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-end;
-  grid-column: 1 / -1;
-  margin-top: var(--space-2);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--slate-100);
+  display: flex; align-items: flex-end; justify-content: flex-end;
+}
+.form-field--action .btn { height: 40px; white-space: nowrap; }
+
+@media (max-width: 1100px) {
+  .upload-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .form-field--action { grid-column: 2; }
+}
+@media (max-width: 700px) {
+  .upload-form-grid { grid-template-columns: 1fr; }
+  .form-field--action { grid-column: 1; }
+  .form-field--action .btn { width: 100%; }
 }
 
 .alert {

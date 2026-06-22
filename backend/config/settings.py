@@ -13,7 +13,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from pathlib import Path
 
-from django.core.management.utils import get_random_secret_key
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -22,13 +22,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", get_random_secret_key())
-
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DJANGO_DEBUG', 'true').lower() in ('1', 'true', 'yes')
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+# Development gets a stable local-only key. Production must provide its own.
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = 'django-insecure-calificador-local-development-only'
+    else:
+        raise ImproperlyConfigured('DJANGO_SECRET_KEY es obligatorio en producción.')
+
+ALLOWED_HOSTS = [
+    host.strip() for host in os.getenv(
+        'DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1'
+    ).split(',') if host.strip()
+]
 
 
 # Application definition
@@ -60,12 +69,10 @@ MIDDLEWARE = [
 ]
 
 # CORS settings para permitir peticiones del frontend
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",  # Vite default port
-    "http://localhost:3000",
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:3000",
-]
+CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv(
+    'DJANGO_CORS_ALLOWED_ORIGINS',
+    'http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000',
+).split(',') if origin.strip()]
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -145,7 +152,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'es-mx'
 
-TIME_ZONE = 'America/Mexico_City'
+TIME_ZONE = 'America/Lima'
 
 USE_I18N = True
 
@@ -157,9 +164,7 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
+STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []
 
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
@@ -190,3 +195,18 @@ SIMPLE_JWT = {
 }
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+SECURE_SSL_REDIRECT = os.getenv(
+    'DJANGO_SECURE_SSL_REDIRECT', str(not DEBUG)
+).lower() == 'true'
+SESSION_COOKIE_SECURE = SECURE_SSL_REDIRECT
+CSRF_COOKIE_SECURE = SECURE_SSL_REDIRECT
+SECURE_HSTS_SECONDS = int(os.getenv(
+    'DJANGO_SECURE_HSTS_SECONDS', '0' if DEBUG else '31536000'
+))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv(
+    'DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS', str(not DEBUG)
+).lower() == 'true'
+SECURE_HSTS_PRELOAD = os.getenv(
+    'DJANGO_SECURE_HSTS_PRELOAD', str(not DEBUG)
+).lower() == 'true'

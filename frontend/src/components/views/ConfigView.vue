@@ -353,13 +353,14 @@ const DAT_FIELDS = [
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
+  min-width: 0;
 }
 
 .config-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: auto auto;
-  gap: var(--space-5);
+  gap: var(--space-4);
   align-items: start;
 }
 
@@ -388,10 +389,11 @@ const DAT_FIELDS = [
   background: white;
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-lg);
-  padding: var(--space-5);
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  min-width: 0;
 }
 
 .card-header { display: flex; flex-direction: column; gap: var(--space-1); }
@@ -454,7 +456,7 @@ const DAT_FIELDS = [
 }
 
 /* DAT */
-.dat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.dat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .dat-field { display: flex; flex-direction: column; gap: var(--space-1); }
 .dat-label { font-size: 0.75rem; font-weight: 600; color: var(--slate-700); display: flex; flex-direction: column; gap: 1px; }
 .dat-hint { font-size: 0.68rem; font-weight: 400; color: var(--slate-400); font-style: italic; }

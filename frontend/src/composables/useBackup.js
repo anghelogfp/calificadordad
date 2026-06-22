@@ -127,46 +127,7 @@ async function replaceProcesos(procesos = []) {
 }
 
 async function restoreServerData(server = {}) {
-  await writeJson('/candidatos/bulk_replace/', { rows: server.candidatos || [] })
-  await writeJson('/identificadores/bulk_replace/', {
-    sources: server.identifierSources || [],
-    rows: server.identificadores || [],
-  })
-  await writeJson('/respuestas/bulk_replace/', {
-    sources: server.responseSources || [],
-    rows: server.respuestas || [],
-  })
-  await writeJson('/answer-keys/bulk_replace/', {
-    sources: server.answerKeySources || [],
-    rows: server.answerKeys || [],
-  })
-  await writeJson('/programa-vacantes/bulk_replace/', {
-    vacantes: Object.fromEntries(
-      (server.programaVacantes || []).map((row) => [row.programa, row.vacantes]),
-    ),
-  })
-  await writeJson('/calification-configs/bulk_replace/', {
-    configs: server.calificationConfigs || [],
-  })
-
-  if (server.datFormatConfig?.id) {
-    await writeJson(`/dat-format-configs/${server.datFormatConfig.id}/`, {
-      header_length: server.datFormatConfig.header_length,
-      answers_length: server.datFormatConfig.answers_length,
-      litho_offset: server.datFormatConfig.litho_offset,
-      litho_length: server.datFormatConfig.litho_length,
-      tipo_offset: server.datFormatConfig.tipo_offset,
-      tipo_length: server.datFormatConfig.tipo_length,
-      dni_offset: server.datFormatConfig.dni_offset,
-      dni_length: server.datFormatConfig.dni_length,
-      aula_offset: server.datFormatConfig.aula_offset,
-      aula_length: server.datFormatConfig.aula_length,
-      answers_offset: server.datFormatConfig.answers_offset,
-    }, 'PUT')
-  }
-
-  await replacePlantillas(server.plantillas || [])
-  await replaceProcesos(server.procesos || [])
+  await writeJson('/backup/restore/', server)
 }
 
 function restoreLocalData(data = {}) {

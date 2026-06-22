@@ -2,6 +2,7 @@ from django.db import transaction
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from config.permissions import IsAuthenticatedReadAdminWrite
 
 from .models import Ponderacion, PlantillaItem, PlantillaPonderacion
 from .serializers import (
@@ -15,6 +16,7 @@ from .serializers import (
 class PonderacionViewSet(viewsets.ModelViewSet):
     queryset = Ponderacion.objects.all()
     serializer_class = PonderacionSerializer
+    permission_classes = [IsAuthenticatedReadAdminWrite]
 
     def get_queryset(self):
         queryset = Ponderacion.objects.all()
@@ -68,6 +70,7 @@ class PonderacionViewSet(viewsets.ModelViewSet):
 
 class PlantillaPonderacionViewSet(viewsets.ModelViewSet):
     queryset = PlantillaPonderacion.objects.prefetch_related('items').all()
+    permission_classes = [IsAuthenticatedReadAdminWrite]
 
     def get_serializer_class(self):
         if self.action in ('create', 'update', 'partial_update'):

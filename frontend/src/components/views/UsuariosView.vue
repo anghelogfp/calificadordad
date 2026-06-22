@@ -1,6 +1,7 @@
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
+import PaginationBar from '@/components/shared/PaginationBar.vue'
 import { useToast } from '@/composables/useToast'
 import { useUsuarios } from '@/composables/useUsuarios'
 import { useFocusTrap } from '@/composables/useFocusTrap'
@@ -40,6 +41,13 @@ useFocusTrap(passwordModalRef, computed(() => showPasswordModal.value))
 const form = reactive({ ...MODAL_EMPTY })
 const saving = ref(false)
 const formError = ref('')
+const usersPage = ref(1)
+const usersPageSize = ref(10)
+const pagedUsers = computed(() => {
+  const start = (usersPage.value - 1) * usersPageSize.value
+  return users.value.slice(start, start + usersPageSize.value)
+})
+watch([() => users.value.length, usersPageSize], () => { usersPage.value = 1 })
 
 function openCreate() {
   Object.assign(form, MODAL_EMPTY)
@@ -192,7 +200,7 @@ async function handleToggleActivo(user) {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="user in users" :key="user.id" :class="{ 'row--inactive': !user.is_active }">
+            <tr v-for="user in pagedUsers" :key="user.id" :class="{ 'row--inactive': !user.is_active }">
               <td class="cell-username">{{ user.username }}</td>
               <td>{{ [user.first_name, user.last_name].filter(Boolean).join(' ') || '—' }}</td>
               <td>{{ user.email || '—' }}</td>
@@ -242,6 +250,13 @@ async function handleToggleActivo(user) {
           </tbody>
         </table>
       </div>
+      <PaginationBar
+        v-if="!loading"
+        v-model:page="usersPage"
+        v-model:page-size="usersPageSize"
+        :total-items="users.length"
+        :page-size-options="[10, 25, 50, 100]"
+      />
     </div>
 
     <!-- ── Modal crear / editar ─────────────────────────────────────────── -->
@@ -526,7 +541,7 @@ async function handleToggleActivo(user) {
 .modal-desc { font-size: 0.85rem; color: var(--slate-600); margin: 0; }
 
 /* Form */
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+.form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .form-field { display: flex; flex-direction: column; gap: var(--space-1); }
 .form-label { font-size: 0.78rem; font-weight: 600; color: var(--slate-700); }
 

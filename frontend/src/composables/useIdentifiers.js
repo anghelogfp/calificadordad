@@ -22,6 +22,7 @@ export { createIdentifierRow, buildIdentifierObservation }
 export function useIdentifiers() {
   const tableState = useTableState({
     storageKey: STORAGE_KEYS.IDENTIFIER,
+    pageSize: 10,
     createRow: createIdentifierRow,
     filterFn: (row, searchValue) => {
       const needle = normalize(searchValue)

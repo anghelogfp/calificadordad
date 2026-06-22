@@ -739,7 +739,7 @@ async function exportPdf() {
 /* Campos técnicos */
 .cdm-fields {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px 10px;
 }
 .cdm-field { display: flex; flex-direction: column; gap: 1px; }
@@ -915,7 +915,7 @@ async function exportPdf() {
 
 /* Responsive */
 @media (max-width: 640px) {
-  .cdm-fields { grid-template-columns: repeat(3, 1fr); }
+  .cdm-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .cdm-cand-footer { gap: 8px; }
 }
 </style>

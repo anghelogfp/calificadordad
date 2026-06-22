@@ -141,6 +141,12 @@ export function useTableState(options = {}) {
   function goToPage(n) {
     currentPage.value = Math.max(1, Math.min(n, totalPages.value))
   }
+  function setPageSize(size) {
+    const parsed = Number(size)
+    if (!Number.isFinite(parsed) || parsed < 1) return
+    pageSize.value = parsed
+    currentPage.value = 1
+  }
   function nextPage() { goToPage(currentPage.value + 1) }
   function prevPage() { goToPage(currentPage.value - 1) }
 
@@ -270,6 +276,7 @@ export function useTableState(options = {}) {
     totalPages,
     pagination,
     goToPage,
+    setPageSize,
     nextPage,
     prevPage,
 

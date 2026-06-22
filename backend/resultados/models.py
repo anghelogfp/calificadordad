@@ -54,7 +54,7 @@ class ProcesoCalificacion(models.Model):
     examen. El campo local_id permite idempotencia: el frontend genera un ID
     en el cliente y el backend lo usa para actualizar en lugar de duplicar.
     """
-    local_id = models.CharField(max_length=64, unique=True)
+    local_id = models.CharField(max_length=64)
     name = models.CharField(max_length=200)
     created_by = models.ForeignKey(
         User,
@@ -67,6 +67,12 @@ class ProcesoCalificacion(models.Model):
     class Meta:
         db_table = 'procesos_calificacion'
         ordering = ['-updated_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['created_by', 'local_id'],
+                name='unique_proceso_local_id_per_user',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.name} (por {self.created_by.username})'
@@ -129,7 +135,7 @@ class ResultadoCandidato(models.Model):
     nombres = models.CharField(max_length=200, blank=True)
     area = models.CharField(max_length=100)
     programa = models.CharField(max_length=200, blank=True)
-    score = models.DecimalField(max_digits=10, decimal_places=2)
+    score = models.DecimalField(max_digits=10, decimal_places=3)
     position = models.IntegerField(default=0)
     position_in_programa = models.IntegerField(default=0)
     is_ingresante = models.BooleanField(default=False)

@@ -1,7 +1,8 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import PaginationBar from '@/components/shared/PaginationBar.vue'
 
 const props = defineProps({
   history: { type: Object, required: true },
@@ -38,6 +39,13 @@ function confirmDelete(id) {
 const sorted = computed(() =>
   [...props.history.historyList.value].sort((a, b) => new Date(b.savedAt) - new Date(a.savedAt))
 )
+const historyPage = ref(1)
+const historyPageSize = ref(10)
+const pagedHistory = computed(() => {
+  const start = (historyPage.value - 1) * historyPageSize.value
+  return sorted.value.slice(start, start + historyPageSize.value)
+})
+watch([() => sorted.value.length, historyPageSize], () => { historyPage.value = 1 })
 </script>
 
 <template>
@@ -73,7 +81,7 @@ const sorted = computed(() =>
 
     <div v-else class="process-grid">
       <article
-        v-for="process in sorted"
+        v-for="process in pagedHistory"
         :key="process.id || process.dbId"
         class="process-card"
       >
@@ -144,6 +152,13 @@ const sorted = computed(() =>
         </div>
       </article>
     </div>
+    <PaginationBar
+      v-if="!history.loading.value"
+      v-model:page="historyPage"
+      v-model:page-size="historyPageSize"
+      :total-items="sorted.length"
+      :page-size-options="[10, 25, 50, 100]"
+    />
   </section>
 </template>
 
@@ -176,8 +191,8 @@ const sorted = computed(() =>
 /* Grid */
 .process-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(350px, 100%), 1fr));
+  gap: var(--space-3);
 }
 
 /* Card */
@@ -185,10 +200,10 @@ const sorted = computed(() =>
   background: white;
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-lg);
-  padding: var(--space-5);
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
   transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
 }
 .process-card:hover {

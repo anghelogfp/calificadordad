@@ -2,6 +2,7 @@ from django.db import transaction
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from config.permissions import IsAuthenticatedReadAdminWrite
 from .models import (
     Area,
     CalificationConfig,
@@ -39,6 +40,7 @@ DEFAULT_AREAS = [
 class AreaViewSet(viewsets.ModelViewSet):
     serializer_class = AreaSerializer
     queryset = Area.objects.all()
+    permission_classes = [IsAuthenticatedReadAdminWrite]
 
     @action(detail=False, methods=['post'])
     def init_defaults(self, request):
@@ -69,6 +71,7 @@ class AreaViewSet(viewsets.ModelViewSet):
 
 class DatFormatConfigViewSet(viewsets.ModelViewSet):
     serializer_class = DatFormatConfigSerializer
+    permission_classes = [IsAuthenticatedReadAdminWrite]
 
     def get_queryset(self):
         return DatFormatConfig.objects.all()

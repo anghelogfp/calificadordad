@@ -478,7 +478,7 @@ function setVacantes(programa, val) {
 
 /* ── Body ────────────────────────────────────────────────────────────────── */
 .modal__body {
-  flex: 1; overflow-y: auto;
+  flex: 1; min-width: 0; overflow-y: auto; overflow-x: hidden;
   padding: var(--space-4);
   display: flex; flex-direction: column; gap: var(--space-3);
 }
@@ -561,7 +561,7 @@ function setVacantes(programa, val) {
 
 /* ── Tipo de proceso ─────────────────────────────────────────────────────── */
 .type-toggle {
-  display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2);
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2);
 }
 
 .type-toggle--locked { opacity: 0.55; pointer-events: none; }
@@ -662,7 +662,7 @@ function setVacantes(programa, val) {
 
 /* ── Scores row ──────────────────────────────────────────────────────────── */
 .scores-row {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2);
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2);
 }
 
 .score-item {

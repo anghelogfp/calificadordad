@@ -22,6 +22,7 @@ export { createResponseRow, buildResponseObservation }
 export function useResponses(identifierLookup, identifierLookupByLitho) {
   const tableState = useTableState({
     storageKey: STORAGE_KEYS.RESPONSES,
+    pageSize: 10,
     createRow: createResponseRow,
     filterFn: (row, searchValue) => {
       const needle = normalize(searchValue)

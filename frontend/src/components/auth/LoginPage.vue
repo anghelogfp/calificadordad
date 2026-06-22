@@ -147,7 +147,11 @@ async function handleSubmit() {
 <style scoped>
 /* ── Layout de dos paneles ────────────────────────────────────────────────── */
 .login-layout {
-  min-height: 100vh;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: grid;
   grid-template-columns: 1fr 1fr;
 }

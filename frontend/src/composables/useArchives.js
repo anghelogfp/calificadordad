@@ -71,6 +71,7 @@ function mapArchiveRowToSchema(row) {
 export function useArchives() {
   const tableState = useTableState({
     storageKey: STORAGE_KEYS.ARCHIVE,
+    pageSize: 10,
     createRow: createArchiveRow,
     filterFn: (row, searchValue) => {
       const needle = normalize(searchValue)

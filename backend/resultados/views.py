@@ -41,15 +41,20 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'local_id es requerido.'}, status=status.HTTP_400_BAD_REQUEST)
         if not name:
             return Response({'detail': 'name es requerido.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not isinstance(areas_payload, dict):
+            return Response({'detail': 'areas debe ser un objeto.'}, status=status.HTTP_400_BAD_REQUEST)
 
         with transaction.atomic():
             proceso, _ = ProcesoCalificacion.objects.update_or_create(
+                created_by=request.user,
                 local_id=local_id,
                 defaults={
                     'name': name,
-                    'created_by': request.user,
                 },
             )
+
+            area_names = set(areas_payload)
+            proceso.areas.exclude(area__in=area_names).delete()
 
             for area_name, area_data in areas_payload.items():
                 summary = area_data.get('summary', {})

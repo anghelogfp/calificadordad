@@ -21,11 +21,11 @@ defineProps({
   columns: {
     type: Array,
     default: () => [
-      { key: 'name', label: 'Archivo' },
-      { key: 'timestamp', label: 'Fecha y hora', format: 'timestamp' },
-      { key: 'validRows', label: 'Registros válidos' },
-      { key: 'errorCount', label: 'Errores', badge: true },
-      { key: 'totalLines', label: 'Líneas leídas' },
+      { key: 'name', label: 'Archivo', minWidth: '240px' },
+      { key: 'timestamp', label: 'Fecha y hora', format: 'timestamp', minWidth: '175px' },
+      { key: 'validRows', label: 'Registros válidos', width: '130px' },
+      { key: 'errorCount', label: 'Errores', badge: true, width: '90px' },
+      { key: 'totalLines', label: 'Líneas leídas', width: '120px' },
     ]
   },
   uploadInputId: {
@@ -70,13 +70,13 @@ function getCellValue(source, column) {
       <table class="sources-table">
         <thead>
           <tr>
-            <th v-for="col in columns" :key="col.key">{{ col.label }}</th>
+            <th v-for="col in columns" :key="col.key" :style="{ width: col.width, minWidth: col.minWidth }">{{ col.label }}</th>
             <th>Acciones</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="source in sources" :key="source.id">
-            <td v-for="col in columns" :key="col.key">
+            <td v-for="col in columns" :key="col.key" :style="{ width: col.width, minWidth: col.minWidth }">
               <span
                 v-if="col.badge"
                 class="badge"
@@ -129,6 +129,8 @@ function getCellValue(source, column) {
   border-radius: var(--radius-xl);
   padding: var(--space-6);
   box-shadow: var(--shadow-sm);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .sources-header {
@@ -166,6 +168,8 @@ function getCellValue(source, column) {
   border-radius: var(--radius-lg);
   overflow-x: auto;
   background: white;
+  width: 100%; max-width: 100%; min-width: 0;
+  overscroll-behavior-inline: contain;
 }
 
 .sources-table {

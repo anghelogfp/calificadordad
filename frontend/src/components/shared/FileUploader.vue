@@ -134,8 +134,8 @@ function onChange(event) {
       </div>
 
       <!-- Mini-tabla preview (opcional) -->
-      <div v-if="previewRows.length && previewColumns.length" class="uploader__preview">
-        <div class="uploader__preview-label">Vista previa (primeras {{ previewRows.length }} filas)</div>
+      <details v-if="previewRows.length && previewColumns.length" class="uploader__preview">
+        <summary class="uploader__preview-label">Ver vista previa (primeras {{ previewRows.length }} filas)</summary>
         <div class="uploader__preview-table-wrap">
           <table class="uploader__preview-table">
             <thead>
@@ -152,7 +152,7 @@ function onChange(event) {
             </tbody>
           </table>
         </div>
-      </div>
+      </details>
     </div>
   </section>
 </template>
@@ -165,6 +165,8 @@ function onChange(event) {
   background: white;
   transition: all var(--transition-base);
   overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .uploader::before {
@@ -359,12 +361,19 @@ function onChange(event) {
 .uploader__preview-label {
   font-size: 0.72rem; font-weight: 700; color: var(--slate-400);
   text-transform: uppercase; letter-spacing: 0.05em;
+  cursor: pointer; width: fit-content;
 }
+
+.uploader--has-data .uploader__input { pointer-events: none; }
+
+.uploader__preview[open] .uploader__preview-label { margin-bottom: var(--space-2); }
 
 .uploader__preview-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-md);
+  width: 100%; max-width: 100%; min-width: 0;
+  overscroll-behavior-inline: contain;
 }
 
 .uploader__preview-table {

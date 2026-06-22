@@ -46,11 +46,11 @@ defineProps({
 .step-info-card {
   display: flex;
   align-items: center;
-  gap: var(--space-5);
+  gap: var(--space-4);
   background: linear-gradient(135deg, var(--unap-blue-700) 0%, var(--unap-blue-800) 100%);
-  padding: var(--space-6);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-blue);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   position: relative;
   overflow: hidden;
 }
@@ -67,8 +67,8 @@ defineProps({
 }
 
 .step-info-icon {
-  width: 64px;
-  height: 64px;
+  width: 44px;
+  height: 44px;
   background: rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-lg);
   display: flex;
@@ -78,8 +78,8 @@ defineProps({
 }
 
 .step-info-icon :deep(svg) {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   color: var(--unap-gold-400);
 }
 
@@ -88,14 +88,14 @@ defineProps({
 }
 
 .step-info-content h2 {
-  font-size: 1.25rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: white;
   margin: 0 0 var(--space-1);
 }
 
 .step-info-content p {
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   color: var(--unap-blue-200);
   margin: 0;
 }
@@ -107,7 +107,7 @@ defineProps({
 
 .stat-item {
   text-align: center;
-  padding: var(--space-3) var(--space-5);
+  padding: var(--space-2) var(--space-4);
   background: rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-md);
   backdrop-filter: blur(8px);
@@ -115,7 +115,7 @@ defineProps({
 
 .stat-value {
   display: block;
-  font-size: 1.75rem;
+  font-size: 1.2rem;
   font-weight: 800;
   color: var(--unap-gold-400);
   font-family: var(--font-mono);

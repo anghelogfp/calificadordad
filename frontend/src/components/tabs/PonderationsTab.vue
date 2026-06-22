@@ -1,6 +1,6 @@
 <script setup>
 import { reactive, ref } from 'vue'
-import StepInfoCard from '@/components/shared/StepInfoCard.vue'
+import WorkflowIntroCard from '@/components/shared/WorkflowIntroCard.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 
 const props = defineProps({
@@ -49,21 +49,20 @@ function handleRename(event) {
 
 <template>
   <section class="tab-content">
-    <StepInfoCard
-      title="Plantillas de Ponderación"
-      description="Gestiona las recetas de puntaje reutilizables. Cada plantilla define el peso de cada asignatura en el cálculo."
-      variant="gold"
-      :stats="ponderations.sidebarSections.map(s => ({
-        value: s.plantillas.length,
-        label: s.label
-      }))"
+    <WorkflowIntroCard
+      eyebrow="Configuración de cálculo"
+      title="Plantillas de ponderación"
+      description="Gestiona asignaturas, preguntas y pesos reutilizables para calcular los puntajes."
+      :count="ponderations.plantillas.length"
+      count-label="plantillas creadas"
+      :ready="ponderations.plantillas.length > 0"
     >
       <template #icon>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
         </svg>
       </template>
-    </StepInfoCard>
+    </WorkflowIntroCard>
 
     <div class="plantillas-layout">
 
@@ -249,8 +248,8 @@ function handleRename(event) {
           </div>
 
           <!-- Form agregar asignatura -->
-          <div class="add-form-card">
-            <h3 class="add-form-title">Agregar asignatura</h3>
+          <details class="add-form-card" :open="!ponderations.selectedPlantillaItems.length">
+            <summary class="add-form-title">Agregar asignatura</summary>
             <form class="add-form" @submit.prevent="ponderations.addItem">
               <div class="field">
                 <label>Asignatura</label>
@@ -294,7 +293,7 @@ function handleRename(event) {
             <div v-if="ponderations.editorError" class="alert alert--error">
               {{ ponderations.editorError }}
             </div>
-          </div>
+          </details>
 
           <!-- Tabla de asignaturas -->
           <div class="items-table-card">
@@ -411,6 +410,7 @@ function handleRename(event) {
   flex-direction: column;
   gap: var(--space-6);
   animation: slideUp 0.4s ease-out;
+  min-width: 0;
 }
 
 @keyframes slideUp {
@@ -422,10 +422,11 @@ function handleRename(event) {
 
 .plantillas-layout {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 280px minmax(0, 1fr);
   gap: var(--space-5);
   align-items: start;
 }
+.editor { min-width: 0; max-width: 100%; }
 
 @media (max-width: 900px) {
   .plantillas-layout { grid-template-columns: 1fr; }
@@ -441,14 +442,13 @@ function handleRename(event) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  position: sticky;
-  top: var(--space-6);
-  max-height: calc(100vh - 200px);
+  position: static;
+  max-height: none;
 }
 
 .sidebar__inner {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: visible;
   padding: var(--space-3) 0;
 }
 
@@ -711,6 +711,10 @@ function handleRename(event) {
 }
 
 .add-form-title { font-size: 0.9rem; font-weight: 700; color: var(--slate-700); margin: 0; }
+.add-form-title { cursor: pointer; list-style: none; }
+.add-form-title::-webkit-details-marker { display: none; }
+.add-form-title::after { content: '＋'; float: right; color: var(--unap-blue-600); }
+.add-form-card[open] .add-form-title::after { content: '−'; }
 
 .add-form {
   display: grid;
@@ -744,7 +748,10 @@ function handleRename(event) {
   border-bottom: 1px solid var(--slate-200); font-size: 0.83rem; color: var(--slate-500);
 }
 
-.table-scroll { max-height: 460px; overflow-y: auto; }
+.table-scroll {
+  width: 100%; max-width: 100%; min-width: 0;
+  overflow-x: auto; overflow-y: visible;
+}
 
 table { width: 100%; border-collapse: collapse; }
 

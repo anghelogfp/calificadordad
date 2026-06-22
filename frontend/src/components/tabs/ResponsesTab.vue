@@ -1,7 +1,7 @@
 <script setup>
 import { reactive, ref, computed } from 'vue'
 import { RESPONSES_SUBTABS } from '@/constants'
-import StepInfoCard from '@/components/shared/StepInfoCard.vue'
+import WorkflowIntroCard from '@/components/shared/WorkflowIntroCard.vue'
 import FileUploader from '@/components/shared/FileUploader.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
 import SubTabs from '@/components/shared/SubTabs.vue'
@@ -64,12 +64,12 @@ function cancelPending() {
 }
 
 const tableColumns = [
-  { key: 'lectura', label: 'N° lectura' },
-  { key: 'dni', label: 'DNI', maxlength: 8 },
-  { key: 'tipo', label: 'Tip', maxlength: 1, tight: true },
-  { key: 'litho', label: 'Litho', maxlength: 6 },
-  { key: 'answers', label: 'Respuestas', type: 'textarea', rows: 2 },
-  { key: 'observaciones', label: 'Observaciones', badge: true },
+  { key: 'lectura', label: 'N° lectura', class: 'column--code', width: '110px', minWidth: '110px' },
+  { key: 'dni', label: 'DNI', maxlength: 8, class: 'column--dni', width: '120px', minWidth: '120px' },
+  { key: 'tipo', label: 'Tip', maxlength: 1, tight: true, class: 'column--code', width: '65px', minWidth: '65px' },
+  { key: 'litho', label: 'Litho', maxlength: 6, class: 'column--code', width: '105px', minWidth: '105px' },
+  { key: 'answers', label: 'Respuestas', type: 'textarea', rows: 2, class: 'column--answers', minWidth: '470px' },
+  { key: 'observaciones', label: 'Observaciones', badge: true, class: 'column--observations', minWidth: '240px' },
 ]
 
 function getRowClass(row) {
@@ -81,21 +81,19 @@ function getRowClass(row) {
 
 <template>
   <section class="tab-content">
-    <StepInfoCard
-      title="Importar Hojas de Respuestas"
-      description="Carga los archivos .dat con las respuestas marcadas por los postulantes (60 preguntas)."
-      :stats="responses.responsesHasData ? [
-        { value: responses.totalRows, label: 'Registros' },
-        ...(responses.sourcesCount ? [{ value: responses.sourcesCount, label: 'Archivos' }] : [])
-      ] : []"
+    <WorkflowIntroCard
+      eyebrow="Paso 3 · Respuestas"
+      title="Hojas de respuestas"
+      description="Importa las respuestas marcadas por los postulantes para vincularlas con sus identificadores."
+      :count="responses.totalRows"
+      count-label="respuestas cargadas"
+      :ready="responses.responsesHasData"
     >
       <template #icon>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
         </svg>
       </template>
-    </StepInfoCard>
-
     <FileUploader
       id="responses-input"
       accept=".dat,.txt"
@@ -122,6 +120,7 @@ function getRowClass(row) {
         </svg>
       </template>
     </FileUploader>
+    </WorkflowIntroCard>
 
     <div v-if="responses.importError" class="alert alert--error">
       {{ responses.importError }}
@@ -169,6 +168,9 @@ function getRowClass(row) {
       :selected-count="responses.totalSelected"
     >
       <template #actions>
+        <details class="toolbar-menu">
+          <summary class="btn btn--ghost">Acciones ▾</summary>
+          <div class="toolbar-menu__panel">
         <button type="button" class="btn" @click="responses.exportResponsesToExcel" :disabled="!responses.responsesHasData">
           Exportar a Excel
         </button>
@@ -199,6 +201,8 @@ function getRowClass(row) {
         >
           Eliminar seleccionados ({{ responses.totalSelected }})
         </button>
+          </div>
+        </details>
       </template>
     </Toolbar>
 
@@ -230,6 +234,7 @@ function getRowClass(row) {
         @cancel-edit="responses.toggleEdit"
         @remove-row="responses.removeRow"
         @change-page="responses.goToPage"
+        @change-page-size="responses.setPageSize"
       />
 
       <EmptyState
@@ -259,6 +264,7 @@ function getRowClass(row) {
   flex-direction: column;
   gap: var(--space-6);
   animation: slideUp 0.4s ease-out;
+  min-width: 0;
 }
 
 @keyframes slideUp {

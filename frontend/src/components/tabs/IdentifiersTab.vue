@@ -1,7 +1,7 @@
 <script setup>
 import { reactive, ref } from 'vue'
 import { IDENTIFIER_SUBTABS } from '@/constants'
-import StepInfoCard from '@/components/shared/StepInfoCard.vue'
+import WorkflowIntroCard from '@/components/shared/WorkflowIntroCard.vue'
 import FileUploader from '@/components/shared/FileUploader.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
 import SubTabs from '@/components/shared/SubTabs.vue'
@@ -48,12 +48,12 @@ function cancelPending() {
 }
 
 const tableColumns = [
-  { key: 'lectura', label: 'N° lectura' },
-  { key: 'dni', label: 'DNI', maxlength: 8 },
-  { key: 'aula', label: 'Aula', maxlength: 3 },
-  { key: 'tipo', label: 'Tip', maxlength: 1, tight: true },
-  { key: 'litho', label: 'Litho', maxlength: 6 },
-  { key: 'observaciones', label: 'Observaciones', badge: true },
+  { key: 'lectura', label: 'N° lectura', class: 'column--code', width: '16%', minWidth: '110px' },
+  { key: 'dni', label: 'DNI', maxlength: 8, class: 'column--dni', width: '16%', minWidth: '120px' },
+  { key: 'aula', label: 'Aula', maxlength: 3, class: 'column--code', width: '10%', minWidth: '80px' },
+  { key: 'tipo', label: 'Tip', maxlength: 1, tight: true, class: 'column--code', width: '8%', minWidth: '65px' },
+  { key: 'litho', label: 'Litho', maxlength: 6, class: 'column--code', width: '14%', minWidth: '105px' },
+  { key: 'observaciones', label: 'Observaciones', badge: true, class: 'column--observations', width: '36%', minWidth: '220px', maxWidth: '360px' },
 ]
 
 function getRowClass(row) {
@@ -65,21 +65,19 @@ function getRowClass(row) {
 
 <template>
   <section class="tab-content">
-    <StepInfoCard
-      title="Importar Hojas de Identificación"
-      description="Carga los archivos .dat con los datos de identificación de los postulantes."
-      :stats="identifiers.identifierHasData ? [
-        { value: identifiers.totalRows, label: 'Registros' },
-        ...(identifiers.sources.length ? [{ value: identifiers.sources.length, label: 'Archivos' }] : [])
-      ] : []"
+    <WorkflowIntroCard
+      eyebrow="Paso 2 · Vinculación"
+      title="Hojas de identificación"
+      description="Importa los archivos .dat que vinculan lectura, DNI, aula y tipo de prueba."
+      :count="identifiers.totalRows"
+      count-label="registros cargados"
+      :ready="identifiers.identifierHasData"
     >
       <template #icon>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
         </svg>
       </template>
-    </StepInfoCard>
-
     <FileUploader
       id="identifier-input"
       accept=".dat,.txt"
@@ -104,6 +102,7 @@ function getRowClass(row) {
         </svg>
       </template>
     </FileUploader>
+    </WorkflowIntroCard>
 
     <div v-if="identifiers.importError" class="alert alert--error">
       {{ identifiers.importError }}
@@ -129,6 +128,9 @@ function getRowClass(row) {
       :selected-count="identifiers.totalSelected"
     >
       <template #actions>
+        <details class="toolbar-menu">
+          <summary class="btn btn--ghost">Acciones ▾</summary>
+          <div class="toolbar-menu__panel">
         <button type="button" class="btn" @click="identifiers.exportIdentifiersToExcel" :disabled="!identifiers.identifierHasData">
           Exportar a Excel
         </button>
@@ -159,6 +161,8 @@ function getRowClass(row) {
         >
           Eliminar seleccionados ({{ identifiers.totalSelected }})
         </button>
+          </div>
+        </details>
       </template>
     </Toolbar>
 
@@ -190,6 +194,7 @@ function getRowClass(row) {
         @cancel-edit="identifiers.toggleEdit"
         @remove-row="identifiers.removeRow"
         @change-page="identifiers.goToPage"
+        @change-page-size="identifiers.setPageSize"
       />
 
       <EmptyState
@@ -219,6 +224,7 @@ function getRowClass(row) {
   flex-direction: column;
   gap: var(--space-6);
   animation: slideUp 0.4s ease-out;
+  min-width: 0;
 }
 
 @keyframes slideUp {

@@ -247,8 +247,9 @@ export function parseResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_F
     remainder = remainder.slice(1)
   }
 
-  const lithoSegment = remainder.slice(0, formatConfig.lithoLength)
-  const answersSegment = remainder.slice(formatConfig.lithoLength)
+  const lithoSegment   = remainder.slice(formatConfig.lithoOffset, formatConfig.lithoOffset + formatConfig.lithoLength)
+  const tipoSegment    = remainder.slice(formatConfig.tipoOffset, formatConfig.tipoOffset + formatConfig.tipoLength)
+  const answersSegment = remainder.slice(formatConfig.answersOffset).trim()
 
   const row = createResponseRow({
     rawLine: raw,
@@ -258,6 +259,7 @@ export function parseResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_F
     folio,
     indicator,
     litho: removeWhitespace(lithoSegment),
+    tipo: tipoSegment.trim().toUpperCase(),
     answers: answersSegment,
   })
 

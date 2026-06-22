@@ -31,11 +31,8 @@ const emit = defineEmits(['goHome', 'toggleMobileMenu'])
     <button type="button" class="header-brand" aria-label="Ir al inicio" @click="emit('goHome')">
       <img src="/unap.png" alt="UNAP" class="brand-logo" />
       <div class="brand-text">
-        <span class="brand-university">Universidad Nacional del Altiplano de Puno</span>
-        <span class="brand-division">Dirección de Admisión</span>
-        <span class="brand-sub">
-          <span class="brand-system">Sistema de Calificación</span>
-        </span>
+        <span class="brand-system">Sistema de Calificación</span>
+        <span class="brand-context">Dirección de Admisión <span aria-hidden="true">·</span> UNAP</span>
       </div>
     </button>
 
@@ -63,7 +60,7 @@ const emit = defineEmits(['goHome', 'toggleMobileMenu'])
 .app-header {
   background: linear-gradient(135deg, var(--unap-blue-800) 0%, var(--unap-blue-900) 100%);
   padding: 0 var(--space-6);
-  height: 76px;
+  height: 68px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -119,8 +116,8 @@ const emit = defineEmits(['goHome', 'toggleMobileMenu'])
 .header-brand:hover { background: rgba(255,255,255,0.08); }
 
 .brand-logo {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   flex-shrink: 0;
   object-fit: contain;
@@ -134,42 +131,23 @@ const emit = defineEmits(['goHome', 'toggleMobileMenu'])
   min-width: 0;
 }
 
-.brand-university {
-  font-size: 1.08rem;
-  font-weight: 700;
+.brand-system {
   color: white;
+  font-size: 1.08rem;
+  font-weight: 750;
   letter-spacing: 0.01em;
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.2;
 }
 
-.brand-division {
-  font-size: 0.88rem;
+.brand-context {
+  color: rgba(255,255,255,0.62);
+  font-size: 0.78rem;
   font-weight: 500;
-  color: rgba(255,255,255,0.65);
-  white-space: nowrap;
   line-height: 1.2;
-}
-
-.brand-sub {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: 0.82rem;
-  color: rgba(255,255,255,0.45);
-  font-weight: 400;
   white-space: nowrap;
-  overflow: hidden;
-  line-height: 1.2;
-}
-
-.brand-sep { opacity: 0.5; }
-
-.brand-system {
-  color: var(--unap-gold-300);
-  font-weight: 600;
 }
 
 .brand-conv {
@@ -254,7 +232,7 @@ const emit = defineEmits(['goHome', 'toggleMobileMenu'])
 
 @media (max-width: 768px) {
   .app-header {
-    height: 64px;
+    height: 60px;
     padding: 0 var(--space-4);
     gap: var(--space-3);
   }
@@ -266,8 +244,11 @@ const emit = defineEmits(['goHome', 'toggleMobileMenu'])
   .user-name        { display: none; }
 
   .brand-logo {
-    width: 40px;
-    height: 40px;
+    width: 38px;
+    height: 38px;
   }
+
+  .brand-system { font-size: 0.95rem; }
+  .brand-context { font-size: 0.7rem; }
 }
 </style>
