@@ -1,4 +1,4 @@
-import { ref, computed, watch } from 'vue'
+import { ref, shallowRef, computed, watch } from 'vue'
 import { useStorage, watchDebounced } from '@vueuse/core'
 import { STORAGE_KEYS, ANSWER_KEY_AREAS, API_BASE_URL, DEFAULT_DAT_FORMAT } from '@/constants'
 import { apiFetch } from '@/utils/apiFetch'
@@ -64,7 +64,7 @@ export function useCalification(
     name: '',
     type: 'simulacro',
   })
-  const _areasData = ref({})
+  const _areasData = shallowRef({})
 
   // Composite proxy with same interface as the old useStorage ref
   const activeProcess = computed({
