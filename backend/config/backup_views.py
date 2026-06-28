@@ -60,7 +60,11 @@ def _replace_processes(user, procesos):
         if not local_id or not name:
             raise serializers.ValidationError('Cada proceso requiere id y name.')
         proceso = ProcesoCalificacion.objects.create(
-            created_by=user, local_id=local_id, name=name,
+            created_by=user,
+            local_id=local_id,
+            name=name,
+            process_type=payload.get('type') or payload.get('process_type') or 'simulacro',
+            simulacro_scope=payload.get('simulacroScope') or payload.get('simulacro_scope') or '',
         )
         for area_name, area_data in (payload.get('areas') or {}).items():
             summary = area_data.get('summary') or {}
@@ -77,6 +81,12 @@ def _replace_processes(user, procesos):
                 total_candidates=summary.get('totalCandidates', 0),
                 missing_responses=summary.get('missingResponses', 0),
                 missing_keys=summary.get('missingKeys', 0),
+                duplicate_responses=summary.get('duplicateResponses', 0),
+                invalid_candidates=summary.get('invalidCandidates', 0),
+                missing_programs=summary.get('missingPrograms', 0),
+                invalid_response_types=summary.get('invalidResponseTypes', 0),
+                unlinked_responses=summary.get('unlinkedResponses', 0),
+                no_calificados=summary.get('noCalificados', []),
                 total_weight=summary.get('totalWeight', 0),
                 answers_length=summary.get('answersLength', 60),
             )

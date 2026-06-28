@@ -28,6 +28,7 @@ class DatFormatConfigSerializer(serializers.ModelSerializer):
             'id', 'header_length', 'answers_length',
             'litho_offset', 'litho_length', 'tipo_offset', 'tipo_length',
             'dni_offset', 'dni_length', 'aula_offset', 'aula_length', 'answers_offset',
+            'response_answers_offset',
         ]
         read_only_fields = ['id']
 
@@ -164,6 +165,7 @@ class AnswerKeySourceSerializer(serializers.ModelSerializer):
             'identificationName',
             'timestamp',
             'area',
+            'scope',
             'validRows',
             'responseErrors',
             'identificationErrors',
@@ -183,6 +185,7 @@ class AnswerKeyRowSerializer(serializers.ModelSerializer):
             'id',
             'area',
             'tipo',
+            'scope',
             'answers',
             'indicator',
             'folio',

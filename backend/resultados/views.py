@@ -36,6 +36,8 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
         data = request.data
         local_id = data.get('local_id', '').strip()
         name = data.get('name', '').strip()
+        process_type = data.get('type', data.get('process_type', 'simulacro')) or 'simulacro'
+        simulacro_scope = data.get('simulacroScope', data.get('simulacro_scope', '')) or ''
         areas_payload = data.get('areas', {})
         if not local_id:
             return Response({'detail': 'local_id es requerido.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -50,6 +52,8 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                 local_id=local_id,
                 defaults={
                     'name': name,
+                    'process_type': process_type,
+                    'simulacro_scope': simulacro_scope,
                 },
             )
 
@@ -74,6 +78,12 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                         'total_candidates': summary.get('totalCandidates', 0),
                         'missing_responses': summary.get('missingResponses', 0),
                         'missing_keys': summary.get('missingKeys', 0),
+                        'duplicate_responses': summary.get('duplicateResponses', 0),
+                        'invalid_candidates': summary.get('invalidCandidates', 0),
+                        'missing_programs': summary.get('missingPrograms', 0),
+                        'invalid_response_types': summary.get('invalidResponseTypes', 0),
+                        'unlinked_responses': summary.get('unlinkedResponses', 0),
+                        'no_calificados': summary.get('noCalificados', []),
                         'total_weight': summary.get('totalWeight', 0),
                         'answers_length': summary.get('answersLength', 60),
                     },
@@ -119,6 +129,12 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                     'totalCandidates': area_obj.total_candidates,
                     'missingResponses': area_obj.missing_responses,
                     'missingKeys': area_obj.missing_keys,
+                    'duplicateResponses': area_obj.duplicate_responses,
+                    'invalidCandidates': area_obj.invalid_candidates,
+                    'missingPrograms': area_obj.missing_programs,
+                    'invalidResponseTypes': area_obj.invalid_response_types,
+                    'unlinkedResponses': area_obj.unlinked_responses,
+                    'noCalificados': area_obj.no_calificados,
                     'totalWeight': float(area_obj.total_weight),
                     'answersLength': area_obj.answers_length,
                     'correctValue': float(area_obj.correct_value),
@@ -156,6 +172,8 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
             'id': proceso.local_id,
             'dbId': proceso.id,
             'name': proceso.name,
+            'type': proceso.process_type,
+            'simulacroScope': proceso.simulacro_scope,
             'savedAt': proceso.updated_at.isoformat(),
             'areas': areas,
         })

@@ -16,6 +16,17 @@ import { apiFetch } from '@/utils/apiFetch'
 
 export { createIdentifierRow, buildIdentifierObservation }
 
+function summarizeObservations(rows) {
+  const summary = new Map()
+  rows.forEach((row) => {
+    String(row.observaciones || '')
+      .split(' · ')
+      .filter(Boolean)
+      .forEach((issue) => summary.set(issue, (summary.get(issue) || 0) + 1))
+  })
+  return Array.from(summary.entries()).map(([label, count]) => ({ label, count }))
+}
+
 /**
  * Composable para gestión de identificadores
  */
@@ -56,6 +67,12 @@ export function useIdentifiers() {
   )
 
   const observationCount = computed(() => observations.value.length)
+  const observationSummary = computed(() => summarizeObservations(observations.value))
+  const observationByRowId = computed(() => {
+    const map = new Map()
+    observations.value.forEach(row => map.set(row.id, row))
+    return map
+  })
 
   // Lookup por clave de match
   const identifierLookup = computed(() => {
@@ -284,6 +301,34 @@ export function useIdentifiers() {
     saveAs(blob, 'identificadores.xlsx')
   }
 
+  async function exportIdentifierObservationsToExcel() {
+    const rows = observations.value
+    if (!rows.length) return
+    const workbook = new ExcelJS.Workbook()
+    const worksheet = workbook.addWorksheet('Observados')
+    worksheet.columns = [
+      { header: 'N° lectura', key: 'lectura', width: 14 },
+      { header: 'DNI', key: 'dni', width: 12 },
+      { header: 'Aula', key: 'aula', width: 10 },
+      { header: 'Tipo', key: 'tipo', width: 8 },
+      { header: 'Litho', key: 'litho', width: 12 },
+      { header: 'Observaciones', key: 'observaciones', width: 60 },
+    ]
+    worksheet.getRow(1).eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7C2D12' } }
+      cell.alignment = { horizontal: 'center' }
+    })
+    rows.forEach(({ id, rawLine, header, examCode, folio, answers, sourceId, ...rest }) => {
+      worksheet.addRow(rest)
+    })
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    saveAs(blob, `observados-identificadores-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
   /**
    * Exporta observaciones a PDF
    */
@@ -334,6 +379,8 @@ export function useIdentifiers() {
     identifierHasData,
     observations,
     observationCount,
+    observationSummary,
+    observationByRowId,
     identifierLookup,
     identifierLookupByLitho,
 
@@ -346,6 +393,7 @@ export function useIdentifiers() {
     removeIdentifierSource,
     clearAllIdentifiers,
     exportIdentifiersToExcel,
+    exportIdentifierObservationsToExcel,
     exportObservationsPdf,
   }
 }

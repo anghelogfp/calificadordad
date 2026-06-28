@@ -1,6 +1,6 @@
 <script setup>
 import { reactive, ref, computed } from 'vue'
-import { RESPONSES_SUBTABS } from '@/constants'
+import { RESPONSES_SUBTABS, DEFAULT_DAT_FORMAT } from '@/constants'
 import WorkflowIntroCard from '@/components/shared/WorkflowIntroCard.vue'
 import FileUploader from '@/components/shared/FileUploader.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
@@ -33,6 +33,40 @@ const matchStatus = computed(() => {
 const emit = defineEmits(['update:subTab'])
 
 const responses = reactive(props.responses)
+const showOnlyObserved = ref(false)
+const detectFileInput = ref(null)
+const detecting = ref(false)
+const configuredOffset = DEFAULT_DAT_FORMAT.responseAnswersOffset
+
+const displayedRows = computed(() => (
+  showOnlyObserved.value ? responses.observations : responses.pagedRows
+))
+
+const detectStatus = computed(() => {
+  const r = responses.detectedOffset
+  if (!r) return null
+  if (r.offset < 0) return { label: 'Error al detectar', variant: 'error' }
+  const match = r.offset === configuredOffset
+  return {
+    label: match
+      ? `Offset detectado: ${r.offset} (coincide con config)`
+      : `Offset detectado: ${r.offset} (config: ${configuredOffset})`,
+    variant: match ? 'success' : 'warn',
+  }
+})
+
+function handleDetectFormat() {
+  detectFileInput.value?.click()
+}
+
+async function onDetectFileChange(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  detecting.value = true
+  await responses.detectFormat(file)
+  detecting.value = false
+  event.target.value = ''
+}
 
 // ── Confirmación inline ──────────────────────────────────────────────────────
 const pendingAction = ref(null)
@@ -74,7 +108,7 @@ const tableColumns = [
 
 function getRowClass(row) {
   return {
-    'row--issue': row.observaciones !== 'Sin observaciones'
+    'row--issue': Boolean(responses.observationByRowId?.get(row.id))
   }
 }
 </script>
@@ -125,6 +159,60 @@ function getRowClass(row) {
     <div v-if="responses.importError" class="alert alert--error">
       {{ responses.importError }}
     </div>
+
+    <input
+      ref="detectFileInput"
+      type="file"
+      accept=".dat,.txt"
+      style="display:none"
+      @change="onDetectFileChange"
+    >
+
+    <section class="detect-section">
+      <div class="detect-section__info">
+        <span class="detect-section__eyebrow">Formato de archivo</span>
+        <p>Offset configurado: <strong>{{ configuredOffset }}</strong> (respuestas inician en posición {{ configuredOffset }})</p>
+      </div>
+      <div class="detect-section__actions">
+        <button type="button" class="btn btn--ghost" :disabled="detecting" @click="handleDetectFormat">
+          <svg v-if="detecting" class="btn__icon spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12a9 9 0 11-6.219-8.56"/>
+          </svg>
+          <svg v-else class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          {{ detecting ? 'Analizando...' : 'Detectar formato' }}
+        </button>
+        <span v-if="detectStatus" class="detect-badge" :class="`detect-badge--${detectStatus.variant}`">
+          {{ detectStatus.label }}
+        </span>
+      </div>
+    </section>
+
+    <section v-if="responses.observationCount" class="observed-panel">
+      <div class="observed-panel__header">
+        <div>
+          <span class="observed-panel__eyebrow">Observados de respuestas</span>
+          <h3>{{ responses.observationCount }} registro(s) requieren revisión</h3>
+        </div>
+        <div class="observed-panel__actions">
+          <button type="button" class="btn btn--ghost" @click="showOnlyObserved = !showOnlyObserved">
+            {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
+          </button>
+          <button type="button" class="btn btn--primary" @click="responses.exportResponseObservationsToExcel">
+            Exportar observados
+          </button>
+        </div>
+      </div>
+      <div class="observed-panel__chips">
+        <span v-for="item in responses.observationSummary" :key="item.label" class="observed-chip">
+          <strong>{{ item.count }}</strong> {{ item.label }}
+        </span>
+      </div>
+      <p class="observed-panel__hint">
+        Corrige la lectura, DNI, tipo o respuestas marcadas en la tabla antes de volver a calificar.
+      </p>
+    </section>
 
     <!-- Confirmación inline -->
     <div v-if="pendingAction" class="confirm-banner">
@@ -177,6 +265,14 @@ function getRowClass(row) {
         <button
           type="button"
           class="btn btn--ghost"
+          @click="responses.exportResponseObservationsToExcel"
+          :disabled="!responses.observationCount"
+        >
+          Observados Excel
+        </button>
+        <button
+          type="button"
+          class="btn btn--ghost"
           @click="responses.exportResponsesObservationsPdf"
           :disabled="!responses.observationCount"
         >
@@ -220,14 +316,14 @@ function getRowClass(row) {
       <DataTable
         v-if="responses.responsesHasData"
         :columns="tableColumns"
-        :rows="responses.pagedRows"
+        :rows="displayedRows"
         :selection="responses.selection"
         :editing="responses.editing"
         :is-all-selected="responses.isAllVisibleSelected"
         :is-indeterminate="responses.isSomeVisibleSelected"
         :selected-count="responses.totalSelected"
         :row-class="getRowClass"
-        :pagination="responses.pagination"
+        :pagination="showOnlyObserved ? null : responses.pagination"
         @toggle-selection="responses.toggleSelection"
         @toggle-select-all="responses.toggleSelectAll"
         @toggle-edit="responses.toggleEdit"
@@ -354,6 +450,89 @@ function getRowClass(row) {
   background: linear-gradient(135deg, var(--error-600) 0%, #b91c1c 100%);
 }
 
+.btn--primary {
+  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.observed-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 4px solid #d97706;
+  border-radius: var(--radius-lg);
+}
+
+.observed-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.observed-panel__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: #92400e;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.observed-panel h3 {
+  margin: 0;
+  color: #78350f;
+  font-size: 0.98rem;
+}
+
+.observed-panel__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.observed-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.observed-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px var(--space-2);
+  background: white;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-full);
+  color: #92400e;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.observed-chip strong {
+  color: #78350f;
+}
+
+.observed-panel__hint {
+  margin: 0;
+  color: #92400e;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
 .icon {
   display: inline-flex;
   align-items: center;
@@ -454,4 +633,87 @@ function getRowClass(row) {
 }
 .match-bar--low svg             { color: #dc2626; }
 .match-bar--low .match-bar__fill { background: #f87171; }
+
+@media (max-width: 768px) {
+  .observed-panel__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .observed-panel__actions {
+    justify-content: flex-start;
+  }
+}
+
+/* ── Detect section ────────────────────────────────────────────────────── */
+.detect-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--slate-50);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-lg);
+}
+
+.detect-section__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--slate-500);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.detect-section__info p {
+  margin: 0;
+  color: var(--slate-700);
+  font-size: 0.82rem;
+}
+
+.detect-section__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.detect-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.detect-badge--success {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.detect-badge--warn {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.detect-badge--error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 </style>

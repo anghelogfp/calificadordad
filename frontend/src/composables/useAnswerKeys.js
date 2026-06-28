@@ -14,21 +14,34 @@ import {
   buildResponseMatchKey,
   buildAreaTipoKey,
 } from '@/utils/helpers'
-import { parseIdentifierLine, parseResponseLine, readLinesFromFile } from '@/utils/parsers'
+import { parseIdentifierLine, parseResponseLine, readLinesFromFile, detectResponseAnswersOffset } from '@/utils/parsers'
 import { apiFetch } from '@/utils/apiFetch'
+
+function summarizeObservations(rows) {
+  const summary = new Map()
+  rows.forEach((row) => {
+    String(row.observaciones || '')
+      .split(' · ')
+      .filter(Boolean)
+      .forEach((issue) => summary.set(issue, (summary.get(issue) || 0) + 1))
+  })
+  return Array.from(summary.entries()).map(([label, count]) => ({ label, count }))
+}
 
 /**
  * Crea una fila de clave de respuesta
  */
 export function createAnswerKeyRow(data = {}) {
+  const rawArea = data.area == null ? '' : String(data.area).trim()
   const row = {
     id: data.id ?? generateId(),
-    area: normalizeArea(data.area),
+    area: rawArea ? normalizeArea(rawArea) : '',
     tipo: data.tipo ?? '',
     answers: data.answers ?? '',
     indicator: data.indicator ?? '',
     folio: data.folio ?? '',
     litho: data.litho ?? '',
+    scope: data.scope ?? (rawArea ? 'area' : 'general'),
     observaciones: data.observaciones ?? 'Sin observaciones',
     sourceId: data.sourceId ?? '',
   }
@@ -42,9 +55,10 @@ export function createAnswerKeyRow(data = {}) {
  */
 export function buildAnswerKeyObservation(row) {
   const issues = []
+  const isGeneralKey = row.scope === 'general' || !String(row.area || '').trim()
 
   const tipo = (row.tipo || '').trim()
-  if (!tipo) {
+  if (!isGeneralKey && !tipo) {
     issues.push('Tipo no informado')
   }
 
@@ -56,11 +70,12 @@ export function buildAnswerKeyObservation(row) {
   }
 
   const answersRaw = String(row.answers || '').toUpperCase()
-  const answersNormalized = answersRaw.replaceAll(/\s/g, '')
+  const answerWindow = answersRaw.slice(0, 60)
+  const answersNormalized = answerWindow.replace(/\s/g, '')
   if (!answersNormalized) {
     issues.push('Sin respuestas registradas')
-  } else if (answersNormalized.length !== 60) {
-    issues.push(`Cadena incompleta (${answersNormalized.length}/60)`)
+  } else if (answersRaw.length < 60) {
+    issues.push(`Cadena incompleta (${answersRaw.length}/60)`)
   } else if (/[^A-E*]/.test(answersNormalized)) {
     issues.push('Respuestas con marcas no válidas')
   }
@@ -105,6 +120,22 @@ export function useAnswerKeys(archiveRows) {
   const identificationInputRef = ref(null)
   const responsesInputRef = ref(null)
 
+  // Detección de offset de respuestas
+  const detectedOffset = ref(null)
+
+  async function detectFormat(file) {
+    detectedOffset.value = null
+    try {
+      const text = await file.text()
+      const sanitized = text.split('\u001a').join('')
+      const lines = sanitized.split(/\r?\n/).filter(Boolean)
+      const result = detectResponseAnswersOffset(lines)
+      detectedOffset.value = result
+    } catch {
+      detectedOffset.value = { offset: -1, score: 0, answerPct: 0, digitPct: 1 }
+    }
+  }
+
   // Computed
   const answerKeyHasData = computed(() => tableState.rows.value.length > 0)
   const sourcesCount = computed(() => sources.value.length)
@@ -116,6 +147,12 @@ export function useAnswerKeys(archiveRows) {
   )
 
   const observationCount = computed(() => observations.value.length)
+  const observationSummary = computed(() => summarizeObservations(observations.value))
+  const observationByRowId = computed(() => {
+    const map = new Map()
+    observations.value.forEach(row => map.set(row.id, row))
+    return map
+  })
 
   // Opciones de área basadas en archivos cargados
   const answerKeyAreaOptions = computed(() => {
@@ -150,6 +187,7 @@ export function useAnswerKeys(archiveRows) {
   const answerKeyFallbackByArea = computed(() => {
     const map = new Map()
     tableState.rows.value.forEach((row) => {
+      if (!row.area?.trim()) return
       const area = normalizeArea(row.area)
       if (!area || map.has(area)) return
       map.set(area, row)
@@ -312,6 +350,61 @@ export function useAnswerKeys(archiveRows) {
     }
   }
 
+  async function readGeneralAnswerKeyFile(responsesFileParam) {
+    const responseResults = await readLinesFromFile(responsesFileParam, parseResponseLine)
+    const responseRowsOnly = responseResults.filter((item) => item && item.row)
+    const responseErrors = responseResults.filter((item) => item && item.error)
+
+    const createdAt = new Date().toISOString()
+    const sourceId = generateId()
+    const combinedRows = responseRowsOnly.map(({ row }) => createAnswerKeyRow({
+      area: '',
+      tipo: row.tipo || '',
+      answers: row.answers,
+      indicator: row.indicator,
+      folio: row.folio,
+      litho: row.litho,
+      scope: 'general',
+      sourceId,
+    }))
+
+    const errorMessages = responseErrors.map(({ error }) => `${responsesFileParam.name}: ${error}`)
+    if (combinedRows.length === 0) {
+      if (errorMessages.length) {
+        const preview = errorMessages.slice(0, 3).join(' | ')
+        tableState.importError.value = errorMessages.length > 3 ? `${preview} ...` : preview
+      } else {
+        tableState.importError.value = 'No se encontraron claves válidas en el archivo seleccionado.'
+      }
+      return
+    }
+
+    tableState.rows.value = [...tableState.rows.value, ...combinedRows]
+    sources.value = [
+      ...sources.value,
+      {
+        id: sourceId,
+        name: responsesFileParam.name,
+        identificationName: '',
+        timestamp: createdAt,
+        area: 'General',
+        scope: 'general',
+        validRows: combinedRows.length,
+        responseErrors: responseErrors.length,
+        identificationErrors: 0,
+      },
+    ]
+
+    tableState.clearSelection()
+    tableState.clearEditing()
+    if (errorMessages.length) {
+      const preview = errorMessages.slice(0, 3).join(' | ')
+      tableState.importError.value = errorMessages.length > 3 ? `${preview} ...` : preview
+    } else {
+      tableState.importError.value = ''
+    }
+  }
+
   /**
    * Handler para cambio de archivo de identificación
    */
@@ -332,6 +425,25 @@ export function useAnswerKeys(archiveRows) {
    * Importa archivos de claves
    */
   async function importAnswerKeyFiles() {
+    if (!responsesFile.value) {
+      tableState.importError.value = 'Selecciona el archivo de respuestas correctas (.dat) antes de importar.'
+      return
+    }
+
+    if (!identificationFile.value) {
+      try {
+        await readGeneralAnswerKeyFile(responsesFile.value)
+        responsesFile.value = null
+        if (responsesInputRef.value) {
+          responsesInputRef.value.value = ''
+        }
+      } catch (error) {
+        console.error(error)
+        tableState.importError.value = 'Ocurrió un problema al procesar la clave general.'
+      }
+      return
+    }
+
     if (!identificationFile.value || !responsesFile.value) {
       tableState.importError.value = 'Selecciona ambos archivos (.dat) antes de importar.'
       return
@@ -400,6 +512,33 @@ export function useAnswerKeys(archiveRows) {
     saveAs(blob, 'claves-respuestas.xlsx')
   }
 
+  async function exportAnswerKeyObservationsToExcel() {
+    const rows = observations.value
+    if (!rows.length) return
+    const workbook = new ExcelJS.Workbook()
+    const worksheet = workbook.addWorksheet('Observados')
+    worksheet.columns = [
+      { header: 'Área', key: 'area', width: 18 },
+      { header: 'Tipo', key: 'tipo', width: 8 },
+      { header: 'Litho', key: 'litho', width: 12 },
+      { header: 'Respuestas', key: 'answers', width: 70 },
+      { header: 'Observaciones', key: 'observaciones', width: 60 },
+    ]
+    worksheet.getRow(1).eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7C2D12' } }
+      cell.alignment = { horizontal: 'center' }
+    })
+    rows.forEach(({ id, sourceId, indicator, folio, ...rest }) => {
+      worksheet.addRow(rest)
+    })
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    saveAs(blob, `observados-claves-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
   /**
    * Exporta observaciones a PDF
    */
@@ -460,6 +599,9 @@ export function useAnswerKeys(archiveRows) {
     sourcesCount,
     observations,
     observationCount,
+    observationSummary,
+    observationByRowId,
+    detectedOffset,
     answerKeyAreaOptions,
     answerKeyLookupByMatch,
     answerKeyLookupByAreaTipo,
@@ -469,12 +611,15 @@ export function useAnswerKeys(archiveRows) {
     initializeAnswerKeys,
     syncAnswerKeysToApi,
     readAnswerKeyFiles,
+    readGeneralAnswerKeyFile,
     onAnswerKeyIdentificationChange,
     onAnswerKeyResponsesChange,
     importAnswerKeyFiles,
+    detectFormat,
     removeAnswerKeySource,
     clearAllAnswerKeys,
     exportAnswerKeysToExcel,
+    exportAnswerKeyObservationsToExcel,
     exportAnswerKeysObservationsPdf,
   }
 }

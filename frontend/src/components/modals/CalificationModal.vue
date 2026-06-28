@@ -21,10 +21,11 @@ useFocusTrap(modalRef, computed(() => props.show))
 
 const runningAll = ref(false)
 const allResult = ref(null)
+const isRealMode = computed(() => props.calification.processType === 'real')
+const isGeneralSimulacro = computed(() => props.calification.isGeneralSimulacro)
 
 function close() { emit('close') }
 function runCalification() {
-  console.log('[modal] runCalification llamado, área:', props.calification.calificationArea, 'plantillaId:', props.calification.calificationPlantillaId, 'hasBlockers:', props.calification.preflightCheck?.hasBlockers)
   props.calification.runCalification()
 }
 
@@ -61,7 +62,15 @@ function setVacantes(programa, val) {
           </div>
           <div class="modal__title">
             <h2>Calcular Puntajes</h2>
-            <p>Selecciona área · plantilla · valores y genera el ranking</p>
+            <p>
+              {{
+                isRealMode
+                  ? 'Convocatoria real · claves P/Q/R/S/T · ranking por programa'
+                  : isGeneralSimulacro
+                    ? 'Simulacro general · clave única · ranking general'
+                    : 'Simulacro por áreas · ranking por área'
+              }}
+            </p>
           </div>
           <button type="button" class="modal__close" @click="close" aria-label="Cerrar">
             <svg viewBox="0 0 20 20" fill="currentColor">
@@ -70,7 +79,7 @@ function setVacantes(programa, val) {
           </button>
         </header>
 
-        <form class="modal__body" @submit.prevent="runCalification">
+        <form class="modal__body" @submit.prevent="runCalification" novalidate>
 
           <!-- Error de calificación (top) -->
           <div v-if="calification.calificationError" class="alert alert--error">
@@ -145,6 +154,69 @@ function setVacantes(programa, val) {
               <p v-if="calification.processAreas.length > 0" class="field-note">
                 Para cambiar el tipo, recalcula todas las áreas del proceso.
               </p>
+
+              <div v-if="!isRealMode" class="field">
+                <label>
+                  Alcance del simulacro
+                  <span class="locked-chip">
+                    Detectado: {{ calification.inferredSimulacroScope === 'general' ? 'General' : 'Por áreas' }}
+                  </span>
+                </label>
+                <div class="type-toggle" :class="{ 'type-toggle--locked': calification.processAreas.length > 0 }">
+                  <button
+                    type="button"
+                    class="type-opt"
+                    :class="{ 'type-opt--active': calification.simulacroScope === 'general' }"
+                    :disabled="calification.processAreas.length > 0"
+                    @click="calification.simulacroScope = 'general'"
+                  >
+                    <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+                      <path d="M8 8a3 3 0 100-6 3 3 0 000 6zM2 14s1-4 6-4 6 4 6 4H2z"/>
+                    </svg>
+                    <span class="type-opt__text">
+                      General
+                      <small>Un ranking para todos</small>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    class="type-opt"
+                    :class="{ 'type-opt--active': calification.simulacroScope === 'areas' }"
+                    :disabled="calification.processAreas.length > 0"
+                    @click="calification.simulacroScope = 'areas'"
+                  >
+                    <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
+                      <path d="M2 3.5A1.5 1.5 0 013.5 2h9A1.5 1.5 0 0114 3.5V5H2V3.5zM2 6h5v8H3.5A1.5 1.5 0 012 12.5V6zm6 0h6v6.5a1.5 1.5 0 01-1.5 1.5H8V6z"/>
+                    </svg>
+                    <span class="type-opt__text">
+                      Por áreas
+                      <small>Ranking separado por área</small>
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="mode-summary" :class="isRealMode ? 'mode-summary--real' : 'mode-summary--simulacro'">
+                <span class="mode-chip">
+                  <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
+                    <path fill-rule="evenodd" d="M8 16A8 8 0 108 0a8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882L7.45 9.703 5.28 7.533a.75.75 0 00-1.06 1.061l2.79 2.79a.75.75 0 001.137-.089l3.71-5.104z" clip-rule="evenodd"/>
+                  </svg>
+                  {{ isRealMode ? 'Tipo P/Q/R/S/T obligatorio' : 'Tipo no requerido' }}
+                </span>
+                <span class="mode-chip">
+                  <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
+                    <path d="M2 3.75A1.75 1.75 0 013.75 2h8.5A1.75 1.75 0 0114 3.75v8.5A1.75 1.75 0 0112.25 14h-8.5A1.75 1.75 0 012 12.25v-8.5zM4 5v1.5h8V5H4zm0 3v1.5h8V8H4zm0 3v1h5v-1H4z"/>
+                  </svg>
+                  {{ isRealMode ? 'Área y programa requeridos' : isGeneralSimulacro ? 'Padrón sin área permitido' : 'Áreas del padrón' }}
+                </span>
+                <span class="mode-chip">
+                  <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
+                    <path fill-rule="evenodd" d="M2 13.5A1.5 1.5 0 003.5 15h9a1.5 1.5 0 001.5-1.5v-7A1.5 1.5 0 0012.5 5h-9A1.5 1.5 0 002 6.5v7zM3.5 6h9a.5.5 0 01.5.5V8H3V6.5a.5.5 0 01.5-.5zM3 9h10v4.5a.5.5 0 01-.5.5h-9a.5.5 0 01-.5-.5V9z" clip-rule="evenodd"/>
+                    <path d="M5 1a1 1 0 00-1 1v1h2V2a1 1 0 00-1-1zm6 0a1 1 0 00-1 1v1h2V2a1 1 0 00-1-1z"/>
+                  </svg>
+                  {{ isRealMode ? 'Vacantes por programa' : isGeneralSimulacro ? 'Ranking general' : 'Ranking por área' }}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -154,8 +226,8 @@ function setVacantes(programa, val) {
               <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
                 <path d="M8.354 1.146a.5.5 0 00-.708 0l-6 6A.5.5 0 002 8v5a1 1 0 001 1h3a1 1 0 001-1v-3h2v3a1 1 0 001 1h3a1 1 0 001-1V8a.5.5 0 00-.146-.354l-6-6z"/>
               </svg>
-              Área a calificar
-              <span v-if="calification.calificationAreaOptions.length > 1" class="section__counter">
+              {{ isGeneralSimulacro ? 'Ranking a calificar' : 'Área a calificar' }}
+              <span v-if="!isGeneralSimulacro && calification.calificationAreaOptions.length > 1" class="section__counter">
                 {{ calification.processAreas.length }} / {{ calification.calificationAreaOptions.length }} calculadas
               </span>
             </p>
@@ -290,7 +362,7 @@ function setVacantes(programa, val) {
           </div>
 
           <!-- ── SECCIÓN 4: Vacantes (condicional) ──────────────────────── -->
-          <div v-if="calification.programasForCurrentArea.length > 0" class="section">
+          <div v-if="isRealMode && calification.programasForCurrentArea.length > 0" class="section">
             <p class="section__label">
               <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
                 <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7zm4-6a3 3 0 100-6 3 3 0 000 6zM5.978 8.372A5.976 5.976 0 005 9H1s-1 0-1 1 1 3 1 3h3.5c.34-.81.84-1.583 1.478-2.372z"/>
@@ -318,6 +390,18 @@ function setVacantes(programa, val) {
               </div>
             </div>
           </div>
+          <div v-else-if="!isRealMode" class="section mode-note">
+            <p class="section__label">
+              <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
+                <path fill-rule="evenodd" d="M8 16A8 8 0 108 0 8 8 0 008 16zm.75-11.25a.75.75 0 00-1.5 0v4.5c0 .414.336.75.75.75h3a.75.75 0 000-1.5H8.75V4.75z" clip-rule="evenodd"/>
+              </svg>
+              Salida de simulacro
+            </p>
+            <div class="mode-note__body">
+              <span>Se generará una tabla plana por puntaje total.</span>
+              <span>Las vacantes e ingresantes no se aplican en este modo.</span>
+            </div>
+          </div>
 
           <!-- ── SECCIÓN 5: Diagnóstico del área ───────────────────────── -->
           <div
@@ -332,7 +416,7 @@ function setVacantes(programa, val) {
               <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
                 <path fill-rule="evenodd" d="M8 16A8 8 0 108 0a8 8 0 000 16zm.93-9.412l-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM8 5.5a1 1 0 110-2 1 1 0 010 2z" clip-rule="evenodd"/>
               </svg>
-              Diagnóstico del área
+              {{ isGeneralSimulacro ? 'Diagnóstico del ranking general' : 'Diagnóstico del área' }}
               <span
                 class="status-badge"
                 :class="calification.preflightCheck.hasBlockers ? 'badge--error'
@@ -398,14 +482,15 @@ function setVacantes(programa, val) {
 
             <!-- Calcular área activa -->
             <button
-              type="submit"
+              type="button"
               class="btn btn--gold"
               :disabled="calification.preflightCheck.hasBlockers"
+              @click="runCalification"
             >
               <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd"/>
               </svg>
-              Calcular {{ calification.calificationArea }}
+              Calcular {{ isGeneralSimulacro ? 'ranking general' : calification.calificationArea }}
             </button>
           </div>
         </footer>
@@ -600,6 +685,49 @@ function setVacantes(programa, val) {
   box-shadow: var(--shadow-gold);
 }
 
+.mode-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--slate-200);
+  background: var(--slate-50);
+}
+
+.mode-summary--simulacro {
+  border-color: var(--unap-blue-100);
+  background: var(--unap-blue-50);
+}
+
+.mode-summary--real {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--slate-600);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.mode-chip svg {
+  flex-shrink: 0;
+  color: var(--unap-blue-500);
+}
+
+.mode-summary--real .mode-chip {
+  color: #78350f;
+}
+
+.mode-summary--real .mode-chip svg {
+  color: #d97706;
+}
+
 /* ── Área pills ──────────────────────────────────────────────────────────── */
 .area-pills {
   display: flex; flex-wrap: wrap; gap: var(--space-2);
@@ -735,6 +863,21 @@ function setVacantes(programa, val) {
 
 .vacantes-unit {
   font-size: 0.7rem; color: var(--slate-400); font-weight: 500;
+}
+
+.mode-note {
+  border-color: var(--unap-blue-100);
+  background: var(--unap-blue-50);
+}
+
+.mode-note__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--unap-blue-800);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.45;
 }
 
 /* ── Preflight / Diagnóstico ─────────────────────────────────────────────── */

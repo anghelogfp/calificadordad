@@ -11,10 +11,22 @@ import {
   createResponseRow,
   buildResponseObservation,
   parseResponseLine,
+  detectResponseAnswersOffset,
 } from '@/utils/parsers'
 import { apiFetch } from '@/utils/apiFetch'
 
 export { createResponseRow, buildResponseObservation }
+
+function summarizeObservations(rows) {
+  const summary = new Map()
+  rows.forEach((row) => {
+    String(row.observaciones || '')
+      .split(' · ')
+      .filter(Boolean)
+      .forEach((issue) => summary.set(issue, (summary.get(issue) || 0) + 1))
+  })
+  return Array.from(summary.entries()).map(([label, count]) => ({ label, count }))
+}
 
 /**
  * Composable para gestión de respuestas
@@ -47,6 +59,22 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
   const apiReady = ref(false)
   let skipNextApiSync = false
 
+  // Detección de offset de respuestas
+  const detectedOffset = ref(null)
+
+  async function detectFormat(file) {
+    detectedOffset.value = null
+    try {
+      const text = await file.text()
+      const sanitized = text.split('\u001a').join('')
+      const lines = sanitized.split(/\r?\n/).filter(Boolean)
+      const result = detectResponseAnswersOffset(lines)
+      detectedOffset.value = result
+    } catch {
+      detectedOffset.value = { offset: -1, score: 0, answerPct: 0, digitPct: 1 }
+    }
+  }
+
   // Computed
   const responsesHasData = computed(() => tableState.rows.value.length > 0)
   const sourcesCount = computed(() => sources.value.length)
@@ -58,6 +86,12 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
   )
 
   const observationCount = computed(() => observations.value.length)
+  const observationSummary = computed(() => summarizeObservations(observations.value))
+  const observationByRowId = computed(() => {
+    const map = new Map()
+    observations.value.forEach(row => map.set(row.id, row))
+    return map
+  })
 
   // Lookup por DNI
   const responsesByDni = computed(() => {
@@ -303,6 +337,34 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
     saveAs(blob, 'respuestas.xlsx')
   }
 
+  async function exportResponseObservationsToExcel() {
+    const rows = observations.value
+    if (!rows.length) return
+    const workbook = new ExcelJS.Workbook()
+    const worksheet = workbook.addWorksheet('Observados')
+    worksheet.columns = [
+      { header: 'N° lectura', key: 'lectura', width: 14 },
+      { header: 'DNI', key: 'dni', width: 12 },
+      { header: 'Tipo', key: 'tipo', width: 8 },
+      { header: 'Litho', key: 'litho', width: 12 },
+      { header: 'Respuestas', key: 'answers', width: 70 },
+      { header: 'Observaciones', key: 'observaciones', width: 60 },
+    ]
+    worksheet.getRow(1).eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7C2D12' } }
+      cell.alignment = { horizontal: 'center' }
+    })
+    rows.forEach(({ id, sourceId, header, examCode, folio, indicator, ...rest }) => {
+      worksheet.addRow(rest)
+    })
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    saveAs(blob, `observados-respuestas-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
   /**
    * Exporta observaciones a PDF
    */
@@ -355,18 +417,23 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
     sourcesCount,
     observations,
     observationCount,
+    observationSummary,
+    observationByRowId,
     responsesByDni,
+    detectedOffset,
 
     // Métodos específicos
     initializeResponses,
     syncResponsesToApi,
     applyIdentifierDataToResponseRow,
     readResponseFiles,
+    detectFormat,
     onResponseDrop,
     onResponseFileChange,
     removeResponsesSource,
     clearAllResponses,
     exportResponsesToExcel,
+    exportResponseObservationsToExcel,
     exportResponsesObservationsPdf,
   }
 }

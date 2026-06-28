@@ -29,6 +29,7 @@ class DatFormatConfig(models.Model):
     aula_offset = models.IntegerField(default=15)
     aula_length = models.IntegerField(default=3)
     answers_offset = models.IntegerField(default=18)
+    response_answers_offset = models.IntegerField(default=7)
 
     class Meta:
         db_table = 'dat_format_configs'
@@ -226,6 +227,7 @@ class AnswerKeySource(models.Model):
     identification_name = models.CharField(max_length=255, blank=True)
     timestamp = models.DateTimeField()
     area = models.CharField(max_length=100, blank=True)
+    scope = models.CharField(max_length=20, blank=True, default='')
     valid_rows = models.IntegerField(default=0)
     response_errors = models.IntegerField(default=0)
     identification_errors = models.IntegerField(default=0)
@@ -262,6 +264,7 @@ class AnswerKeyRow(models.Model):
     client_id = models.CharField(max_length=64)
     area = models.CharField(max_length=100, blank=True)
     tipo = models.CharField(max_length=10, blank=True)
+    scope = models.CharField(max_length=20, blank=True, default='')
     answers = models.CharField(max_length=300, blank=True)
     indicator = models.CharField(max_length=10, blank=True)
     folio = models.CharField(max_length=40, blank=True)

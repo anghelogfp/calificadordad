@@ -138,6 +138,7 @@ export const DEFAULT_DAT_FORMAT = Object.freeze({
   aulaOffset: 15,
   aulaLength: 3,
   answersOffset: 18,
+  responseAnswersOffset: 7,
 })
 
 // Ponderaciones por defecto

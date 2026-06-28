@@ -16,6 +16,8 @@ export function useHistory() {
         id: p.local_id,
         dbId: p.id,
         name: p.name,
+        type: p.process_type || 'simulacro',
+        simulacroScope: p.simulacro_scope || '',
         savedAt: p.updated_at,
         areaNames: p.area_names || [],
         totalCandidates: p.total_candidates || 0,
@@ -35,6 +37,8 @@ export function useHistory() {
         body: JSON.stringify({
           local_id: process.id,
           name: customName || process.name,
+          type: process.type || 'simulacro',
+          simulacroScope: process.simulacroScope || '',
           areas: process.areas,
         }),
       })

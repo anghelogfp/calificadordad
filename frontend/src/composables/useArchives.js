@@ -8,7 +8,7 @@ import {
   ARCHIVE_COLUMNS,
   ARCHIVE_KEY_ALIASES,
 } from '@/constants'
-import { generateId, normalize, normalizeArea } from '@/utils/helpers'
+import { generateId, normalize, normalizeArea, stripDigits } from '@/utils/helpers'
 import { apiFetch } from '@/utils/apiFetch'
 
 /**
@@ -65,6 +65,32 @@ function mapArchiveRowToSchema(row) {
   return hasContent ? createArchiveRow(mappedRow) : null
 }
 
+function buildArchiveIssues(rows) {
+  const countsByDni = new Map()
+  rows.forEach((row) => {
+    const dni = stripDigits(row.dni)
+    if (!dni) return
+    countsByDni.set(dni, (countsByDni.get(dni) || 0) + 1)
+  })
+
+  return rows.map((row) => {
+    const dni = stripDigits(row.dni)
+    const issues = []
+    if (!dni) {
+      issues.push('DNI vacío')
+    } else {
+      if (dni.length !== 8) issues.push(`DNI incompleto (${dni.length}/8)`)
+      if ((countsByDni.get(dni) || 0) > 1) issues.push('DNI duplicado')
+    }
+    return {
+      row,
+      dni,
+      issues,
+      message: issues.length ? issues.join(' · ') : 'Sin observaciones',
+    }
+  })
+}
+
 /**
  * Composable para gestión de archivos (padrón)
  */
@@ -101,6 +127,33 @@ export function useArchives() {
     })
     return map
   })
+
+  const archiveIssues = computed(() =>
+    buildArchiveIssues(tableState.rows.value).filter(item => item.issues.length > 0)
+  )
+
+  const archiveIssueCount = computed(() => archiveIssues.value.length)
+
+  const archiveIssueSummary = computed(() => {
+    const summary = new Map()
+    archiveIssues.value.forEach((item) => {
+      item.issues.forEach((issue) => {
+        const key = issue.startsWith('DNI incompleto') ? 'DNI incompleto' : issue
+        summary.set(key, (summary.get(key) || 0) + 1)
+      })
+    })
+    return Array.from(summary.entries()).map(([label, count]) => ({ label, count }))
+  })
+
+  const archiveIssueByRowId = computed(() => {
+    const map = new Map()
+    archiveIssues.value.forEach((item) => {
+      map.set(item.row.id, item)
+    })
+    return map
+  })
+
+  const observedRows = computed(() => archiveIssues.value.map(item => item.row))
 
   async function initializeArchives() {
     apiLoading.value = true
@@ -237,6 +290,45 @@ export function useArchives() {
     saveAs(blob, 'postulantes.xlsx')
   }
 
+  async function exportArchiveIssuesToExcel() {
+    if (!archiveIssues.value.length) return
+    const workbook = new ExcelJS.Workbook()
+    const worksheet = workbook.addWorksheet('Observados')
+    worksheet.columns = [
+      { header: 'DNI', key: 'dni', width: 12 },
+      { header: 'Apellido paterno', key: 'paterno', width: 20 },
+      { header: 'Apellido materno', key: 'materno', width: 20 },
+      { header: 'Nombres', key: 'nombres', width: 28 },
+      { header: 'Área', key: 'area', width: 18 },
+      { header: 'Programa', key: 'programa', width: 32 },
+      { header: 'Observación', key: 'observacion', width: 48 },
+    ]
+
+    worksheet.getRow(1).eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7C2D12' } }
+      cell.alignment = { horizontal: 'center' }
+    })
+
+    archiveIssues.value.forEach(({ row, message, dni }) => {
+      worksheet.addRow({
+        dni,
+        paterno: row.paterno || '',
+        materno: row.materno || '',
+        nombres: row.nombres || '',
+        area: row.area || '',
+        programa: row.programa || '',
+        observacion: message,
+      })
+    })
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    saveAs(blob, `observados-padron-${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
   /**
    * Handler para drop de archivo
    */
@@ -295,6 +387,11 @@ export function useArchives() {
     pendingRow,
     archiveHasData,
     archiveByDni,
+    archiveIssues,
+    archiveIssueCount,
+    archiveIssueSummary,
+    archiveIssueByRowId,
+    observedRows,
     lastFileName,
     apiLoading,
     apiSyncing,
@@ -305,6 +402,7 @@ export function useArchives() {
     syncArchivesToApi,
     readArchiveWorkbook,
     exportArchiveToExcel,
+    exportArchiveIssuesToExcel,
     onArchiveDrop,
     onArchiveFileChange,
     addArchiveRow,

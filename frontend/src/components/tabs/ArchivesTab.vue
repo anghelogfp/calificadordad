@@ -12,6 +12,7 @@ const props = defineProps({
 })
 
 const archives = reactive(props.archives)
+const showOnlyObserved = ref(false)
 
 const tableColumns = ARCHIVE_COLUMNS.map(col => ({
   key: col.key,
@@ -28,6 +29,22 @@ const tableColumns = ARCHIVE_COLUMNS.map(col => ({
 // Preview para FileUploader (primeras 5 filas, columnas principales)
 const PREVIEW_COLS = ARCHIVE_COLUMNS.slice(0, 5).map(c => ({ key: c.key, label: c.label }))
 const previewRows = computed(() => (archives.rows?.value ?? []).slice(0, 5))
+const displayedRows = computed(() => {
+  if (showOnlyObserved.value) return archives.observedRows || []
+  return archives.pagedRows || []
+})
+
+const simulacroDetection = computed(() => {
+  const rows = archives.rows?.value || []
+  if (!rows.length) return null
+  const withArea = rows.filter(row => row.area?.trim()).length
+  return {
+    scope: withArea > 0 ? 'areas' : 'general',
+    withArea,
+    withoutArea: rows.length - withArea,
+    total: rows.length,
+  }
+})
 
 // Validación de áreas: detecta áreas del padrón que no están en la DB
 const unknownAreas = computed(() => {
@@ -41,7 +58,11 @@ const unknownAreas = computed(() => {
   return Array.from(unknown).sort()
 })
 
-function getRowClass(row) { return {} }
+function getRowClass(row) {
+  return {
+    'row--observed': Boolean(archives.archiveIssueByRowId?.get(row.id)),
+  }
+}
 
 // ── Confirmación inline ──────────────────────────────────────────────────────
 
@@ -140,6 +161,22 @@ const emit = defineEmits(['goConfig'])
       <span>{{ archives.importError }}</span>
     </div>
 
+    <section v-if="simulacroDetection" class="scope-panel">
+      <div>
+        <span class="scope-panel__eyebrow">Detección para simulacro</span>
+        <h3>
+          {{ simulacroDetection.scope === 'general' ? 'Simulacro general detectado' : 'Simulacro por áreas detectado' }}
+        </h3>
+      </div>
+      <p>
+        {{
+          simulacroDetection.scope === 'general'
+            ? `El padrón no trae área. En simulacro se puede generar un ranking general de ${simulacroDetection.total} postulante(s).`
+            : `${simulacroDetection.withArea} postulante(s) tienen área. En simulacro se puede calificar por áreas.`
+        }}
+      </p>
+    </section>
+
     <!-- Advertencia de áreas no reconocidas -->
     <div v-if="unknownAreas.length" class="alert alert--warn">
       <svg class="alert__icon" viewBox="0 0 20 20" fill="currentColor">
@@ -152,6 +189,31 @@ const emit = defineEmits(['goConfig'])
         <a class="alert__link" href="#" @click.prevent="$emit('goConfig')">Ir a Configuración →</a>
       </span>
     </div>
+
+    <section v-if="archives.archiveIssueCount" class="observed-panel">
+      <div class="observed-panel__header">
+        <div>
+          <span class="observed-panel__eyebrow">Observados del padrón</span>
+          <h3>{{ archives.archiveIssueCount }} registro(s) requieren revisión</h3>
+        </div>
+        <div class="observed-panel__actions">
+          <button type="button" class="btn btn--ghost" @click="showOnlyObserved = !showOnlyObserved">
+            {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
+          </button>
+          <button type="button" class="btn btn--primary" @click="archives.exportArchiveIssuesToExcel">
+            Exportar observados
+          </button>
+        </div>
+      </div>
+      <div class="observed-panel__chips">
+        <span v-for="item in archives.archiveIssueSummary" :key="item.label" class="observed-chip">
+          <strong>{{ item.count }}</strong> {{ item.label }}
+        </span>
+      </div>
+      <p class="observed-panel__hint">
+        Puedes corregir el DNI directamente en la tabla con el botón editar. Al guardar, la observación se recalcula automáticamente.
+      </p>
+    </section>
 
     <!-- Banner de confirmación inline -->
     <div v-if="pendingAction" class="confirm-banner">
@@ -212,6 +274,9 @@ const emit = defineEmits(['goConfig'])
           </svg>
           Exportar Excel
         </button>
+        <button type="button" class="btn btn--ghost" @click="archives.exportArchiveIssuesToExcel" :disabled="!archives.archiveIssueCount">
+          Exportar observados
+        </button>
         <button type="button" class="btn btn--ghost" @click="confirmClearAll" :disabled="!archives.hasData">
           <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
             <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
@@ -237,14 +302,14 @@ const emit = defineEmits(['goConfig'])
     <DataTable
       v-if="archives.hasData"
       :columns="tableColumns"
-      :rows="archives.pagedRows"
+      :rows="displayedRows"
       :selection="archives.selection"
       :editing="archives.editing"
       :is-all-selected="archives.isAllVisibleSelected"
       :is-indeterminate="archives.isSomeVisibleSelected"
       :selected-count="archives.totalSelected"
       :row-class="getRowClass"
-      :pagination="archives.pagination"
+      :pagination="showOnlyObserved ? null : archives.pagination"
       @toggle-selection="archives.toggleSelection"
       @toggle-select-all="archives.toggleSelectAll"
       @toggle-edit="archives.toggleEdit"
@@ -526,9 +591,138 @@ const emit = defineEmits(['goConfig'])
   transform: translateY(-1px);
 }
 
+.observed-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 4px solid #d97706;
+  border-radius: var(--radius-lg);
+}
+
+.scope-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: #f8fafc;
+  border: 1px solid var(--slate-200);
+  border-left: 4px solid var(--unap-blue-500);
+  border-radius: var(--radius-lg);
+}
+
+.scope-panel__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--unap-blue-700);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.scope-panel h3 {
+  margin: 0;
+  color: var(--slate-800);
+  font-size: 0.98rem;
+}
+
+.scope-panel p {
+  margin: 0;
+  color: var(--slate-500);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  max-width: 430px;
+}
+
+.observed-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.observed-panel__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: #92400e;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.observed-panel h3 {
+  margin: 0;
+  color: #78350f;
+  font-size: 0.98rem;
+}
+
+.observed-panel__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.observed-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.observed-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px var(--space-2);
+  background: white;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-full);
+  color: #92400e;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.observed-chip strong {
+  color: #78350f;
+}
+
+.observed-panel__hint {
+  margin: 0;
+  color: #92400e;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+:deep(.row--observed) {
+  background: #fff7ed;
+}
+
+:deep(.row--observed td:first-child) {
+  border-left: 3px solid #f97316;
+}
+
 @media (max-width: 768px) {
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .observed-panel__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .observed-panel__actions {
+    justify-content: flex-start;
+  }
+
+  .scope-panel {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

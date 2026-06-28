@@ -122,7 +122,8 @@ const DAT_FIELDS = [
   { key: 'dniLength',     label: 'Longitud DNI',          hint: 'Caracteres del DNI' },
   { key: 'aulaOffset',    label: 'Offset aula',           hint: 'Posición inicial del aula' },
   { key: 'aulaLength',    label: 'Longitud aula',         hint: 'Caracteres del aula' },
-  { key: 'answersOffset', label: 'Offset respuestas',     hint: 'Posición donde inician las respuestas' },
+  { key: 'answersOffset', label: 'Offset respuestas (identif.)', hint: 'Posición donde inician las respuestas en identificadores' },
+  { key: 'responseAnswersOffset', label: 'Offset respuestas (exam)', hint: 'Posición donde inician las respuestas en archivos de examen' },
 ]
 </script>
 

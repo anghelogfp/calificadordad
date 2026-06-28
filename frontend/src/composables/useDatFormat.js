@@ -30,6 +30,7 @@ export function useDatFormat() {
           aulaOffset:    cfg.aula_offset,
           aulaLength:    cfg.aula_length,
           answersOffset: cfg.answers_offset,
+          responseAnswersOffset: cfg.response_answers_offset,
         }
       }
     } catch (e) {
@@ -52,6 +53,7 @@ export function useDatFormat() {
       aula_offset:    formatConfig.value.aulaOffset,
       aula_length:    formatConfig.value.aulaLength,
       answers_offset: formatConfig.value.answersOffset,
+      response_answers_offset: formatConfig.value.responseAnswersOffset,
     }
     try {
       const id = apiId.value || 1

@@ -14,10 +14,236 @@ export function useExport() {
     return `${prefix}-${safeName}-${safeArea}-${date}.${ext}`
   }
 
-  async function exportScoresToExcel(rankedResults, convocatoriaName = '') {
+  function safeSheetName(name) {
+    return String(name || 'Resultados').replace(/[\\/?*[\]:]/g, ' ').slice(0, 31)
+  }
+
+  function answerStats(row) {
+    const answers = String(row.answersRaw || '').toUpperCase()
+    const keys = String(row.correctAnswersRaw || '').toUpperCase()
+    let correct = 0
+    let incorrect = 0
+    let blank = 0
+    const length = Math.max(answers.length, keys.length)
+
+    for (let i = 0; i < length; i += 1) {
+      const marked = answers[i] || ' '
+      const key = keys[i] || ' '
+      const markedValid = /^[A-E]$/.test(marked)
+      const keyValid = /^[A-E]$/.test(key)
+      if (markedValid && keyValid && marked === key) correct += 1
+      else if (markedValid) incorrect += 1
+      else blank += 1
+    }
+
+    return { correct, incorrect, blank }
+  }
+
+  function styleHeaderRow(row, fill = 'FF1E3A5F') {
+    row.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: fill },
+      }
+      cell.alignment = { horizontal: 'center', vertical: 'middle' }
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFD9E2EC' } },
+        left: { style: 'thin', color: { argb: 'FFD9E2EC' } },
+        bottom: { style: 'thin', color: { argb: 'FFD9E2EC' } },
+        right: { style: 'thin', color: { argb: 'FFD9E2EC' } },
+      }
+    })
+  }
+
+  function addSummarySheet(workbook, rows, area, areaSummary, areaStats, convocatoriaName) {
+    const sheet = workbook.addWorksheet('Resumen')
+    const first = rows[0] || {}
+    const calculationDate = areaSummary?.timestamp
+      ? new Date(areaSummary.timestamp).toLocaleString('es-PE')
+      : new Date().toLocaleString('es-PE')
+
+    sheet.mergeCells('A1:B1')
+    sheet.getCell('A1').value = 'Resumen de Simulacro'
+    sheet.getCell('A1').font = { bold: true, size: 16, color: { argb: 'FF0F2F57' } }
+    sheet.getCell('A1').alignment = { horizontal: 'center' }
+
+    const summaryRows = [
+      ['Proceso', convocatoriaName || 'Sin nombre'],
+      ['Modo', 'Simulacro'],
+      ['Área exportada', area || ''],
+      ['Fecha de cálculo', calculationDate],
+      ['Plantilla de ponderación', areaSummary?.plantillaName || ''],
+      ['Puntos por correcta', areaSummary?.correctValue ?? ''],
+      ['Puntos por incorrecta', areaSummary?.incorrectValue ?? ''],
+      ['Puntos por blanco', areaSummary?.blankValue ?? ''],
+      ['Total de preguntas', areaSummary?.answersLength ?? ''],
+      ['Peso total', areaSummary?.totalWeight ?? ''],
+      ['Postulantes del área', areaSummary?.totalCandidates ?? rows.length],
+      ['Postulantes calificados', rows.length],
+      ['Sin respuesta', areaSummary?.missingResponses ?? 0],
+      ['Sin clave', areaSummary?.missingKeys ?? 0],
+      ['Respuestas duplicadas', areaSummary?.duplicateResponses ?? 0],
+      ['DNI observado en padrón', areaSummary?.invalidCandidates ?? 0],
+      ['Sin programa', areaSummary?.missingPrograms ?? 0],
+      ['Tipo de prueba inválido', areaSummary?.invalidResponseTypes ?? 0],
+      ['Respuestas sin DNI', areaSummary?.unlinkedResponses ?? 0],
+      ['Puntaje máximo', areaStats?.max ?? ''],
+      ['Puntaje mínimo', areaStats?.min ?? ''],
+      ['Promedio', areaStats?.avg ?? ''],
+      ['Clave usada', first.correctAnswersRaw || ''],
+    ]
+
+    summaryRows.forEach((item) => sheet.addRow(item))
+    sheet.getColumn(1).width = 28
+    sheet.getColumn(2).width = 70
+    sheet.getColumn(1).font = { bold: true, color: { argb: 'FF1E3A5F' } }
+    sheet.eachRow((row, index) => {
+      if (index <= 1) return
+      row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F7FB' } }
+      row.getCell(2).alignment = { wrapText: true }
+    })
+  }
+
+  function addObservationsSheet(workbook, areaSummary) {
+    const sheet = workbook.addWorksheet('Observaciones')
+    const header = sheet.addRow(['Tipo de observación', 'Cantidad', 'Detalle'])
+    styleHeaderRow(header)
+
+    const rows = [
+      ['Sin respuesta', areaSummary?.missingResponses ?? 0, 'Postulantes del padrón sin respuesta .dat.'],
+      ['Sin clave', areaSummary?.missingKeys ?? 0, 'Respuestas que no pudieron cruzarse con una clave del área.'],
+      ['Respuestas duplicadas', areaSummary?.duplicateResponses ?? 0, 'Postulantes con más de una hoja de respuestas vinculada al mismo DNI.'],
+      ['DNI observado en padrón', areaSummary?.invalidCandidates ?? 0, 'Postulantes con DNI vacío, incompleto o duplicado.'],
+      ['Sin programa', areaSummary?.missingPrograms ?? 0, 'Postulantes sin programa de estudios en convocatoria real.'],
+      ['Tipo de prueba inválido', areaSummary?.invalidResponseTypes ?? 0, 'Respuestas sin tipo P/Q/R/S/T válido en convocatoria real.'],
+      ['Respuestas sin DNI', areaSummary?.unlinkedResponses ?? 0, 'Respuestas no vinculadas a un DNI.'],
+    ]
+
+    rows.forEach((item) => sheet.addRow(item))
+    sheet.columns = [{ width: 22 }, { width: 12 }, { width: 70 }]
+    sheet.getColumn(2).alignment = { horizontal: 'center' }
+  }
+
+  function addNoCalificadosSheet(workbook, noCalificados = []) {
+    const sheet = workbook.addWorksheet('No calificados')
+    const header = sheet.addRow([
+      'DNI',
+      'Apellido Paterno',
+      'Apellido Materno',
+      'Nombres',
+      'Área',
+      'Programa',
+      'Motivo',
+      'Detalle',
+    ])
+    styleHeaderRow(header, 'FF7C2D12')
+
+    noCalificados.forEach((row) => {
+      sheet.addRow([
+        row.dni || '',
+        row.paterno || '',
+        row.materno || '',
+        row.nombres || '',
+        row.area || '',
+        row.programa || '',
+        row.motivo || '',
+        row.detalle || '',
+      ])
+    })
+
+    if (!noCalificados.length) {
+      sheet.addRow(['', '', '', '', '', '', 'Sin observaciones', 'Todos los postulantes con respuesta válida fueron calificados.'])
+    }
+
+    sheet.columns = [
+      { width: 12 }, { width: 18 }, { width: 18 }, { width: 25 },
+      { width: 16 }, { width: 28 }, { width: 22 }, { width: 70 },
+    ]
+    sheet.getColumn(8).alignment = { wrapText: true }
+  }
+
+  function addSimulacroResultsSheet(workbook, rows, area) {
+    const sheet = workbook.addWorksheet(safeSheetName(`Resultados ${area || ''}`))
+
+    sheet.mergeCells('A1:O1')
+    sheet.getCell('A1').value = `Resultados de Simulacro - Área: ${area || ''}`
+    sheet.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF0F2F57' } }
+    sheet.getCell('A1').alignment = { horizontal: 'center' }
+    sheet.addRow([])
+
+    const header = sheet.addRow([
+      'Posición',
+      'DNI',
+      'Apellido Paterno',
+      'Apellido Materno',
+      'Nombres',
+      'Área',
+      'Programa',
+      'Tipo',
+      'Aula',
+      'Litho',
+      'Puntaje',
+      'Correctas',
+      'Incorrectas',
+      'En blanco',
+      'Respuestas marcadas',
+    ])
+    styleHeaderRow(header)
+
+    rows.forEach((row) => {
+      const stats = answerStats(row)
+      const dataRow = sheet.addRow([
+        row.position,
+        row.dni,
+        row.paterno || '',
+        row.materno || '',
+        row.nombres || '',
+        row.area || area || '',
+        row.programa || '',
+        row.tipo || '',
+        row.aula || '',
+        row.litho || '',
+        row.score,
+        stats.correct,
+        stats.incorrect,
+        stats.blank,
+        row.answersRaw || '',
+      ])
+      dataRow.getCell(11).font = { bold: true }
+      dataRow.getCell(15).font = { name: 'Courier New', size: 9 }
+    })
+
+    sheet.columns = [
+      { width: 10 }, { width: 12 }, { width: 18 }, { width: 18 }, { width: 25 },
+      { width: 15 }, { width: 28 }, { width: 8 }, { width: 8 }, { width: 12 },
+      { width: 12 }, { width: 10 }, { width: 12 }, { width: 10 }, { width: 68 },
+    ]
+    sheet.views = [{ state: 'frozen', ySplit: 3 }]
+    sheet.autoFilter = 'A3:O3'
+  }
+
+  async function exportScoresToExcel(rankedResults, convocatoriaName = '', options = {}) {
     if (!rankedResults?.length) return
 
     const workbook = new ExcelJS.Workbook()
+    const processType = options.processType || 'simulacro'
+
+    if (processType !== 'real') {
+      const area = options.area || rankedResults[0]?.area || 'Área'
+      addSummarySheet(workbook, rankedResults, area, options.areaSummary, options.areaStats, convocatoriaName)
+      addSimulacroResultsSheet(workbook, rankedResults, area)
+      addObservationsSheet(workbook, options.areaSummary)
+      addNoCalificadosSheet(workbook, options.areaSummary?.noCalificados || [])
+
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      saveAs(blob, buildFilename('simulacro-resultados', convocatoriaName, area, 'xlsx'))
+      return
+    }
 
     // Agrupar por área
     const byArea = new Map()
@@ -102,7 +328,7 @@ export function useExport() {
     const blob = new Blob([buffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     })
-    saveAs(blob, buildFilename('resultados', convocatoriaName, 'todas', 'xlsx'))
+    saveAs(blob, buildFilename('resultados', convocatoriaName, options.area || 'todas', 'xlsx'))
   }
 
   async function _loadLogoBase64() {
@@ -291,8 +517,10 @@ export function useExport() {
     doc.save(`ingresantes${modoSuffix}-${safeName}-${date}.pdf`)
   }
 
-  async function exportScoresToPdf(rankedResults, summary, convocatoriaName = '') {
+  async function exportScoresToPdf(rankedResults, summary, convocatoriaName = '', options = {}) {
     if (!rankedResults?.length) return
+    const processType = options.processType || 'simulacro'
+    const isReal = processType === 'real'
 
     // Agrupar por área
     const byArea = new Map()
@@ -302,6 +530,7 @@ export function useExport() {
     })
 
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const logoBase64 = await _loadLogoBase64()
     let isFirst = true
 
     byArea.forEach((rows, area) => {
@@ -310,6 +539,114 @@ export function useExport() {
 
       const date = new Date().toLocaleDateString('es-PE')
       const areaStats = summary?.statsByArea?.get(area)
+      const areaSummary = options.areaSummary
+      const pageW = doc.internal.pageSize.getWidth()
+      const pageH = doc.internal.pageSize.getHeight()
+
+      if (!isReal) {
+        // Cabecera institucional compacta
+        if (logoBase64) doc.addImage(logoBase64, 'PNG', 10, 8, 18, 18)
+
+        doc.setFillColor(10, 36, 70)
+        doc.rect(0, 0, pageW, 7, 'F')
+
+        doc.setFontSize(13)
+        doc.setTextColor(30, 58, 95)
+        doc.setFont(undefined, 'bold')
+        doc.text('UNIVERSIDAD NACIONAL DEL ALTIPLANO', pageW / 2, 13, { align: 'center' })
+        doc.setFontSize(9)
+        doc.setFont(undefined, 'normal')
+        doc.setTextColor(90, 98, 112)
+        doc.text('Dirección de Admisión', pageW / 2, 18, { align: 'center' })
+
+        doc.setDrawColor(221, 171, 68)
+        doc.setLineWidth(0.8)
+        doc.line(34, 25, pageW - 10, 25)
+
+        doc.setFontSize(14)
+        doc.setTextColor(15, 47, 87)
+        doc.setFont(undefined, 'bold')
+        doc.text('RESULTADOS DE SIMULACRO', 10, 34)
+
+        doc.setFontSize(8.5)
+        doc.setFont(undefined, 'normal')
+        doc.setTextColor(80, 80, 80)
+        doc.text(`Proceso: ${convocatoriaName || 'Sin nombre'}`, 10, 40)
+        doc.text(`Área: ${area}  |  Fecha: ${date}  |  Total calificados: ${rows.length}`, 10, 45)
+
+        const stats = [
+          ['Máximo', areaStats?.max?.toFixed ? areaStats.max.toFixed(3) : (areaStats?.max ?? '-')],
+          ['Mínimo', areaStats?.min?.toFixed ? areaStats.min.toFixed(3) : (areaStats?.min ?? '-')],
+          ['Promedio', areaStats?.avg?.toFixed ? areaStats.avg.toFixed(3) : (areaStats?.avg ?? '-')],
+          ['Preguntas', areaSummary?.answersLength ?? '-'],
+        ]
+
+        const boxY = 51
+        const boxW = (pageW - 20 - 9) / 4
+        stats.forEach(([label, value], index) => {
+          const x = 10 + index * (boxW + 3)
+          doc.setFillColor(244, 247, 251)
+          doc.setDrawColor(217, 226, 236)
+          doc.roundedRect(x, boxY, boxW, 14, 2, 2, 'FD')
+          doc.setFontSize(7)
+          doc.setTextColor(90, 98, 112)
+          doc.text(label, x + 3, boxY + 5)
+          doc.setFontSize(10)
+          doc.setFont(undefined, 'bold')
+          doc.setTextColor(15, 47, 87)
+          doc.text(String(value), x + 3, boxY + 11)
+          doc.setFont(undefined, 'normal')
+        })
+
+        doc.setFontSize(7.5)
+        doc.setTextColor(90, 98, 112)
+        doc.text(
+          `Plantilla: ${areaSummary?.plantillaName || '-'}  |  Correcta: ${areaSummary?.correctValue ?? '-'}  Incorrecta: ${areaSummary?.incorrectValue ?? '-'}  Blanco: ${areaSummary?.blankValue ?? '-'}`,
+          10,
+          71,
+        )
+
+        autoTable(doc, {
+          startY: 76,
+          head: [['#', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Programa', 'Puntaje']],
+          body: rows.map((row) => [
+            row.position,
+            row.dni,
+            row.paterno || '',
+            row.materno || '',
+            row.nombres || '',
+            row.programa || '',
+            Number(row.score || 0).toFixed(3),
+          ]),
+          headStyles: {
+            fillColor: [10, 36, 70],
+            textColor: 255,
+            fontStyle: 'bold',
+            fontSize: 7.5,
+            halign: 'center',
+          },
+          bodyStyles: { fontSize: 7.3, cellPadding: 2 },
+          alternateRowStyles: { fillColor: [246, 248, 251] },
+          columnStyles: {
+            0: { halign: 'center', cellWidth: 10 },
+            1: { halign: 'center', cellWidth: 18 },
+            5: { cellWidth: 34 },
+            6: { halign: 'right', cellWidth: 18, fontStyle: 'bold' },
+          },
+          margin: { left: 10, right: 10 },
+          didDrawPage: () => {
+            const pg = doc.internal.getCurrentPageInfo().pageNumber
+            doc.setDrawColor(221, 226, 232)
+            doc.line(10, pageH - 12, pageW - 10, pageH - 12)
+            doc.setFontSize(7)
+            doc.setTextColor(140, 148, 160)
+            doc.text(`Página ${pg}`, pageW / 2, pageH - 7, { align: 'center' })
+            doc.text(`Generado el ${date}`, pageW - 10, pageH - 7, { align: 'right' })
+          },
+        })
+
+        return
+      }
 
       // Encabezado
       doc.setFontSize(14)
@@ -365,7 +702,7 @@ export function useExport() {
       })
     })
 
-    doc.save(buildFilename('resultados', convocatoriaName, 'todas', 'pdf'))
+    doc.save(buildFilename(isReal ? 'resultados' : 'simulacro-ranking', convocatoriaName, options.area || 'todas', 'pdf'))
   }
 
   return {

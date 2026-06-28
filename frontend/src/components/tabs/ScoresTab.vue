@@ -88,6 +88,10 @@ const issueCount = computed(() => {
   if (!summary) return 0
   return (summary.missingResponses || 0) +
     (summary.missingKeys || 0) +
+    (summary.duplicateResponses || 0) +
+    (summary.invalidCandidates || 0) +
+    (summary.missingPrograms || 0) +
+    (summary.invalidResponseTypes || 0) +
     (summary.unlinkedResponses || 0)
 })
 
@@ -228,7 +232,13 @@ function closeDetail() {
 function handleExportExcel() {
   props.exporter.exportScoresToExcel(
     localFilteredResults.value,
-    props.convocatoriaName
+    props.convocatoriaName,
+    {
+      processType: calification.activeProcess?.type ?? 'simulacro',
+      area: calification.calificationDisplayArea,
+      areaSummary: calification.calificationSummary,
+      areaStats: currentAreaStats.value,
+    },
   )
 }
 
@@ -236,7 +246,12 @@ function handleExportPdf() {
   props.exporter.exportScoresToPdf(
     localFilteredResults.value,
     { statsByArea: props.dashboard.statsByArea.value },
-    props.convocatoriaName
+    props.convocatoriaName,
+    {
+      processType: calification.activeProcess?.type ?? 'simulacro',
+      area: calification.calificationDisplayArea,
+      areaSummary: calification.calificationSummary,
+    },
   )
 }
 
@@ -316,7 +331,7 @@ function handleExportIngresantesPdf() {
             PDF
           </button>
           <button
-            v-if="hasIngresanteData"
+            v-if="isRealMode && hasIngresanteData"
             type="button"
             class="btn btn--primary"
             @click="handleExportIngresantesPdf"
@@ -417,7 +432,7 @@ function handleExportIngresantesPdf() {
             <div class="action-menu__panel">
               <button type="button" @click="handleExportExcel">Exportar Excel</button>
               <button type="button" @click="handleExportPdf">Exportar PDF completo</button>
-              <button v-if="hasIngresanteData" type="button" @click="handleExportIngresantesPdf">PDF de ingresantes</button>
+              <button v-if="isRealMode && hasIngresanteData" type="button" @click="handleExportIngresantesPdf">PDF de ingresantes</button>
             </div>
           </details>
 
@@ -489,6 +504,10 @@ function handleExportIngresantesPdf() {
           <span><strong>Preguntas:</strong> {{ calification.calificationSummary?.answersLength }}</span>
           <span v-if="calification.calificationSummary?.missingResponses" class="meta-warn">Sin respuesta: {{ calification.calificationSummary.missingResponses }}</span>
           <span v-if="calification.calificationSummary?.missingKeys" class="meta-warn">Sin clave: {{ calification.calificationSummary.missingKeys }}</span>
+          <span v-if="calification.calificationSummary?.duplicateResponses" class="meta-warn">Duplicados: {{ calification.calificationSummary.duplicateResponses }}</span>
+          <span v-if="calification.calificationSummary?.invalidCandidates" class="meta-warn">DNI observado: {{ calification.calificationSummary.invalidCandidates }}</span>
+          <span v-if="calification.calificationSummary?.missingPrograms" class="meta-warn">Sin programa: {{ calification.calificationSummary.missingPrograms }}</span>
+          <span v-if="calification.calificationSummary?.invalidResponseTypes" class="meta-warn">Tipo inválido: {{ calification.calificationSummary.invalidResponseTypes }}</span>
           <span v-if="calification.calificationSummary?.unlinkedResponses" class="meta-warn">Sin DNI vinculado: {{ calification.calificationSummary.unlinkedResponses }}</span>
         </div>
       </details>
@@ -598,6 +617,15 @@ function handleExportIngresantesPdf() {
         </span>
         <span v-if="calification.calificationSummary.missingKeys" class="meta-warn">
           Sin clave: {{ calification.calificationSummary.missingKeys }}
+        </span>
+        <span v-if="calification.calificationSummary.invalidCandidates" class="meta-warn">
+          DNI observado: {{ calification.calificationSummary.invalidCandidates }}
+        </span>
+        <span v-if="calification.calificationSummary.missingPrograms" class="meta-warn">
+          Sin programa: {{ calification.calificationSummary.missingPrograms }}
+        </span>
+        <span v-if="calification.calificationSummary.invalidResponseTypes" class="meta-warn">
+          Tipo inválido: {{ calification.calificationSummary.invalidResponseTypes }}
         </span>
       </div>
 

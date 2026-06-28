@@ -183,12 +183,13 @@ export function buildResponseObservation(row, formatConfig = DEFAULT_DAT_FORMAT)
   }
 
   const answersRaw = String(row.answers || '').toUpperCase()
-  const answersNormalized = answersRaw.replaceAll(/\s/g, '')
-  if (!answersNormalized) {
+  const answerWindow = answersRaw.slice(0, formatConfig.answersLength)
+  const markedAnswers = answerWindow.replace(/\s/g, '')
+  if (!answersRaw.trim()) {
     issues.push('Sin respuestas marcadas')
-  } else if (answersNormalized.length !== formatConfig.answersLength) {
-    issues.push(`Cadena incompleta (${answersNormalized.length}/${formatConfig.answersLength})`)
-  } else if (/[^A-E*]/.test(answersNormalized)) {
+  } else if (answersRaw.length < formatConfig.answersLength) {
+    issues.push(`Cadena incompleta (${answersRaw.length}/${formatConfig.answersLength})`)
+  } else if (/[^A-E*]/.test(markedAnswers)) {
     issues.push('Respuestas con marcas no válidas')
   }
 
@@ -247,9 +248,13 @@ export function parseResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_F
     remainder = remainder.slice(1)
   }
 
-  const lithoSegment   = remainder.slice(formatConfig.lithoOffset, formatConfig.lithoOffset + formatConfig.lithoLength)
-  const tipoSegment    = remainder.slice(formatConfig.tipoOffset, formatConfig.tipoOffset + formatConfig.tipoLength)
-  const answersSegment = remainder.slice(formatConfig.answersOffset).trim()
+  const lithoSegment = remainder.slice(formatConfig.lithoOffset, formatConfig.lithoOffset + formatConfig.lithoLength)
+  const tipoSegment = remainder.slice(formatConfig.tipoOffset, formatConfig.tipoOffset + formatConfig.tipoLength)
+  const responseAnswersOffset = formatConfig.responseAnswersOffset
+    ?? (formatConfig.tipoOffset + formatConfig.tipoLength)
+  const answersSegment = remainder
+    .slice(responseAnswersOffset, responseAnswersOffset + formatConfig.answersLength)
+    .toUpperCase()
 
   const row = createResponseRow({
     rawLine: raw,
@@ -266,6 +271,79 @@ export function parseResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_F
   row.observaciones = buildResponseObservation(row, formatConfig)
 
   return { row }
+}
+
+/**
+ * Detecta automáticamente el offset de respuestas en un archivo .dat
+ * Probando offsets 0-25 y midiendo cuál produce más caracteres A-E/espacio
+ * (respuestas válidas) y menos dígitos (DNI/aula).
+ * @param {string[]} lines - Líneas crudas del archivo
+ * @param {object} [formatConfig] - Configuración de formato DAT
+ * @returns {{ offset: number, score: number, answerPct: number, digitPct: number } | null}
+ */
+export function detectResponseAnswersOffset(lines, formatConfig = DEFAULT_DAT_FORMAT) {
+  const SAMPLE_SIZE = 20
+  const MAX_OFFSET = 25
+  const expectedLen = formatConfig.answersLength || 60
+
+  const remainders = []
+  for (let i = 0; i < Math.min(lines.length, SAMPLE_SIZE); i++) {
+    const raw = lines[i].replace(/\r$/, '')
+    if (!raw.trim() || raw.trim().length <= 1) continue
+    if (raw.length < 40) continue
+
+    const header = raw.slice(0, formatConfig.headerLength)
+    if (!/^\d+$/.test(header)) continue
+
+    let remainder = raw.slice(formatConfig.headerLength)
+    let cursor = 0
+
+    const examMatch = remainder.slice(cursor).match(/^\s*(\d{4})/)
+    if (!examMatch) continue
+    cursor += examMatch[0].length
+    remainder = remainder.slice(cursor)
+
+    const folioMatch = remainder.match(/^\s*#?(\d+)/)
+    if (!folioMatch) continue
+    cursor = folioMatch[0].length
+    remainder = remainder.slice(cursor)
+
+    const indicatorMatch = remainder.match(/^\s*([A-Z])/i)
+    if (!indicatorMatch) continue
+    cursor = indicatorMatch[0].length
+    remainder = remainder.slice(cursor)
+
+    if (remainder.startsWith(' ')) remainder = remainder.slice(1)
+    remainders.push(remainder)
+  }
+
+  if (remainders.length < 3) return null
+
+  const scores = []
+  for (let offset = 0; offset <= MAX_OFFSET; offset++) {
+    let answerChars = 0
+    let digitChars = 0
+    let spaceChars = 0
+    let total = 0
+
+    remainders.forEach((r) => {
+      const block = r.slice(offset, offset + expectedLen).toUpperCase()
+      for (const ch of block) {
+        total++
+        if (/[A-E]/.test(ch)) answerChars++
+        else if (/\d/.test(ch)) digitChars++
+        else if (ch === ' ') spaceChars++
+      }
+    })
+
+    if (total === 0) continue
+    const answerPct = (answerChars + spaceChars) / total
+    const digitPct = digitChars / total
+    scores.push({ offset, answerPct, digitPct, score: answerPct - digitPct * 2 })
+  }
+
+  scores.sort((a, b) => b.score - a.score)
+  return scores[0]
 }
 
 /**

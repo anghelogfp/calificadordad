@@ -24,6 +24,8 @@ class AreaCalificacionSerializer(serializers.ModelSerializer):
             'correct_value', 'incorrect_value', 'blank_value',
             'plantilla_id', 'plantilla_name', 'plantilla_snapshot',
             'total_candidates', 'missing_responses', 'missing_keys',
+            'duplicate_responses', 'invalid_candidates', 'missing_programs',
+            'invalid_response_types', 'unlinked_responses', 'no_calificados',
             'total_weight', 'answers_length',
             'resultados',
         ]
@@ -38,7 +40,7 @@ class ProcesoListSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProcesoCalificacion
         fields = [
-            'id', 'local_id', 'name',
+            'id', 'local_id', 'name', 'process_type', 'simulacro_scope',
             'area_names', 'total_candidates',
             'created_by_username', 'created_at', 'updated_at',
         ]
@@ -52,7 +54,7 @@ class ProcesoDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProcesoCalificacion
         fields = [
-            'id', 'local_id', 'name',
+            'id', 'local_id', 'name', 'process_type', 'simulacro_scope',
             'areas_data', 'created_by_username',
             'created_at', 'updated_at',
         ]

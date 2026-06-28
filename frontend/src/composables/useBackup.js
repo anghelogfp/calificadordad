@@ -121,6 +121,8 @@ async function replaceProcesos(procesos = []) {
     await writeJson('/procesos/', {
       local_id: proceso.id || proceso.local_id,
       name: proceso.name,
+      type: proceso.type || proceso.process_type || 'simulacro',
+      simulacroScope: proceso.simulacroScope || proceso.simulacro_scope || '',
       areas: proceso.areas || {},
     })
   }

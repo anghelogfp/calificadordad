@@ -56,6 +56,8 @@ class ProcesoCalificacion(models.Model):
     """
     local_id = models.CharField(max_length=64)
     name = models.CharField(max_length=200)
+    process_type = models.CharField(max_length=20, default='simulacro')
+    simulacro_scope = models.CharField(max_length=20, blank=True, default='')
     created_by = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -110,6 +112,12 @@ class AreaCalificacion(models.Model):
     total_candidates = models.IntegerField(default=0)
     missing_responses = models.IntegerField(default=0)
     missing_keys = models.IntegerField(default=0)
+    duplicate_responses = models.IntegerField(default=0)
+    invalid_candidates = models.IntegerField(default=0)
+    missing_programs = models.IntegerField(default=0)
+    invalid_response_types = models.IntegerField(default=0)
+    unlinked_responses = models.IntegerField(default=0)
+    no_calificados = models.JSONField(default=list)
     total_weight = models.DecimalField(max_digits=10, decimal_places=3, default=0)
     answers_length = models.IntegerField(default=60)
 

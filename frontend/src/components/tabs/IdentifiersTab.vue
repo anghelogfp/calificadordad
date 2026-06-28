@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { IDENTIFIER_SUBTABS } from '@/constants'
 import WorkflowIntroCard from '@/components/shared/WorkflowIntroCard.vue'
 import FileUploader from '@/components/shared/FileUploader.vue'
@@ -17,6 +17,11 @@ const props = defineProps({
 const emit = defineEmits(['update:subTab'])
 
 const identifiers = reactive(props.identifiers)
+const showOnlyObserved = ref(false)
+
+const displayedRows = computed(() => (
+  showOnlyObserved.value ? identifiers.observations : identifiers.pagedRows
+))
 
 // ── Confirmación inline ──────────────────────────────────────────────────────
 const pendingAction = ref(null)
@@ -58,7 +63,7 @@ const tableColumns = [
 
 function getRowClass(row) {
   return {
-    'row--issue': row.observaciones !== 'Sin observaciones'
+    'row--issue': Boolean(identifiers.observationByRowId?.get(row.id))
   }
 }
 </script>
@@ -108,6 +113,31 @@ function getRowClass(row) {
       {{ identifiers.importError }}
     </div>
 
+    <section v-if="identifiers.observationCount" class="observed-panel">
+      <div class="observed-panel__header">
+        <div>
+          <span class="observed-panel__eyebrow">Observados de identificadores</span>
+          <h3>{{ identifiers.observationCount }} registro(s) requieren revisión</h3>
+        </div>
+        <div class="observed-panel__actions">
+          <button type="button" class="btn btn--ghost" @click="showOnlyObserved = !showOnlyObserved">
+            {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
+          </button>
+          <button type="button" class="btn btn--primary" @click="identifiers.exportIdentifierObservationsToExcel">
+            Exportar observados
+          </button>
+        </div>
+      </div>
+      <div class="observed-panel__chips">
+        <span v-for="item in identifiers.observationSummary" :key="item.label" class="observed-chip">
+          <strong>{{ item.count }}</strong> {{ item.label }}
+        </span>
+      </div>
+      <p class="observed-panel__hint">
+        Corrige los campos en la tabla y vuelve a vincular las respuestas si el cambio afecta DNI, lectura, aula o tipo.
+      </p>
+    </section>
+
     <!-- Confirmación inline -->
     <div v-if="pendingAction" class="confirm-banner">
       <svg viewBox="0 0 20 20" fill="currentColor">
@@ -133,6 +163,14 @@ function getRowClass(row) {
           <div class="toolbar-menu__panel">
         <button type="button" class="btn" @click="identifiers.exportIdentifiersToExcel" :disabled="!identifiers.identifierHasData">
           Exportar a Excel
+        </button>
+        <button
+          type="button"
+          class="btn btn--ghost"
+          @click="identifiers.exportIdentifierObservationsToExcel"
+          :disabled="!identifiers.observationCount"
+        >
+          Observados Excel
         </button>
         <button
           type="button"
@@ -180,14 +218,14 @@ function getRowClass(row) {
       <DataTable
         v-if="identifiers.identifierHasData"
         :columns="tableColumns"
-        :rows="identifiers.pagedRows"
+        :rows="displayedRows"
         :selection="identifiers.selection"
         :editing="identifiers.editing"
         :is-all-selected="identifiers.isAllVisibleSelected"
         :is-indeterminate="identifiers.isSomeVisibleSelected"
         :selected-count="identifiers.totalSelected"
         :row-class="getRowClass"
-        :pagination="identifiers.pagination"
+        :pagination="showOnlyObserved ? null : identifiers.pagination"
         @toggle-selection="identifiers.toggleSelection"
         @toggle-select-all="identifiers.toggleSelectAll"
         @toggle-edit="identifiers.toggleEdit"
@@ -314,6 +352,89 @@ function getRowClass(row) {
   background: linear-gradient(135deg, var(--error-600) 0%, #b91c1c 100%);
 }
 
+.btn--primary {
+  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.observed-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 4px solid #d97706;
+  border-radius: var(--radius-lg);
+}
+
+.observed-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.observed-panel__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: #92400e;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.observed-panel h3 {
+  margin: 0;
+  color: #78350f;
+  font-size: 0.98rem;
+}
+
+.observed-panel__actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.observed-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.observed-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px var(--space-2);
+  background: white;
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-full);
+  color: #92400e;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.observed-chip strong {
+  color: #78350f;
+}
+
+.observed-panel__hint {
+  margin: 0;
+  color: #92400e;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
 .icon {
   display: inline-flex;
   align-items: center;
@@ -322,5 +443,16 @@ function getRowClass(row) {
 .icon svg {
   width: 16px;
   height: 16px;
+}
+
+@media (max-width: 768px) {
+  .observed-panel__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .observed-panel__actions {
+    justify-content: flex-start;
+  }
 }
 </style>
