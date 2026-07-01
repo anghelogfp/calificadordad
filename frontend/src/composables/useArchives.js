@@ -208,6 +208,11 @@ export function useArchives() {
    */
   async function readArchiveWorkbook(file) {
     tableState.importError.value = ''
+    if (!file?.name || !file.name.toLowerCase().endsWith('.xlsx')) {
+      tableState.importError.value = 'Selecciona un archivo .xlsx válido.'
+      return
+    }
+
     try {
       const { ExcelJS } = await loadExcelDeps()
       const buffer = await file.arrayBuffer()
@@ -262,8 +267,19 @@ export function useArchives() {
       tableState.setRows(mapped)
     } catch (error) {
       console.error(error)
+      const message = String(error?.message || '').toLowerCase()
+      if (message.includes('invalid') || message.includes('zip') || message.includes('corrupt')) {
+        tableState.importError.value = 'El archivo seleccionado no parece ser un .xlsx válido o está dañado.'
+        return
+      }
+
+      if (message.includes('worksheet') || message.includes('header')) {
+        tableState.importError.value = 'El archivo se abrió, pero su estructura no coincide con el formato esperado.'
+        return
+      }
+
       tableState.importError.value =
-        'Ocurrió un problema al procesar el archivo. Asegúrate de que sea un Excel (.xlsx) válido.'
+        'No se pudo procesar el archivo Excel. Revisa que sea un .xlsx válido y que no esté protegido o dañado.'
     }
   }
 
