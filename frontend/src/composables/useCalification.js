@@ -6,10 +6,12 @@ import { useToast } from '@/composables/useToast'
 import {
   normalize,
   normalizeArea,
-  stripDigits,
-  buildAreaTipoKey,
-  buildQuestionPlan,
 } from '@/utils/helpers'
+import {
+  GENERAL_SIMULACRO_AREA,
+} from '@/utils/calificationHelpers'
+import { calculateAreaResults } from '@/domain/calification/calculateResults'
+import { buildCalificationPreflight } from '@/domain/calification/preflight'
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
@@ -20,38 +22,6 @@ function generateDefaultName() {
   const year = date.getFullYear()
   const month = date.toLocaleDateString('es-PE', { month: 'long' })
   return `Admisión ${year} · ${month.charAt(0).toUpperCase() + month.slice(1)}`
-}
-
-const REAL_TEST_TYPES = ['P', 'Q', 'R', 'S', 'T']
-const GENERAL_SIMULACRO_AREA = 'General'
-
-function buildDniCounts(rows) {
-  const counts = new Map()
-  rows.forEach((row) => {
-    const dni = stripDigits(row.dni)
-    if (!dni) return
-    counts.set(dni, (counts.get(dni) || 0) + 1)
-  })
-  return counts
-}
-
-function getCandidateDniIssue(candidate, dniCounts) {
-  const dni = stripDigits(candidate.dni)
-  if (!dni) return 'DNI vacío'
-  if (dni.length !== 8) return `DNI incompleto (${dni.length}/8)`
-  if ((dniCounts.get(dni) || 0) > 1) return 'DNI duplicado'
-  return ''
-}
-
-function getExactAnswerKey(rows, area, tipo, areaList) {
-  const normalizedArea = normalizeArea(area, areaList)
-  const normalizedTipo = (tipo || '').trim().toUpperCase().slice(0, 1)
-  if (!normalizedTipo) return undefined
-  return rows.find((row) =>
-    row.area?.trim() &&
-    normalizeArea(row.area, areaList) === normalizedArea &&
-    (row.tipo || '').trim().toUpperCase().slice(0, 1) === normalizedTipo
-  )
 }
 
 export function useCalification(
@@ -326,186 +296,16 @@ export function useCalification(
   })
 
   // ── Pre-vuelo ─────────────────────────────────────────────────────────────
-  const preflightCheck = computed(() => {
-    const area = isGeneralSimulacro.value
-      ? GENERAL_SIMULACRO_AREA
-      : normalizeArea(calificationArea.value, effectiveAreaNames.value)
-    const isRealProcess = processType.value === 'real'
-    const dniCounts = buildDniCounts(archiveRows.value)
-
-    // 1. Candidatos del padrón en esta área
-    const candidates = isGeneralSimulacro.value
-      ? archiveRows.value
-      : archiveRows.value.filter(r => normalizeArea(r.area, effectiveAreaNames.value) === area)
-
-    // Simulacro sin columna área: si no hay candidatos con área, usar los sin área asignada.
-    // En real no se aplica este fallback porque área/programa deben venir del padrón.
-    const unassignedCandidates = archiveRows.value.filter(r => !r.area?.trim())
-    const usingFallback = !isRealProcess && candidates.length === 0 && unassignedCandidates.length > 0
-    const effectiveCandidates = usingFallback ? unassignedCandidates : candidates
-
-    // 2. Candidatos sin respuesta .dat
-    const withoutResponse = effectiveCandidates.filter(c => {
-      const dni = stripDigits(c.dni)
-      return !responsesByDni.value.has(dni) || responsesByDni.value.get(dni).length === 0
-    })
-    const duplicatedResponses = effectiveCandidates.filter(c => {
-      const dni = stripDigits(c.dni)
-      return dni && (responsesByDni.value.get(dni) || []).length > 1
-    })
-    const invalidDniCandidates = effectiveCandidates.filter(c => getCandidateDniIssue(c, dniCounts))
-
-    // 3. Respuestas .dat sin candidato en el padrón
-    const allDnisInPadron = new Set(archiveRows.value.map(r => stripDigits(r.dni)))
-    const orphanResponses = [...responsesByDni.value.entries()].filter(([dni]) => !allDnisInPadron.has(dni))
-
-    // 4. Claves de respuesta para el área
-    const areaAnswerKeys = answerKeyRows.value.filter(
-      k => k.area?.trim() && normalizeArea(k.area, effectiveAreaNames.value) === area
-    )
-    const generalAnswerKeys = answerKeyRows.value.filter(k => !k.area?.trim())
-    const keyTypes = new Set(areaAnswerKeys.map(k => (k.tipo || '').trim().toUpperCase().slice(0, 1)).filter(Boolean))
-    const missingRealKeyTypes = REAL_TEST_TYPES.filter(tipo => !keyTypes.has(tipo))
-    const hasAnswerKeys = isRealProcess
-      ? missingRealKeyTypes.length === 0
-      : isGeneralSimulacro.value
-        ? generalAnswerKeys.length > 0 || answerKeyRows.value.length > 0
-        : areaAnswerKeys.length > 0 || generalAnswerKeys.length > 0
-
-    // 5. Respuestas .dat sin DNI vinculado
-    const unlinked = archiveRows.value.length > 0
-      ? responsesRows.value.filter(r => !stripDigits(r.dni)).length
-      : 0
-
-    const missingTipoResponses = isRealProcess
-      ? effectiveCandidates.filter((candidate) => {
-        const dni = stripDigits(candidate.dni)
-        const responseList = responsesByDni.value.get(dni) || []
-        return responseList.some(r => !(r.tipo || '').trim())
-      }).length
-      : 0
-
-    const items = [
-      {
-        key: 'candidates',
-        label: 'Postulantes en el padrón',
-        value: effectiveCandidates.length,
-        status: effectiveCandidates.length > 0 ? 'ok' : 'error',
-        detail: effectiveCandidates.length === 0 ? 'No hay postulantes para esta área en el padrón.' : null,
-      },
-    ]
-
-    if (usingFallback) {
-      items.push({
-        key: 'noArea',
-        label: 'Sin área asignada',
-        value: unassignedCandidates.length,
-        status: 'warn',
-        detail: `El padrón no tiene columna de área — se incluirán los ${unassignedCandidates.length} postulante(s) sin área en el cálculo.`,
-      })
-    }
-
-    if (isRealProcess && unassignedCandidates.length > 0) {
-      items.push({
-        key: 'missingArea',
-        label: 'Postulantes sin área',
-        value: unassignedCandidates.length,
-        status: 'warn',
-        detail: 'Estos postulantes no entrarán al cálculo del área hasta corregir el padrón.',
-      })
-    }
-
-    items.push(
-      {
-        key: 'answerKeys',
-        label: isRealProcess ? 'Claves P/Q/R/S/T' : 'Claves de respuestas',
-        value: hasAnswerKeys ? 'Disponibles' : 'No encontradas',
-        status: hasAnswerKeys ? 'ok' : 'error',
-        detail: !hasAnswerKeys
-          ? (isRealProcess
-            ? `Faltan claves para ${area}: ${missingRealKeyTypes.join(', ')}.`
-            : 'No se encontraron claves para esta área. Sin claves no es posible calificar.')
-          : null,
-      },
-      {
-        key: 'invalidDni',
-        label: 'DNI observado en padrón',
-        value: invalidDniCandidates.length,
-        status: invalidDniCandidates.length === 0 ? 'ok' : 'warn',
-        detail: invalidDniCandidates.length > 0
-          ? `${invalidDniCandidates.length} postulante(s) con DNI vacío, incompleto o duplicado quedarán como no calificados.`
-          : null,
-      },
-      {
-        key: 'withoutResponse',
-        label: 'Sin respuesta .dat',
-        value: withoutResponse.length,
-        status: withoutResponse.length === 0 ? 'ok' : 'warn',
-        detail: withoutResponse.length > 0
-          ? `${withoutResponse.length} postulante(s) no tienen respuesta cargada y no se calificarán.`
-          : null,
-      },
-      {
-        key: 'duplicatedResponses',
-        label: 'Respuestas duplicadas',
-        value: duplicatedResponses.length,
-        status: duplicatedResponses.length === 0 ? 'ok' : 'warn',
-        detail: duplicatedResponses.length > 0
-          ? `${duplicatedResponses.length} postulante(s) tienen más de una respuesta .dat y no se calificarán.`
-          : null,
-      },
-      {
-        key: 'orphan',
-        label: 'Respuestas sin postulante',
-        value: orphanResponses.length,
-        status: orphanResponses.length === 0 ? 'ok' : 'warn',
-        detail: orphanResponses.length > 0
-          ? `${orphanResponses.length} respuesta(s) .dat no coinciden con ningún DNI del padrón.`
-          : null,
-      },
-    )
-
-    if (unlinked > 0) {
-      items.push({
-        key: 'unlinked',
-        label: 'Respuestas sin DNI',
-        value: unlinked,
-        status: 'warn',
-        detail: `${unlinked} respuesta(s) sin DNI vinculado (no se calificarán).`,
-      })
-    }
-
-    if (missingTipoResponses > 0) {
-      items.push({
-        key: 'missingTipo',
-        label: 'Respuestas sin tipo',
-        value: missingTipoResponses,
-        status: 'warn',
-        detail: 'Estos postulantes quedarán como no calificados porque el modo real requiere tipo P, Q, R, S o T.',
-      })
-    }
-
-    // Modo Real: advertir si ningún candidato tiene programa asignado
-    if (isRealProcess) {
-      const sinPrograma = effectiveCandidates.filter(c => !c.programa?.trim()).length
-      if (sinPrograma > 0) {
-        items.push({
-          key: 'sinPrograma',
-          label: 'Sin programa de estudios',
-          value: sinPrograma,
-          status: 'warn',
-          detail: sinPrograma === effectiveCandidates.length
-            ? 'Ningún postulante tiene programa asignado. Quedarán como no calificados hasta corregir el padrón.'
-            : `${sinPrograma} postulante(s) sin programa quedarán como no calificados.`,
-        })
-      }
-    }
-
-    const hasBlockers = effectiveCandidates.length === 0 || !hasAnswerKeys || items.some(i => i.status === 'error')
-    const hasWarnings = items.some(i => i.status === 'warn')
-
-    return { items, hasBlockers, hasWarnings }
-  })
+  const preflightCheck = computed(() => buildCalificationPreflight({
+    area: calificationArea.value,
+    processType: processType.value,
+    simulacroScope: simulacroScope.value,
+    archiveRows: archiveRows.value,
+    responsesRows: responsesRows.value,
+    answerKeyRows: answerKeyRows.value,
+    responsesByDni: responsesByDni.value,
+    areaList: effectiveAreaNames.value,
+  }))
 
   const selectedPonderationIsReady = computed(() => {
     const plantilla = selectedCalificationPlantilla.value
@@ -663,262 +463,24 @@ export function useCalification(
    * Núcleo del cálculo para un área dada. Devuelve { results, summary } o lanza un string de error.
    */
   function _calcForArea(area, plantilla, correctValue, incorrectValue, blankValue) {
-    const isRealProcess = processType.value === 'real'
-    const generalSimulacro = !isRealProcess && simulacroScope.value === 'general'
-    const calculationArea = generalSimulacro ? GENERAL_SIMULACRO_AREA : area
-    const answersLength = effectiveAnswersLength.value
-    const plan = buildQuestionPlan(plantilla.items)
-
-    if (plan.length !== answersLength) {
-      throw new Error(`La plantilla "${plantilla.name}" cubre ${plan.length} preguntas. Deben sumar ${answersLength}.`)
-    }
-
-    const totalWeight = plan.reduce((acc, item) => acc + (Number(item.weight) || 0), 0)
-
-    let candidates = generalSimulacro
-      ? archiveRows.value
-      : archiveRows.value.filter((row) => normalizeArea(row.area, effectiveAreaNames.value) === area)
-
-    if (isRealProcess) {
-      const areaAnswerKeys = answerKeyRows.value.filter(
-        k => k.area?.trim() && normalizeArea(k.area, effectiveAreaNames.value) === area
-      )
-      const keyTypes = new Set(areaAnswerKeys.map(k => (k.tipo || '').trim().toUpperCase().slice(0, 1)).filter(Boolean))
-      const missingRealKeyTypes = REAL_TEST_TYPES.filter(tipo => !keyTypes.has(tipo))
-      if (missingRealKeyTypes.length > 0) {
-        throw new Error(`Faltan claves para ${area}: ${missingRealKeyTypes.join(', ')}.`)
-      }
-    }
-
-    // Solo simulacro puede tomar un padrón sin área asignada.
-    if (!isRealProcess && !generalSimulacro && candidates.length === 0) {
-      const unassigned = archiveRows.value.filter(r => !r.area?.trim())
-      if (unassigned.length > 0) candidates = unassigned
-    }
-
-    if (!candidates.length) {
-      throw new Error('No hay postulantes registrados para el área seleccionada.')
-    }
-
-    const processedResults = []
-    const noCalificados = []
-    const dniCounts = buildDniCounts(archiveRows.value)
-    let missingResponses = 0
-    let missingKeys = 0
-    let duplicateResponses = 0
-    let invalidCandidates = 0
-    let missingPrograms = 0
-    let invalidResponseTypes = 0
-
-    candidates.forEach((candidate) => {
-      const dni = stripDigits(candidate.dni)
-
-      const baseNoCalificado = {
-        dni,
-        paterno: candidate.paterno || '',
-        materno: candidate.materno || '',
-        nombres: candidate.nombres || '',
-        area: calculationArea,
-        programa: candidate.programa || '',
-      }
-
-      const dniIssue = getCandidateDniIssue(candidate, dniCounts)
-      if (dniIssue) {
-        invalidCandidates += 1
-        noCalificados.push({
-          ...baseNoCalificado,
-          motivo: dniIssue,
-          detalle: 'Corrige el DNI en el padrón para poder vincular y calificar al postulante.',
-        })
-        return
-      }
-
-      if (isRealProcess && !candidate.programa?.trim()) {
-        missingPrograms += 1
-        noCalificados.push({
-          ...baseNoCalificado,
-          motivo: 'Sin programa de estudios',
-          detalle: 'En convocatoria real se requiere programa para el ranking por carrera.',
-        })
-        return
-      }
-
-      const responseList = responsesByDni.value.get(dni) || []
-
-      if (!responseList.length) {
-        missingResponses += 1
-        noCalificados.push({
-          ...baseNoCalificado,
-          motivo: 'Sin respuesta .dat',
-          detalle: 'No se encontró una hoja de respuestas vinculada al DNI.',
-        })
-        return
-      }
-
-      if (responseList.length > 1) {
-        duplicateResponses += 1
-        noCalificados.push({
-          ...baseNoCalificado,
-          motivo: 'Respuesta duplicada',
-          detalle: `Se encontraron ${responseList.length} hojas de respuestas para el mismo DNI.`,
-        })
-        return
-      }
-
-      const matchForArea = responseList
-        .map((row) => {
-          const tipo = (row.tipo || '').trim().toUpperCase().slice(0, 1)
-          if (isRealProcess && !REAL_TEST_TYPES.includes(tipo)) {
-            return {
-              row,
-              answer: null,
-              invalidTipo: tipo || 'vacío',
-            }
-          }
-          const key = buildAreaTipoKey(area, tipo, effectiveAreaNames.value)
-          const exactAnswer = isRealProcess
-            ? getExactAnswerKey(answerKeyRows.value, area, tipo, effectiveAreaNames.value)
-            : generalSimulacro
-              ? answerKeyRows.value.find(k => !k.area?.trim()) || answerKeyRows.value[0]
-              : key ? answerKeyLookupByAreaTipo.value.get(key) : undefined
-          const answer = isRealProcess
-            ? exactAnswer
-            : generalSimulacro
-              ? exactAnswer
-              : exactAnswer
-                ?? answerKeyFallbackByArea?.value?.get(normalizeArea(area, effectiveAreaNames.value))
-                ?? answerKeyRows.value.find(k => !k.area?.trim())
-          return { row, answer, invalidTipo: '' }
-        })
-        .find((item) => item.answer || item.invalidTipo)
-
-      if (matchForArea?.invalidTipo) {
-        invalidResponseTypes += 1
-        noCalificados.push({
-          ...baseNoCalificado,
-          motivo: 'Tipo de prueba inválido',
-          detalle: `En convocatoria real la respuesta tiene tipo ${matchForArea.invalidTipo}; debe ser P, Q, R, S o T.`,
-        })
-        return
-      }
-
-      if (!matchForArea || !matchForArea.answer) {
-        missingKeys += 1
-        noCalificados.push({
-          ...baseNoCalificado,
-          motivo: 'Sin clave',
-          detalle: 'No se pudo asociar la respuesta con una clave válida para el área.',
-        })
-        return
-      }
-
-      const { row: responseRow, answer: answerRow } = matchForArea
-      const answersRaw = (responseRow?.answers || '').toUpperCase()
-      const correctAnswersRaw = (answerRow?.answers || '').toUpperCase()
-      const answers = answersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
-      const correctAnswers = correctAnswersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
-
-      let total = 0
-      for (let index = 0; index < plan.length; index += 1) {
-        const weight = Number(plan[index]?.weight) || 0
-        if (weight <= 0) continue
-
-        const responseChar = answers[index] || ' '
-        const correctChar = correctAnswers[index] || ' '
-        const isCorrectCharValid = /^[A-E]$/.test(correctChar)
-        const isResponseCharValid = /^[A-E]$/.test(responseChar)
-
-        if (!isCorrectCharValid) {
-          throw new Error(`La clave oficial contiene una respuesta inválida en la pregunta ${index + 1}.`)
-        }
-
-        let contribution = 0
-        if (isCorrectCharValid && isResponseCharValid && responseChar === correctChar) {
-          contribution = correctValue * weight
-        } else if (isResponseCharValid) {
-          contribution = incorrectValue * weight
-        } else {
-          contribution = blankValue * weight
-        }
-
-        total += contribution
-      }
-
-      processedResults.push({
-        id: `${stripDigits(candidate.dni)}-${calculationArea}`,
-        dni: stripDigits(candidate.dni),
-        paterno: candidate.paterno || '',
-        materno: candidate.materno || '',
-        nombres: candidate.nombres || '',
-        area: calculationArea,
-        programa: candidate.programa || '',
-        score: Math.round(total * 1000) / 1000,
-        position: 0,
-        positionInPrograma: 0,
-        isIngresante: false,
-        answersRaw: answers,
-        correctAnswersRaw: correctAnswers,
-        aula: responseRow.aula || '',
-        tipo: responseRow.tipo || '',
-        litho: responseRow.litho || '',
-        corId: responseRow.examCode || '',
-      })
-    })
-
-    if (isRealProcess) {
-      const byPrograma = new Map()
-      processedResults.forEach((r) => {
-        const prog = r.programa || ''
-        if (!byPrograma.has(prog)) byPrograma.set(prog, [])
-        byPrograma.get(prog).push(r)
-      })
-
-      byPrograma.forEach((rows, prog) => {
-        rows.sort((a, b) => b.score - a.score)
-        const cupo = vacantesPrograma?.value?.[prog] ?? 0
-        rows.forEach((r, i) => {
-          r.positionInPrograma = i + 1
-          r.isIngresante = cupo > 0 && r.positionInPrograma <= cupo
-        })
-      })
-    }
-
-    processedResults.sort((a, b) => b.score - a.score)
-    processedResults.forEach((r, i) => { r.position = i + 1 })
-
-    const unlinkedResponses = responsesRows.value.filter(
-      (r) => !r.dni || r.dni.trim() === ''
-    ).length
-
-    const plantillaSnapshot = (plantilla.items || []).map(i => ({
-      subject: i.subject,
-      questionCount: i.questionCount,
-      ponderation: i.ponderation,
-    }))
-
-    const summary = {
-      area: calculationArea,
-      timestamp: new Date().toISOString(),
-      totalCandidates: candidates.length,
-      missingResponses,
-      missingKeys,
-      duplicateResponses,
-      invalidCandidates,
-      missingPrograms,
-      invalidResponseTypes,
-      unlinkedResponses,
-      noCalificados,
-      totalWeight: Number(totalWeight.toFixed(3)),
-      answersLength,
+    return calculateAreaResults({
+      area,
+      plantilla,
       correctValue,
       incorrectValue,
       blankValue,
-      plantillaId: plantilla.id,
-      plantillaName: plantilla.name,
-      plantillaSnapshot,
-    }
-
-    return { results: processedResults, summary }
+      processType: processType.value,
+      simulacroScope: simulacroScope.value,
+      answersLength: effectiveAnswersLength.value,
+      archiveRows: archiveRows.value,
+      responsesRows: responsesRows.value,
+      answerKeyRows: answerKeyRows.value,
+      responsesByDni: responsesByDni.value,
+      answerKeyLookupByAreaTipo: answerKeyLookupByAreaTipo.value,
+      answerKeyFallbackByArea: answerKeyFallbackByArea?.value,
+      areaList: effectiveAreaNames.value,
+      vacantesPrograma: vacantesPrograma?.value,
+    })
   }
 
   function runCalification() {

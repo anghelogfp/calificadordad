@@ -1,0 +1,142 @@
+import { describe, expect, it } from 'vitest'
+import { calculateAreaResults } from '../calculateResults'
+import { validateCalificationResult } from '../validateResults'
+
+function makeAnswers(char, length = 60) {
+  return char.repeat(length)
+}
+
+function makePlantilla(overrides = {}) {
+  return {
+    id: 'tpl',
+    name: 'Plantilla',
+    questionTotal: 60,
+    items: [
+      {
+        subject: 'General',
+        questionCount: 60,
+        ponderation: 1,
+      },
+    ],
+    ...overrides,
+  }
+}
+
+function makeInput(overrides = {}) {
+  return {
+    area: 'Ingeniería',
+    plantilla: makePlantilla(),
+    correctValue: 10,
+    incorrectValue: 0,
+    blankValue: 2,
+    processType: 'simulacro',
+    simulacroScope: 'areas',
+    answersLength: 60,
+    archiveRows: [
+      { dni: '12345678', area: 'Ingeniería', programa: 'Civil', paterno: 'A' },
+    ],
+    responsesRows: [
+      { dni: '12345678', tipo: 'P', answers: makeAnswers('A'), litho: '100001' },
+    ],
+    answerKeyRows: [
+      { area: 'Ingeniería', tipo: 'P', answers: makeAnswers('A') },
+    ],
+    responsesByDni: new Map([
+      ['12345678', [{ dni: '12345678', tipo: 'P', answers: makeAnswers('A'), litho: '100001' }]],
+    ]),
+    answerKeyLookupByAreaTipo: new Map([
+      ['Ingeniería|P', { area: 'Ingeniería', tipo: 'P', answers: makeAnswers('A') }],
+    ]),
+    answerKeyFallbackByArea: new Map(),
+    areaList: ['Biomédicas', 'Sociales', 'Ingeniería'],
+    vacantesPrograma: {},
+    timestamp: '2026-07-01T12:00:00.000Z',
+    ...overrides,
+  }
+}
+
+describe('calculateAreaResults', () => {
+  it('calcula resultados puros sin depender de Vue', () => {
+    const result = calculateAreaResults(makeInput())
+
+    expect(result.results).toEqual([
+      expect.objectContaining({
+        dni: '12345678',
+        area: 'Ingeniería',
+        score: 600,
+        position: 1,
+        answersRaw: makeAnswers('A'),
+        correctAnswersRaw: makeAnswers('A'),
+      }),
+    ])
+    expect(result.summary).toMatchObject({
+      area: 'Ingeniería',
+      timestamp: '2026-07-01T12:00:00.000Z',
+      totalCandidates: 1,
+      totalWeight: 60,
+      noCalificados: [],
+    })
+    expect(validateCalificationResult({ result })).toMatchObject({ valid: true })
+  })
+
+  it('rechaza plantillas que no cubren todas las preguntas', () => {
+    expect(() => calculateAreaResults(makeInput({
+      plantilla: makePlantilla({
+        items: [{ subject: 'General', questionCount: 59, ponderation: 1 }],
+      }),
+    }))).toThrow('cubre 59 preguntas')
+  })
+
+  it('rechaza claves oficiales con respuestas inválidas', () => {
+    expect(() => calculateAreaResults(makeInput({
+      answerKeyRows: [
+        { area: 'Ingeniería', tipo: 'P', answers: `${makeAnswers('A', 10)}X${makeAnswers('A', 49)}` },
+      ],
+      answerKeyLookupByAreaTipo: new Map([
+        ['Ingeniería|P', { area: 'Ingeniería', tipo: 'P', answers: `${makeAnswers('A', 10)}X${makeAnswers('A', 49)}` }],
+      ]),
+    }))).toThrow('pregunta 11')
+  })
+
+  it('marca ingresantes por programa en proceso real', () => {
+    const answerKeyRows = ['P', 'Q', 'R', 'S', 'T'].map((tipo) => ({
+      area: 'Ingeniería',
+      tipo,
+      answers: makeAnswers('A'),
+    }))
+
+    const result = calculateAreaResults(makeInput({
+      processType: 'real',
+      archiveRows: [
+        { dni: '11111111', area: 'Ingeniería', programa: 'Civil' },
+        { dni: '22222222', area: 'Ingeniería', programa: 'Civil' },
+      ],
+      responsesRows: [
+        { dni: '11111111', tipo: 'P', answers: makeAnswers('A') },
+        { dni: '22222222', tipo: 'Q', answers: makeAnswers('B') },
+      ],
+      answerKeyRows,
+      responsesByDni: new Map([
+        ['11111111', [{ dni: '11111111', tipo: 'P', answers: makeAnswers('A') }]],
+        ['22222222', [{ dni: '22222222', tipo: 'Q', answers: makeAnswers('B') }]],
+      ]),
+      answerKeyLookupByAreaTipo: new Map(),
+      vacantesPrograma: { Civil: 1 },
+    }))
+
+    expect(result.results.map((row) => ({
+      dni: row.dni,
+      position: row.position,
+      positionInPrograma: row.positionInPrograma,
+      isIngresante: row.isIngresante,
+    }))).toEqual([
+      { dni: '11111111', position: 1, positionInPrograma: 1, isIngresante: true },
+      { dni: '22222222', position: 2, positionInPrograma: 2, isIngresante: false },
+    ])
+    expect(validateCalificationResult({
+      result,
+      processType: 'real',
+      vacantesPrograma: { Civil: 1 },
+    })).toMatchObject({ valid: true })
+  })
+})

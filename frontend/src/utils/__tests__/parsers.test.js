@@ -2,11 +2,20 @@ import { describe, it, expect } from 'vitest'
 import {
   createIdentifierRow,
   buildIdentifierObservation,
+  parseIdentifierLine,
   createResponseRow,
   buildResponseObservation,
+  parseResponseLine,
   detectResponseAnswersOffset,
+  readLinesFromFile,
 } from '../parsers'
 import { DEFAULT_DAT_FORMAT } from '@/constants'
+
+const HEADER = '123456789012345678901'
+
+function buildDatLine({ examCode = '2024', folio = '77', indicator = 'A', payload = '' } = {}) {
+  return `${HEADER}${examCode}#${folio}${indicator}${payload}`
+}
 
 describe('createIdentifierRow', () => {
   it('crea fila con valores por defecto', () => {
@@ -112,6 +121,55 @@ describe('buildIdentifierObservation', () => {
   })
 })
 
+describe('parseIdentifierLine', () => {
+  it('parsea una línea válida de identificadores', () => {
+    const answers = 'ABCDE'.repeat(12)
+    const line = buildDatLine({
+      payload: `654321P12345678001${answers}`,
+    })
+
+    const result = parseIdentifierLine(line, 1)
+
+    expect(result.error).toBeUndefined()
+    expect(result.row).toMatchObject({
+      rawLine: line,
+      header: HEADER,
+      lectura: '456789',
+      examCode: '2024',
+      folio: '77',
+      indicator: 'A',
+      litho: '654321',
+      tipo: 'P',
+      dni: '12345678',
+      aula: '001',
+      answers,
+      observaciones: 'Sin observaciones',
+    })
+  })
+
+  it('retorna null para líneas vacías o de relleno', () => {
+    expect(parseIdentifierLine('', 1)).toBeNull()
+    expect(parseIdentifierLine(' ', 2)).toBeNull()
+    expect(parseIdentifierLine('x', 3)).toBeNull()
+  })
+
+  it('reporta errores estructurales de cabecera y longitud', () => {
+    expect(parseIdentifierLine('123', 1).error).toContain('longitud insuficiente')
+
+    const line = `ABC4567890123456789012024#77A654321P12345678001${'A'.repeat(60)}`
+    expect(parseIdentifierLine(line, 2).error).toContain('cabecera inválida')
+  })
+
+  it('reporta partes obligatorias ausentes', () => {
+    expect(parseIdentifierLine(`${HEADER}ABCD#77A${'A'.repeat(40)}`, 1).error)
+      .toContain('código de examen no encontrado')
+    expect(parseIdentifierLine(`${HEADER}2024 A${'A'.repeat(40)}`, 2).error)
+      .toContain('folio')
+    expect(parseIdentifierLine(`${HEADER}2024#77${' '.repeat(40)}`, 3).error)
+      .toContain('indicador')
+  })
+})
+
 describe('createResponseRow', () => {
   it('crea fila con valores por defecto', () => {
     const row = createResponseRow()
@@ -174,6 +232,54 @@ describe('buildResponseObservation', () => {
   })
 })
 
+describe('parseResponseLine', () => {
+  it('parsea respuestas con offset por defecto', () => {
+    const answers = 'ABCDE'.repeat(12)
+    const line = buildDatLine({
+      payload: `654321P${answers}`,
+    })
+
+    const result = parseResponseLine(line, 1)
+
+    expect(result.error).toBeUndefined()
+    expect(result.row).toMatchObject({
+      header: HEADER,
+      lectura: '456789',
+      examCode: '2024',
+      folio: '77',
+      indicator: 'A',
+      litho: '654321',
+      tipo: 'P',
+      answers,
+    })
+    expect(result.row.observaciones).toContain('DNI no vinculado')
+  })
+
+  it('respeta responseAnswersOffset custom', () => {
+    const answers = 'B'.repeat(60)
+    const formatConfig = {
+      ...DEFAULT_DAT_FORMAT,
+      responseAnswersOffset: 18,
+    }
+    const line = buildDatLine({
+      payload: `654321P12345678001${answers}`,
+    })
+
+    const result = parseResponseLine(line, 1, formatConfig)
+
+    expect(result.row.litho).toBe('654321')
+    expect(result.row.tipo).toBe('P')
+    expect(result.row.answers).toBe(answers)
+  })
+
+  it('reporta errores estructurales', () => {
+    expect(parseResponseLine('123', 1).error).toContain('longitud insuficiente')
+
+    const line = `ABC4567890123456789012024#77A654321P${'A'.repeat(60)}`
+    expect(parseResponseLine(line, 2).error).toContain('cabecera inválida')
+  })
+})
+
 describe('detectResponseAnswersOffset', () => {
   it('devuelve null si hay menos de 3 líneas válidas', () => {
     const lines = ['only one short line']
@@ -188,5 +294,41 @@ describe('detectResponseAnswersOffset', () => {
   it('maneja líneas vacías', () => {
     const lines = ['', '', '']
     expect(detectResponseAnswersOffset(lines, DEFAULT_DAT_FORMAT)).toBeNull()
+  })
+
+  it('detecta el offset cuando las respuestas empiezan después de litho y tipo', () => {
+    const lines = [
+      buildDatLine({ payload: `111111P${'A'.repeat(60)}` }),
+      buildDatLine({ payload: `222222Q${'B'.repeat(60)}` }),
+      buildDatLine({ payload: `333333R${'C'.repeat(60)}` }),
+    ]
+
+    const result = detectResponseAnswersOffset(lines, DEFAULT_DAT_FORMAT)
+
+    expect(result.offset).toBe(7)
+    expect(result.answerPct).toBeGreaterThan(0.95)
+    expect(result.digitPct).toBe(0)
+  })
+})
+
+describe('readLinesFromFile', () => {
+  it('normaliza saltos de línea y elimina fin de archivo DOS', async () => {
+    const parsed = []
+    const file = {
+      text: async () => `uno\r\ndos\rtres\u001a\n`,
+    }
+
+    const results = await readLinesFromFile(file, (line, lineNumber) => {
+      if (!line) return null
+      parsed.push([lineNumber, line])
+      return { row: { lineNumber, line } }
+    })
+
+    expect(parsed).toEqual([
+      [1, 'uno'],
+      [2, 'dos'],
+      [3, 'tres'],
+    ])
+    expect(results.map((item) => item.row.line)).toEqual(['uno', 'dos', 'tres'])
   })
 })
