@@ -129,6 +129,68 @@ describe('validateCalificationResult', () => {
     ]))
   })
 
+  it('detecta trazabilidad por pregunta incompleta o con puntaje inconsistente', () => {
+    const validation = validateCalificationResult({
+      result: makeResult({
+        results: [
+          {
+            dni: '11111111',
+            score: 20,
+            position: 1,
+            answersRaw: 'AB ',
+            correctAnswersRaw: 'AAC',
+            questionDetails: [
+              { number: 1, score: 20 },
+              { number: 2, score: -2 },
+            ],
+          },
+        ],
+        summary: {
+          answersLength: 3,
+          totalCandidates: 1,
+          noCalificados: [],
+        },
+      }),
+    })
+
+    expect(validation.valid).toBe(false)
+    expect(validation.errors.map((error) => error.code)).toEqual(expect.arrayContaining([
+      'QUESTION_DETAILS_LENGTH_INVALID',
+      'QUESTION_DETAILS_SCORE_MISMATCH',
+    ]))
+  })
+
+  it('detecta trazabilidad por materia con puntaje inconsistente', () => {
+    const validation = validateCalificationResult({
+      result: makeResult({
+        results: [
+          {
+            dni: '11111111',
+            score: 20,
+            position: 1,
+            answersRaw: 'AB ',
+            correctAnswersRaw: 'AAC',
+            subjectBreakdown: [
+              { subject: 'Matemática', score: 18 },
+            ],
+          },
+        ],
+        summary: {
+          answersLength: 3,
+          totalCandidates: 1,
+          noCalificados: [],
+        },
+      }),
+    })
+
+    expect(validation.valid).toBe(false)
+    expect(validation.errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'SUBJECT_BREAKDOWN_SCORE_MISMATCH',
+      }),
+    ]))
+  })
+
   it('valida posiciones por programa e ingresantes en modo real', () => {
     const validation = validateCalificationResult({
       processType: 'real',

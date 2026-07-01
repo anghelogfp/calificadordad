@@ -1,9 +1,8 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { buildQuestionPlan } from '@/utils/helpers'
 import { useFocusTrap } from '@/composables/useFocusTrap'
+import { loadPdfExportDeps } from '@/utils/exportLoaders'
 
 const props = defineProps({
   candidate: { type: Object, required: true },
@@ -148,6 +147,7 @@ async function exportPdf() {
   const c   = props.candidate
   const s   = props.summary
   const { correctCount, incorrectCount, blankCount } = stats.value
+  const { jsPDF, autoTable } = await loadPdfExportDeps()
   const logoBase64 = await _loadLogo()
 
   // ── Paleta "Ejecutivo Moderno" ────────────────────────────────────────────

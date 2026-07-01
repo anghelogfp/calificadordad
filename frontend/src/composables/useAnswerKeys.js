@@ -1,9 +1,5 @@
 import { ref, computed } from 'vue'
 import { useStorage, watchDebounced } from '@vueuse/core'
-import ExcelJS from 'exceljs'
-import { saveAs } from 'file-saver'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { useTableState } from './useTableState'
 import { STORAGE_KEYS, ANSWER_KEY_COLUMNS, ANSWER_KEY_AREAS } from '@/constants'
 import {
@@ -14,6 +10,7 @@ import {
   buildResponseMatchKey,
   buildAreaTipoKey,
 } from '@/utils/helpers'
+import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
 import { parseIdentifierLine, parseResponseLine, readLinesFromFile, detectResponseAnswersOffset } from '@/utils/parsers'
 import { apiFetch } from '@/utils/apiFetch'
 
@@ -494,6 +491,7 @@ export function useAnswerKeys(archiveRows) {
    */
   async function exportAnswerKeysToExcel() {
     if (!tableState.rows.value.length) return
+    const { ExcelJS, saveAs } = await loadExcelExportDeps()
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Claves')
     worksheet.columns = ANSWER_KEY_COLUMNS.map(({ key, label }) => ({
@@ -515,6 +513,7 @@ export function useAnswerKeys(archiveRows) {
   async function exportAnswerKeyObservationsToExcel() {
     const rows = observations.value
     if (!rows.length) return
+    const { ExcelJS, saveAs } = await loadExcelExportDeps()
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Observados')
     worksheet.columns = [
@@ -542,8 +541,9 @@ export function useAnswerKeys(archiveRows) {
   /**
    * Exporta observaciones a PDF
    */
-  function exportAnswerKeysObservationsPdf() {
+  async function exportAnswerKeysObservationsPdf() {
     const rows = observations.value
+    const { jsPDF, autoTable } = await loadPdfExportDeps()
     const doc = new jsPDF()
     doc.setFontSize(16)
     doc.text('Observaciones de claves', 14, 18)

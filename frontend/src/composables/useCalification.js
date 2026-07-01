@@ -12,6 +12,7 @@ import {
 } from '@/utils/calificationHelpers'
 import { calculateAreaResults } from '@/domain/calification/calculateResults'
 import { buildCalificationPreflight } from '@/domain/calification/preflight'
+import { validateCalificationResult } from '@/domain/calification/validateResults'
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
@@ -307,6 +308,24 @@ export function useCalification(
     areaList: effectiveAreaNames.value,
   }))
 
+  function buildPreflightForArea(area) {
+    return buildCalificationPreflight({
+      area,
+      processType: processType.value,
+      simulacroScope: simulacroScope.value,
+      archiveRows: archiveRows.value,
+      responsesRows: responsesRows.value,
+      answerKeyRows: answerKeyRows.value,
+      responsesByDni: responsesByDni.value,
+      areaList: effectiveAreaNames.value,
+    })
+  }
+
+  function getPreflightBlockerMessage(preflight) {
+    const blocker = preflight.items.find((item) => item.status === 'error')
+    return blocker?.detail || 'Corrige los bloqueos antes de calificar.'
+  }
+
   const selectedPonderationIsReady = computed(() => {
     const plantilla = selectedCalificationPlantilla.value
     return plantilla?.questionTotal === effectiveAnswersLength.value
@@ -483,6 +502,21 @@ export function useCalification(
     })
   }
 
+  function auditCalificationResult(areaResult) {
+    const validation = validateCalificationResult({
+      result: areaResult,
+      processType: processType.value,
+      answersLength: effectiveAnswersLength.value,
+      vacantesPrograma: vacantesPrograma?.value,
+    })
+
+    if (!validation.valid) {
+      console.warn('[calification] Resultado calculado con invariantes inválidas:', validation)
+    }
+
+    return validation
+  }
+
   function runCalification() {
     calificationError.value = ''
 
@@ -505,9 +539,16 @@ export function useCalification(
     if (!Number.isFinite(incorrectValue)) { calificationError.value = 'El valor para respuesta incorrecta no es válido.'; showToast(calificationError.value, 'error'); return }
     if (!Number.isFinite(blankValue)) { calificationError.value = 'El valor para respuesta en blanco no es válido.'; showToast(calificationError.value, 'error'); return }
 
+    if (preflightCheck.value.hasBlockers) {
+      calificationError.value = getPreflightBlockerMessage(preflightCheck.value)
+      showToast(calificationError.value, 'error', 8000)
+      return
+    }
+
     let areaResult
     try {
       areaResult = _calcForArea(area, plantilla, correctValue, incorrectValue, blankValue)
+      auditCalificationResult(areaResult)
     } catch (e) {
       console.error('[runCalification] error:', e)
       calificationError.value = e?.message || String(e)
@@ -563,6 +604,12 @@ export function useCalification(
     for (const areaName of areasToRun) {
       const area = normalizeArea(areaName, effectiveAreaNames.value)
       const calculationArea = isGeneralSimulacro.value ? GENERAL_SIMULACRO_AREA : area
+      const areaPreflight = buildPreflightForArea(calculationArea)
+      if (areaPreflight.hasBlockers) {
+        skippedDetails.push({ area: areaName, reason: getPreflightBlockerMessage(areaPreflight) })
+        continue
+      }
+
       const available = isGeneralSimulacro.value
         ? availablePlantillas.value
         : ponderationsComposable.getPlantillasForCalification(area)
@@ -582,7 +629,9 @@ export function useCalification(
       const { correctValue, incorrectValue, blankValue } = getConfigForArea(calculationArea)
 
       try {
-        newAreas[calculationArea] = _calcForArea(calculationArea, plantilla, correctValue, incorrectValue, blankValue)
+        const areaResult = _calcForArea(calculationArea, plantilla, correctValue, incorrectValue, blankValue)
+        auditCalificationResult(areaResult)
+        newAreas[calculationArea] = areaResult
         calculated.push(calculationArea)
       } catch (e) {
         skippedDetails.push({ area: areaName, reason: e?.message || 'Error desconocido' })

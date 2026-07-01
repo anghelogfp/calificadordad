@@ -1,12 +1,9 @@
 import { computed, ref } from 'vue'
 import { useStorage, watchDebounced } from '@vueuse/core'
-import ExcelJS from 'exceljs'
-import { saveAs } from 'file-saver'
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { useTableState } from './useTableState'
 import { STORAGE_KEYS } from '@/constants'
 import { generateId, normalize, stripDigits, buildResponseMatchKey } from '@/utils/helpers'
+import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
 import {
   createResponseRow,
   buildResponseObservation,
@@ -315,6 +312,7 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
    */
   async function exportResponsesToExcel() {
     if (!tableState.rows.value.length) return
+    const { ExcelJS, saveAs } = await loadExcelExportDeps()
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Respuestas')
     worksheet.columns = [
@@ -340,6 +338,7 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
   async function exportResponseObservationsToExcel() {
     const rows = observations.value
     if (!rows.length) return
+    const { ExcelJS, saveAs } = await loadExcelExportDeps()
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Observados')
     worksheet.columns = [
@@ -368,8 +367,9 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
   /**
    * Exporta observaciones a PDF
    */
-  function exportResponsesObservationsPdf() {
+  async function exportResponsesObservationsPdf() {
     const rows = observations.value
+    const { jsPDF, autoTable } = await loadPdfExportDeps()
     const doc = new jsPDF()
     doc.setFontSize(16)
     doc.text('Observaciones de respuestas', 14, 18)

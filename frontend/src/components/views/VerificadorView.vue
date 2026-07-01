@@ -1,10 +1,9 @@
 <script setup>
 import { ref, computed, reactive, nextTick } from 'vue'
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import { buildQuestionPlan } from '@/utils/helpers'
 import { useVerificador } from '@/composables/useVerificador'
 import { useToast } from '@/composables/useToast'
+import { loadPdfExportDeps } from '@/utils/exportLoaders'
 
 const props = defineProps({
   ponderations: { type: Object, required: true },
@@ -320,6 +319,7 @@ async function exportPdf() {
   }
 
   const { correctCount, incorrectCount, blankCount, score } = stats.value
+  const { jsPDF, autoTable } = await loadPdfExportDeps()
   const logoBase64 = await _loadLogo()
   const allRows    = rows.value
 

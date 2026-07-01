@@ -4,6 +4,8 @@ import { useCalification } from '../useCalification'
 import { buildAreaTipoKey, normalizeArea, stripDigits } from '@/utils/helpers'
 import { DEFAULT_DAT_FORMAT } from '@/constants'
 
+const validateCalificationResultMock = vi.hoisted(() => vi.fn())
+
 vi.mock('@/utils/apiFetch', () => ({
   apiFetch: vi.fn(async () => ({
     ok: true,
@@ -15,6 +17,10 @@ vi.mock('@/composables/useToast', () => ({
   useToast: () => ({
     showToast: vi.fn(),
   }),
+}))
+
+vi.mock('@/domain/calification/validateResults', () => ({
+  validateCalificationResult: validateCalificationResultMock,
 }))
 
 function makeAnswers(char, length = 60) {
@@ -119,6 +125,7 @@ function makeSubject({
 beforeEach(() => {
   localStorage.clear()
   vi.clearAllMocks()
+  validateCalificationResultMock.mockReturnValue({ valid: true, errors: [], warnings: [] })
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
@@ -215,6 +222,28 @@ describe('useCalification', () => {
       'Sin respuesta .dat',
       'Respuesta duplicada',
     ])
+    expect(validateCalificationResultMock).toHaveBeenCalled()
+  })
+
+  it('bloquea la calificación cuando el preflight no tiene candidatos', () => {
+    const { calification } = makeSubject({
+      archiveRows: [],
+      responsesRows: [
+        { dni: '11111111', tipo: 'P', answers: makeAnswers('A'), litho: '100001' },
+      ],
+      answerKeyRows: [
+        { area: '', tipo: '', answers: makeAnswers('A') },
+      ],
+      plantillas: [makePlantilla({ id: 'tpl-general', area: '', name: 'General' })],
+    })
+
+    calification.startNewProcess({ name: 'Sin candidatos', type: 'simulacro' })
+    calification.calificationPlantillaId.value = 'tpl-general'
+    calification.runCalification()
+
+    expect(calification.calificationResults.value).toEqual([])
+    expect(calification.calificationError.value).toBe('No hay postulantes para esta área en el padrón.')
+    expect(validateCalificationResultMock).not.toHaveBeenCalled()
   })
 
   it('en modo real exige claves por tipo y marca ingresantes por vacantes de programa', () => {
@@ -292,5 +321,40 @@ describe('useCalification', () => {
 
     expect(calification.calificationResults.value).toEqual([])
     expect(calification.calificationError.value).toContain('Faltan claves para Ingeniería: T')
+  })
+
+  it('audita resultados inválidos sin bloquear la calificación', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    validateCalificationResultMock.mockReturnValue({
+      valid: false,
+      errors: [{ code: 'TEST_INVARIANT', message: 'Invariante de prueba', context: {} }],
+      warnings: [],
+    })
+    const { calification } = makeSubject({
+      archiveRows: [
+        { dni: '11111111', paterno: 'A', materno: '', nombres: 'Uno' },
+      ],
+      responsesRows: [
+        { dni: '11111111', tipo: 'P', answers: makeAnswers('A'), aula: '001', litho: '100001' },
+      ],
+      answerKeyRows: [
+        { area: '', tipo: '', answers: makeAnswers('A') },
+      ],
+      plantillas: [makePlantilla({ id: 'tpl-general', area: '', name: 'General' })],
+    })
+
+    calification.startNewProcess({ name: 'Simulacro', type: 'simulacro' })
+    calification.calificationPlantillaId.value = 'tpl-general'
+    calification.runCalification()
+
+    expect(calification.calificationResults.value).toHaveLength(1)
+    expect(validateCalificationResultMock).toHaveBeenCalledWith(expect.objectContaining({
+      processType: 'simulacro',
+      answersLength: 60,
+    }))
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[calification] Resultado calculado con invariantes inválidas:',
+      expect.objectContaining({ valid: false }),
+    )
   })
 })

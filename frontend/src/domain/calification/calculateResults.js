@@ -12,6 +12,10 @@ import {
   GENERAL_SIMULACRO_AREA,
 } from '@/utils/calificationHelpers'
 
+function roundScore(value) {
+  return Math.round(value * 1000) / 1000
+}
+
 export function calculateAreaResults({
   area,
   plantilla,
@@ -185,9 +189,13 @@ export function calculateAreaResults({
     const correctAnswers = correctAnswersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
 
     let total = 0
+    const questionDetails = []
+    const subjectBreakdownByName = new Map()
+
     for (let index = 0; index < plan.length; index += 1) {
-      const weight = Number(plan[index]?.weight) || 0
-      if (weight <= 0) continue
+      const planItem = plan[index] || {}
+      const subject = String(planItem.subject || 'Sin materia').trim() || 'Sin materia'
+      const weight = Number(planItem.weight) || 0
 
       const responseChar = answers[index] || ' '
       const correctChar = correctAnswers[index] || ' '
@@ -199,15 +207,45 @@ export function calculateAreaResults({
       }
 
       let contribution = 0
+      let status = 'blank'
       if (isCorrectCharValid && isResponseCharValid && responseChar === correctChar) {
         contribution = correctValue * weight
+        status = 'correct'
       } else if (isResponseCharValid) {
         contribution = incorrectValue * weight
+        status = 'incorrect'
       } else {
         contribution = blankValue * weight
       }
 
       total += contribution
+      const roundedContribution = roundScore(contribution)
+      questionDetails.push({
+        number: index + 1,
+        subject,
+        weight,
+        answer: responseChar.trim(),
+        correctAnswer: correctChar,
+        status,
+        score: roundedContribution,
+      })
+
+      if (!subjectBreakdownByName.has(subject)) {
+        subjectBreakdownByName.set(subject, {
+          subject,
+          questions: 0,
+          correct: 0,
+          incorrect: 0,
+          blank: 0,
+          score: 0,
+          totalWeight: 0,
+        })
+      }
+      const subjectBreakdown = subjectBreakdownByName.get(subject)
+      subjectBreakdown.questions += 1
+      subjectBreakdown[status] += 1
+      subjectBreakdown.score = roundScore(subjectBreakdown.score + contribution)
+      subjectBreakdown.totalWeight = roundScore(subjectBreakdown.totalWeight + weight)
     }
 
     processedResults.push({
@@ -218,10 +256,12 @@ export function calculateAreaResults({
       nombres: candidate.nombres || '',
       area: calculationArea,
       programa: candidate.programa || '',
-      score: Math.round(total * 1000) / 1000,
+      score: roundScore(total),
       position: 0,
       positionInPrograma: 0,
       isIngresante: false,
+      questionDetails,
+      subjectBreakdown: [...subjectBreakdownByName.values()],
       answersRaw: answers,
       correctAnswersRaw: correctAnswers,
       aula: responseRow.aula || '',

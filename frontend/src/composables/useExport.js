@@ -1,7 +1,4 @@
-import { saveAs } from 'file-saver'
-import ExcelJS from 'exceljs'
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
 
 /**
  * Composable para exportar resultados a Excel y PDF
@@ -227,6 +224,7 @@ export function useExport() {
   async function exportScoresToExcel(rankedResults, convocatoriaName = '', options = {}) {
     if (!rankedResults?.length) return
 
+    const { ExcelJS, saveAs } = await loadExcelExportDeps()
     const workbook = new ExcelJS.Workbook()
     const processType = options.processType || 'simulacro'
 
@@ -349,6 +347,7 @@ export function useExport() {
     const ingresantes = (rankedResults || []).filter(r => r.isIngresante)
     if (!ingresantes.length) return
 
+    const { jsPDF, autoTable } = await loadPdfExportDeps()
     const isReal = processType === 'real'
 
     // Agrupar por área
@@ -519,6 +518,7 @@ export function useExport() {
 
   async function exportScoresToPdf(rankedResults, summary, convocatoriaName = '', options = {}) {
     if (!rankedResults?.length) return
+    const { jsPDF, autoTable } = await loadPdfExportDeps()
     const processType = options.processType || 'simulacro'
     const isReal = processType === 'real'
 

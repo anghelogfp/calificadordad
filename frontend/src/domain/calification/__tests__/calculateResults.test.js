@@ -98,6 +98,90 @@ describe('calculateAreaResults', () => {
     }))).toThrow('pregunta 11')
   })
 
+  it('incluye trazabilidad por pregunta y por materia', () => {
+    const result = calculateAreaResults(makeInput({
+      plantilla: makePlantilla({
+        questionTotal: 3,
+        items: [
+          { subject: 'Matemática', questionCount: 2, ponderation: 2 },
+          { subject: 'Verbal', questionCount: 1, ponderation: 1 },
+        ],
+      }),
+      answersLength: 3,
+      correctValue: 10,
+      incorrectValue: -1,
+      blankValue: 2,
+      responsesRows: [
+        { dni: '12345678', tipo: 'P', answers: 'AB', litho: '100001' },
+      ],
+      answerKeyRows: [
+        { area: 'Ingeniería', tipo: 'P', answers: 'AAC' },
+      ],
+      responsesByDni: new Map([
+        ['12345678', [{ dni: '12345678', tipo: 'P', answers: 'AB', litho: '100001' }]],
+      ]),
+      answerKeyLookupByAreaTipo: new Map([
+        ['Ingeniería|P', { area: 'Ingeniería', tipo: 'P', answers: 'AAC' }],
+      ]),
+    }))
+
+    expect(result.results[0]).toMatchObject({
+      score: 20,
+      answersRaw: 'AB ',
+      correctAnswersRaw: 'AAC',
+      questionDetails: [
+        {
+          number: 1,
+          subject: 'Matemática',
+          weight: 2,
+          answer: 'A',
+          correctAnswer: 'A',
+          status: 'correct',
+          score: 20,
+        },
+        {
+          number: 2,
+          subject: 'Matemática',
+          weight: 2,
+          answer: 'B',
+          correctAnswer: 'A',
+          status: 'incorrect',
+          score: -2,
+        },
+        {
+          number: 3,
+          subject: 'Verbal',
+          weight: 1,
+          answer: '',
+          correctAnswer: 'C',
+          status: 'blank',
+          score: 2,
+        },
+      ],
+      subjectBreakdown: [
+        {
+          subject: 'Matemática',
+          questions: 2,
+          correct: 1,
+          incorrect: 1,
+          blank: 0,
+          score: 18,
+          totalWeight: 4,
+        },
+        {
+          subject: 'Verbal',
+          questions: 1,
+          correct: 0,
+          incorrect: 0,
+          blank: 1,
+          score: 2,
+          totalWeight: 1,
+        },
+      ],
+    })
+    expect(validateCalificationResult({ result })).toMatchObject({ valid: true })
+  })
+
   it('marca ingresantes por programa en proceso real', () => {
     const answerKeyRows = ['P', 'Q', 'R', 'S', 'T'].map((tipo) => ({
       area: 'Ingeniería',

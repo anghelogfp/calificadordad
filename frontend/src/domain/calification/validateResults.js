@@ -8,6 +8,14 @@ function isSequential(values) {
   return values.every((value, index) => value === index + 1)
 }
 
+function roundScore(value) {
+  return Math.round(Number(value) * 1000) / 1000
+}
+
+function scoresMatch(left, right) {
+  return Math.abs(roundScore(left) - roundScore(right)) <= 0.001
+}
+
 export function validateCalificationResult({
   result,
   processType = 'simulacro',
@@ -57,6 +65,44 @@ export function validateCalificationResult({
           expected: expectedAnswersLength,
           actual: String(row.correctAnswersRaw ?? '').length,
         }))
+      }
+
+      if (row.questionDetails !== undefined) {
+        if (!Array.isArray(row.questionDetails)) {
+          errors.push(issue('QUESTION_DETAILS_INVALID', 'El detalle por pregunta debe ser una lista.', { dni }))
+        } else {
+          if (row.questionDetails.length !== expectedAnswersLength) {
+            errors.push(issue('QUESTION_DETAILS_LENGTH_INVALID', 'El detalle por pregunta no coincide con la cantidad esperada.', {
+              dni,
+              expected: expectedAnswersLength,
+              actual: row.questionDetails.length,
+            }))
+          }
+
+          const detailsScore = row.questionDetails.reduce((acc, question) => acc + Number(question?.score || 0), 0)
+          if (!scoresMatch(detailsScore, row.score)) {
+            errors.push(issue('QUESTION_DETAILS_SCORE_MISMATCH', 'La suma del detalle por pregunta no coincide con el puntaje final.', {
+              dni,
+              expected: row.score,
+              actual: roundScore(detailsScore),
+            }))
+          }
+        }
+      }
+    }
+
+    if (row.subjectBreakdown !== undefined) {
+      if (!Array.isArray(row.subjectBreakdown)) {
+        errors.push(issue('SUBJECT_BREAKDOWN_INVALID', 'El detalle por materia debe ser una lista.', { dni }))
+      } else {
+        const subjectScore = row.subjectBreakdown.reduce((acc, subject) => acc + Number(subject?.score || 0), 0)
+        if (!scoresMatch(subjectScore, row.score)) {
+          errors.push(issue('SUBJECT_BREAKDOWN_SCORE_MISMATCH', 'La suma del detalle por materia no coincide con el puntaje final.', {
+            dni,
+            expected: row.score,
+            actual: roundScore(subjectScore),
+          }))
+        }
       }
     }
   })

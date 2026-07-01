@@ -1,7 +1,5 @@
 import { reactive, computed, ref } from 'vue'
 import { watchDebounced } from '@vueuse/core'
-import ExcelJS from 'exceljs'
-import { saveAs } from 'file-saver'
 import { useTableState } from './useTableState'
 import {
   STORAGE_KEYS,
@@ -10,6 +8,7 @@ import {
 } from '@/constants'
 import { generateId, normalize, normalizeArea, stripDigits } from '@/utils/helpers'
 import { apiFetch } from '@/utils/apiFetch'
+import { loadExcelDeps, loadExcelExportDeps } from '@/utils/exportLoaders'
 
 /**
  * Crea una fila de archivo (padrón)
@@ -210,6 +209,7 @@ export function useArchives() {
   async function readArchiveWorkbook(file) {
     tableState.importError.value = ''
     try {
+      const { ExcelJS } = await loadExcelDeps()
       const buffer = await file.arrayBuffer()
       const workbook = new ExcelJS.Workbook()
       await workbook.xlsx.load(buffer)
@@ -272,6 +272,7 @@ export function useArchives() {
    */
   async function exportArchiveToExcel() {
     if (!tableState.rows.value.length) return
+    const { ExcelJS, saveAs } = await loadExcelExportDeps()
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Postulantes')
     worksheet.columns = ARCHIVE_COLUMNS.map(({ key, label }) => ({
@@ -292,6 +293,7 @@ export function useArchives() {
 
   async function exportArchiveIssuesToExcel() {
     if (!archiveIssues.value.length) return
+    const { ExcelJS, saveAs } = await loadExcelExportDeps()
     const workbook = new ExcelJS.Workbook()
     const worksheet = workbook.addWorksheet('Observados')
     worksheet.columns = [

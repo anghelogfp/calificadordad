@@ -43,22 +43,14 @@ class PonderacionViewSet(viewsets.ModelViewSet):
         errors = []
 
         for item in data:
-            serializer = PonderacionSerializer(data=item)
+            existing = Ponderacion.objects.filter(
+                area__iexact=item.get('area', ''),
+                subject__iexact=item.get('subject', ''),
+            ).first()
+            serializer = PonderacionSerializer(existing, data=item) if existing else PonderacionSerializer(data=item)
             if serializer.is_valid():
-                existing = Ponderacion.objects.filter(
-                    area__iexact=item.get('area', ''),
-                    subject__iexact=item.get('subject', ''),
-                ).first()
-                if existing:
-                    serializer = PonderacionSerializer(existing, data=item)
-                    if serializer.is_valid():
-                        serializer.save()
-                        created.append(serializer.data)
-                    else:
-                        errors.append({'data': item, 'errors': serializer.errors})
-                else:
-                    serializer.save()
-                    created.append(serializer.data)
+                serializer.save()
+                created.append(serializer.data)
             else:
                 errors.append({'data': item, 'errors': serializer.errors})
 

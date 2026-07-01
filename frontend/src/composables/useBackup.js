@@ -1,5 +1,4 @@
 import { ref } from 'vue'
-import { saveAs } from 'file-saver'
 import { STORAGE_KEYS } from '@/constants'
 import { apiFetch } from '@/utils/apiFetch'
 
@@ -158,6 +157,7 @@ export function useBackup() {
     exportLoading.value = true
 
     try {
+      const { saveAs } = await import('file-saver')
       const backup = {
         version: BACKUP_VERSION,
         exportedAt: new Date().toISOString(),
@@ -171,6 +171,7 @@ export function useBackup() {
       saveAs(blob, `backup-calificador-${date}.json`)
     } catch (error) {
       exportError.value = 'No se pudo exportar desde el servidor. Se descargó un respaldo local de emergencia.'
+      const { saveAs } = await import('file-saver')
 
       const backup = {
         version: 2,
