@@ -785,3 +785,22 @@ Pendiente para la siguiente sesión:
 - probar carga sintética con ~5000 postulantes
 - decidir persistencia de la trazabilidad
 - decidir si se mantiene ExcelJS o se reemplaza
+
+## CI / npm ci
+
+Hallazgo reciente:
+
+- el frontend tenía `npm` declarado como dependencia normal en `frontend/package.json`
+- esa dependencia no se usa en el código
+- su presencia arrastraba un árbol enorme y dependencias transitive de `@emnapi/*`
+- se eliminó `npm` del frontend y se regeneró `frontend/package-lock.json`
+
+Resultado esperado:
+
+- `npm ci` en GitHub Actions ya no debería depender de esa dependencia sobrante
+- el lock quedó más limpio y reproducible
+
+Nota local:
+
+- en esta máquina `npm ci` todavía tropieza con bloqueos de archivos temporales de `node_modules`
+- eso es un problema del entorno local, no del árbol de dependencias del proyecto
