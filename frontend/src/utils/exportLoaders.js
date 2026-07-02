@@ -1,5 +1,5 @@
 export async function loadExcelDeps() {
-  const { default: ExcelJS } = await import('exceljs/dist/exceljs.bare.min.js')
+  const { default: ExcelJS } = await import('exceljs')
   return { ExcelJS }
 }
 
