@@ -22,6 +22,7 @@ import { useScoreDashboard } from '@/composables/useScoreDashboard'
 import { useExport } from '@/composables/useExport'
 import { useVacantesPrograma } from '@/composables/useVacantesPrograma'
 import { useToast } from '@/composables/useToast'
+import { GENERAL_SIMULACRO_AREA, REAL_TEST_TYPES } from '@/utils/calificationHelpers'
 
 // Layout
 import AppHeader from '@/components/layout/AppHeader.vue'
@@ -212,6 +213,7 @@ const responseReconciliation = computed(() => {
 
 const answerKeyReconciliation = computed(() => {
   const processIsReal = calification.processType.value === 'real'
+  const isGeneralSimulacro = !processIsReal && calification.simulacroScope.value === 'general'
   const activeAreas = areas.areaNames.value.length ? areas.areaNames.value : []
   const expectedAreas = activeAreas.filter(area =>
     archives.rows.value.some(row => String(row.area || '').trim().toLowerCase() === area.toLowerCase())
@@ -230,34 +232,46 @@ const answerKeyReconciliation = computed(() => {
   })
 
   const keyByAreaType = new Set()
+  const keyByArea = new Set()
   const generalKeys = answerKeys.rows.value.filter(row => !String(row.area || '').trim()).length
   answerKeys.rows.value.forEach((row) => {
     const area = String(row.area || '').trim()
     const type = firstLetter(row.tipo)
+    if (area) keyByArea.add(area.toLowerCase())
     if (area && type) keyByAreaType.add(`${area.toLowerCase()}|${type}`)
   })
 
   const requiredPairs = []
   if (processIsReal) {
     areasToCheck.forEach((area) => {
-      ;['P', 'Q', 'R', 'S', 'T'].forEach(type => requiredPairs.push({ area, type }))
+      REAL_TEST_TYPES.forEach(type => requiredPairs.push({ area, type }))
     })
+  } else if (isGeneralSimulacro) {
+    if (responses.rows.value.length || archives.rows.value.length) {
+      requiredPairs.push({ area: GENERAL_SIMULACRO_AREA, type: 'General' })
+    }
   } else {
-    areaTypes.forEach((types, area) => {
-      types.forEach(type => requiredPairs.push({ area, type }))
-    })
+    const expectedAreaKeys = expectedAreas.length ? expectedAreas : [...areaTypes.keys()]
+    expectedAreaKeys.forEach(area => requiredPairs.push({ area, type: '' }))
   }
 
   const missingPairs = !processIsReal && generalKeys > 0
     ? []
-    : requiredPairs.filter(({ area, type }) =>
-      !keyByAreaType.has(`${area.toLowerCase()}|${type}`)
-    )
+    : isGeneralSimulacro
+      ? (requiredPairs.length && answerKeys.rows.value.length === 0 ? requiredPairs : [])
+      : processIsReal
+        ? requiredPairs.filter(({ area, type }) =>
+          !keyByAreaType.has(`${area.toLowerCase()}|${type}`)
+        )
+        : requiredPairs.filter(({ area }) =>
+          !keyByArea.has(area.toLowerCase())
+        )
   const duplicatePairs = countDuplicates(
     answerKeys.rows.value.map(row => {
       const area = String(row.area || '').trim().toLowerCase()
       const type = firstLetter(row.tipo)
-      return area && type ? `${area}|${type}` : ''
+      if (processIsReal) return area && type ? `${area}|${type}` : ''
+      return area || (!String(row.area || '').trim() ? GENERAL_SIMULACRO_AREA.toLowerCase() : '')
     }),
   )
   const incompleteKeys = answerKeys.rows.value.filter(row =>
@@ -273,6 +287,8 @@ const answerKeyReconciliation = computed(() => {
     duplicatePairs,
     incompleteKeys,
     issues,
+    mode: processIsReal ? 'real' : isGeneralSimulacro ? 'simulacro-general' : 'simulacro-areas',
+    generalKeyCoversSimulacro: !processIsReal && generalKeys > 0,
     status: issues === 0 && answerKeys.rows.value.length > 0 ? 'ok' : issues > 0 ? 'warn' : 'empty',
   }
 })

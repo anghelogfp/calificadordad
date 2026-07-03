@@ -35,6 +35,7 @@ function makeAnswerKeys(overrides = {}) {
     responseInputRef: null,
     detectedOffset: null,
     configuredResponseAnswersOffset: 7,
+    expectedAnswersLength: 60,
     importAnswerKeyFiles: vi.fn(),
     onAnswerKeyIdentificationChange: vi.fn(),
     onAnswerKeyResponseChange: vi.fn(),
@@ -113,5 +114,25 @@ describe('AnswerKeysTab', () => {
 
     expect(wrapper.find('.step-state-panel').exists()).toBe(true)
     expect(wrapper.text()).toContain('0 / 2 áreas con clave')
+  })
+
+  it('acepta clave general para simulacro sin exigir claves por área', () => {
+    const wrapper = mountAnswerKeysTab({
+      status: 'ok',
+      keysTotal: 1,
+      coveredPairs: 1,
+      missingPairs: [],
+      generalKeys: 1,
+      duplicatePairs: 0,
+      incompleteKeys: 0,
+      mode: 'simulacro-general',
+      generalKeyCoversSimulacro: true,
+    })
+
+    expect(wrapper.find('.step-state-panel--ok').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Clave general activa')
+    expect(wrapper.text()).toContain('la clave general cubre el ranking completo')
+    expect(wrapper.text()).not.toContain('Falta Biomédicas')
+    expect(wrapper.text()).not.toContain('Falta Ingeniería')
   })
 })

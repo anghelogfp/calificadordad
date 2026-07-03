@@ -33,6 +33,19 @@ const displayedRows = computed(() => (
   showOnlyObserved.value ? answerKeys.observations : answerKeys.pagedRows
 ))
 
+const displayedRowsWithCounts = computed(() =>
+  displayedRows.value.map((row) => {
+    const expected = answerKeys.expectedAnswersLength ?? 60
+    const actual = String(row.answers || '').replace(/\s/g, '').length
+    row.answerCount = `${actual}/${expected}`
+    row.answerCountStatus = actual === expected ? 'ok' : 'warn'
+    row.answerCountTitle = actual === expected
+      ? 'Clave completa'
+      : `Clave incompleta: ${actual} de ${expected} respuestas`
+    return row
+  })
+)
+
 function setImportMode(mode) {
   importMode.value = mode
   if (mode === 'general') {
@@ -78,6 +91,7 @@ const tableColumns = [
   { key: 'tipo', label: 'Tip', maxlength: 1, tight: true, class: 'column--code', width: '65px', minWidth: '65px' },
   { key: 'litho', label: 'Litho', maxlength: 6, class: 'column--code', width: '105px', minWidth: '105px' },
   { key: 'answers', label: 'Respuestas', type: 'textarea', rows: 2, class: 'column--answers', minWidth: '470px' },
+  { key: 'answerCount', label: 'Conteo', type: 'answer-count', width: '92px', minWidth: '92px' },
   { key: 'observaciones', label: 'Observaciones', badge: true, class: 'column--observations', minWidth: '240px' },
 ]
 
@@ -100,13 +114,21 @@ function getRowClass(row) {
 // Cobertura de áreas
 const areaCoverage = computed(() => {
   const loaded = new Set(answerKeys.sources.map(s => s.area).filter(Boolean))
+  const generalKeyCoversSimulacro = props.reconciliation?.generalKeyCoversSimulacro
   return (answerKeys.answerKeyAreaOptions || []).map(area => ({
     name: area,
-    hasKey: loaded.has(area),
+    hasKey: generalKeyCoversSimulacro || loaded.has(area),
   }))
 })
 
 const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).length)
+const hasMissingAreaCoverage = computed(() =>
+  !props.reconciliation?.generalKeyCoversSimulacro &&
+  coveredCount.value < areaCoverage.value.length
+)
+const coverageUnit = computed(() =>
+  props.reconciliation?.mode === 'simulacro-areas' ? 'áreas' : 'pares'
+)
 
 const stepState = computed(() => {
   if (!answerKeys.answerKeyHasData && !(props.reconciliation?.keysTotal)) {
@@ -121,7 +143,7 @@ const stepState = computed(() => {
       title: 'Corregir claves faltantes o duplicadas',
     }
   }
-  if (props.reconciliation?.incompleteKeys || coveredCount.value < areaCoverage.value.length) {
+  if (props.reconciliation?.incompleteKeys || hasMissingAreaCoverage.value) {
     return {
       variant: 'warn',
       title: 'Revisar cobertura de claves',
@@ -161,26 +183,31 @@ const stepState = computed(() => {
           <span class="step-state-panel__eyebrow">Estado de claves</span>
           <h3>{{ stepState.title }}</h3>
         </div>
-        <span v-if="areaCoverage.length" class="step-state-panel__summary">
+        <span v-if="areaCoverage.length && !reconciliation?.generalKeyCoversSimulacro" class="step-state-panel__summary">
           {{ coveredCount }} / {{ areaCoverage.length }} áreas con clave
+        </span>
+        <span v-else-if="reconciliation?.generalKeyCoversSimulacro" class="step-state-panel__summary">
+          Clave general activa
         </span>
       </div>
       <div class="step-state-panel__chips">
         <template v-if="reconciliation && reconciliation.keysTotal">
-          <span class="step-state-chip"><strong>{{ reconciliation.coveredPairs }}</strong> pares cubiertos</span>
-          <span class="step-state-chip"><strong>{{ reconciliation.missingPairs.length }}</strong> pares faltantes</span>
+          <span class="step-state-chip"><strong>{{ reconciliation.coveredPairs }}</strong> {{ coverageUnit }} cubiertos</span>
+          <span class="step-state-chip"><strong>{{ reconciliation.missingPairs.length }}</strong> {{ coverageUnit }} faltantes</span>
           <span class="step-state-chip"><strong>{{ reconciliation.generalKeys }}</strong> claves generales</span>
           <span class="step-state-chip"><strong>{{ reconciliation.duplicatePairs }}</strong> duplicadas</span>
           <span class="step-state-chip"><strong>{{ reconciliation.incompleteKeys }}</strong> observadas</span>
         </template>
-        <span
-          v-for="area in areaCoverage"
-          :key="area.name"
-          class="step-state-chip"
-          :class="area.hasKey ? 'step-state-chip--ok' : 'step-state-chip--missing'"
-        >
-          <strong>{{ area.hasKey ? 'OK' : 'Falta' }}</strong> {{ area.name }}
-        </span>
+        <template v-if="!reconciliation?.generalKeyCoversSimulacro">
+          <span
+            v-for="area in areaCoverage"
+            :key="area.name"
+            class="step-state-chip"
+            :class="area.hasKey ? 'step-state-chip--ok' : 'step-state-chip--missing'"
+          >
+            <strong>{{ area.hasKey ? 'OK' : 'Falta' }}</strong> {{ area.name }}
+          </span>
+        </template>
       </div>
       <p v-if="reconciliation?.missingPairs?.length" class="step-state-panel__hint">
         Faltan:
@@ -188,12 +215,14 @@ const stepState = computed(() => {
           v-for="(pair, index) in reconciliation.missingPairs.slice(0, 8)"
           :key="`${pair.area}-${pair.type}`"
         >
-          {{ pair.area }} {{ pair.type }}<span v-if="index < Math.min(reconciliation.missingPairs.length, 8) - 1">, </span>
+          {{ pair.type ? `${pair.area} ${pair.type}` : pair.area }}<span v-if="index < Math.min(reconciliation.missingPairs.length, 8) - 1">, </span>
         </strong>
         <span v-if="reconciliation.missingPairs.length > 8"> y {{ reconciliation.missingPairs.length - 8 }} más.</span>
       </p>
       <p v-else class="step-state-panel__hint">
-        Este cruce compara las claves cargadas con las áreas y tipos detectados en las respuestas.
+        {{ reconciliation?.generalKeyCoversSimulacro
+          ? 'En simulacro, la clave general cubre el ranking completo sin exigir claves por área.'
+          : 'Este cruce compara las claves cargadas con las áreas y tipos detectados en las respuestas.' }}
       </p>
     </section>
 
@@ -430,7 +459,7 @@ const stepState = computed(() => {
       <DataTable
         v-if="answerKeys.answerKeyHasData"
         :columns="tableColumns.map(col => col.key === 'area' ? { ...col, options: answerKeys.answerKeyAreaOptions } : col)"
-        :rows="displayedRows"
+        :rows="displayedRowsWithCounts"
         :selection="answerKeys.selection"
         :editing="answerKeys.editing"
         :is-all-selected="answerKeys.isAllVisibleSelected"

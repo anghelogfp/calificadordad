@@ -62,6 +62,9 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
   const configuredResponseAnswersOffset = computed(() =>
     effectiveFormatConfig().responseAnswersOffset ?? DEFAULT_DAT_FORMAT.responseAnswersOffset
   )
+  const expectedAnswersLength = computed(() =>
+    effectiveFormatConfig().answersLength ?? DEFAULT_DAT_FORMAT.answersLength
+  )
 
   async function detectFormat(file) {
     detectedOffset.value = null
@@ -426,6 +429,7 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
     responsesByDni,
     detectedOffset,
     configuredResponseAnswersOffset,
+    expectedAnswersLength,
 
     // Métodos específicos
     initializeResponses,

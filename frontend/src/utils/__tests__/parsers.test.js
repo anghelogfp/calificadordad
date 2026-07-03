@@ -6,6 +6,7 @@ import {
   createResponseRow,
   buildResponseObservation,
   parseResponseLine,
+  parseAnswerKeyResponseLine,
   detectResponseAnswersOffset,
   readLinesFromFile,
 } from '../parsers'
@@ -147,6 +148,18 @@ describe('parseIdentifierLine', () => {
     })
   })
 
+  it('preserva espacios en respuestas de identificadores para conteo visual', () => {
+    const answers = `${'A'.repeat(58)}  `
+    const line = buildDatLine({
+      payload: `654321P12345678001${answers}`,
+    })
+
+    const result = parseIdentifierLine(line, 1)
+
+    expect(result.row.answers).toBe(answers)
+    expect(result.row.answers).toHaveLength(60)
+  })
+
   it('retorna null para líneas vacías o de relleno', () => {
     expect(parseIdentifierLine('', 1)).toBeNull()
     expect(parseIdentifierLine(' ', 2)).toBeNull()
@@ -277,6 +290,36 @@ describe('parseResponseLine', () => {
 
     const line = `ABC4567890123456789012024#77A654321P${'A'.repeat(60)}`
     expect(parseResponseLine(line, 2).error).toContain('cabecera inválida')
+  })
+})
+
+describe('parseAnswerKeyResponseLine', () => {
+  it('parsea clave sin tipo leyendo respuestas desde despues del litho', () => {
+    const answers = 'BCCCBCADBACABCABBDACBBCABBABCCBBABBCBCECABABCECDBCBCBAABBCDB'
+    const line = buildDatLine({
+      payload: `039090${answers}`,
+    })
+
+    const result = parseAnswerKeyResponseLine(line, 1)
+
+    expect(result.error).toBeUndefined()
+    expect(result.row.litho).toBe('039090')
+    expect(result.row.tipo).toBe('')
+    expect(result.row.answers).toBe(answers)
+    expect(result.row.answers).toHaveLength(60)
+  })
+
+  it('mantiene tipo cuando la clave trae litho, tipo y respuestas', () => {
+    const answers = 'A'.repeat(60)
+    const line = buildDatLine({
+      payload: `039090P${answers}`,
+    })
+
+    const result = parseAnswerKeyResponseLine(line, 1)
+
+    expect(result.row.litho).toBe('039090')
+    expect(result.row.tipo).toBe('P')
+    expect(result.row.answers).toBe(answers)
   })
 })
 

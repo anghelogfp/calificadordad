@@ -24,6 +24,19 @@ const displayedRows = computed(() => (
   showOnlyObserved.value ? identifiers.observations : identifiers.pagedRows
 ))
 
+const displayedRowsWithCounts = computed(() =>
+  displayedRows.value.map((row) => {
+    const expected = identifiers.expectedAnswersLength ?? 60
+    const actual = String(row.answers || '').length
+    row.answerCount = `${actual}/${expected}`
+    row.answerCountStatus = actual === expected ? 'ok' : 'warn'
+    row.answerCountTitle = actual === expected
+      ? 'Cadena completa'
+      : `Cadena incompleta: ${actual} de ${expected} caracteres`
+    return row
+  })
+)
+
 const stepState = computed(() => {
   if (!props.reconciliation || (!props.reconciliation.padronTotal && !props.reconciliation.identifiersTotal)) {
     return {
@@ -84,6 +97,7 @@ const tableColumns = [
   { key: 'aula', label: 'Aula', maxlength: 3, class: 'column--code', width: '10%', minWidth: '80px' },
   { key: 'tipo', label: 'Tip', maxlength: 1, tight: true, class: 'column--code', width: '8%', minWidth: '65px' },
   { key: 'litho', label: 'Litho', maxlength: 6, class: 'column--code', width: '14%', minWidth: '105px' },
+  { key: 'answerCount', label: 'Conteo', type: 'answer-count', width: '92px', minWidth: '92px' },
   { key: 'observaciones', label: 'Observaciones', badge: true, class: 'column--observations', width: '36%', minWidth: '220px', maxWidth: '360px' },
 ]
 
@@ -259,7 +273,7 @@ function getRowClass(row) {
       <DataTable
         v-if="identifiers.identifierHasData"
         :columns="tableColumns"
-        :rows="displayedRows"
+        :rows="displayedRowsWithCounts"
         :selection="identifiers.selection"
         :editing="identifiers.editing"
         :is-all-selected="identifiers.isAllVisibleSelected"

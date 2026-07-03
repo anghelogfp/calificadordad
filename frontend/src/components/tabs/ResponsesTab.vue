@@ -43,6 +43,19 @@ const displayedRows = computed(() => (
   showOnlyObserved.value ? responses.observations : responses.pagedRows
 ))
 
+const displayedRowsWithCounts = computed(() =>
+  displayedRows.value.map((row) => {
+    const expected = responses.expectedAnswersLength ?? 60
+    const actual = String(row.answers || '').length
+    row.answerCount = `${actual}/${expected}`
+    row.answerCountStatus = actual === expected ? 'ok' : 'warn'
+    row.answerCountTitle = actual === expected
+      ? 'Cadena completa'
+      : `Cadena incompleta: ${actual} de ${expected} caracteres`
+    return row
+  })
+)
+
 const stepState = computed(() => {
   if (!responses.responsesHasData && (!props.reconciliation || !props.reconciliation.responsesTotal)) {
     return {
@@ -129,6 +142,7 @@ const tableColumns = [
   { key: 'tipo', label: 'Tip', maxlength: 1, tight: true, class: 'column--code', width: '65px', minWidth: '65px' },
   { key: 'litho', label: 'Litho', maxlength: 6, class: 'column--code', width: '105px', minWidth: '105px' },
   { key: 'answers', label: 'Respuestas', type: 'textarea', rows: 2, class: 'column--answers', minWidth: '470px' },
+  { key: 'answerCount', label: 'Conteo', type: 'answer-count', width: '92px', minWidth: '92px' },
   { key: 'observaciones', label: 'Observaciones', badge: true, class: 'column--observations', minWidth: '240px' },
 ]
 
@@ -338,7 +352,7 @@ function getRowClass(row) {
       <DataTable
         v-if="responses.responsesHasData"
         :columns="tableColumns"
-        :rows="displayedRows"
+        :rows="displayedRowsWithCounts"
         :selection="responses.selection"
         :editing="responses.editing"
         :is-all-selected="responses.isAllVisibleSelected"

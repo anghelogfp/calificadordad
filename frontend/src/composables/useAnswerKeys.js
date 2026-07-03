@@ -11,7 +11,7 @@ import {
   buildAreaTipoKey,
 } from '@/utils/helpers'
 import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
-import { parseIdentifierLine, parseResponseLine, readLinesFromFile, detectResponseAnswersOffset } from '@/utils/parsers'
+import { parseIdentifierLine, parseAnswerKeyResponseLine, readLinesFromFile, detectResponseAnswersOffset } from '@/utils/parsers'
 import { apiFetch } from '@/utils/apiFetch'
 
 function summarizeObservations(rows) {
@@ -54,11 +54,6 @@ export function buildAnswerKeyObservation(row, formatConfig = DEFAULT_DAT_FORMAT
   const issues = []
   const isGeneralKey = row.scope === 'general' || !String(row.area || '').trim()
 
-  const tipo = (row.tipo || '').trim()
-  if (!isGeneralKey && !tipo) {
-    issues.push('Tipo no informado')
-  }
-
   const lithoDigits = stripDigits(row.litho)
   if (!lithoDigits) {
     issues.push('Litho sin marcar')
@@ -71,8 +66,8 @@ export function buildAnswerKeyObservation(row, formatConfig = DEFAULT_DAT_FORMAT
   const answersNormalized = answerWindow.replace(/\s/g, '')
   if (!answersNormalized) {
     issues.push('Sin respuestas registradas')
-  } else if (answersRaw.length < formatConfig.answersLength) {
-    issues.push(`Cadena incompleta (${answersRaw.length}/${formatConfig.answersLength})`)
+  } else if (answersNormalized.length < formatConfig.answersLength) {
+    issues.push(`Cadena incompleta (${answersNormalized.length}/${formatConfig.answersLength})`)
   } else if (/[^A-E*]/.test(answersNormalized)) {
     issues.push('Respuestas con marcas no válidas')
   }
@@ -130,6 +125,9 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
   const detectedOffset = ref(null)
   const configuredResponseAnswersOffset = computed(() =>
     effectiveFormatConfig().responseAnswersOffset ?? DEFAULT_DAT_FORMAT.responseAnswersOffset
+  )
+  const expectedAnswersLength = computed(() =>
+    effectiveFormatConfig().answersLength ?? DEFAULT_DAT_FORMAT.answersLength
   )
 
   async function detectFormat(file) {
@@ -274,7 +272,7 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
     )
     const responseResults = await readLinesFromFile(
       responsesFileParam,
-      (line, lineNumber) => parseResponseLine(line, lineNumber, effectiveFormatConfig()),
+      (line, lineNumber) => parseAnswerKeyResponseLine(line, lineNumber, effectiveFormatConfig()),
     )
 
     const identifierRowsOnly = identifierResults.filter((item) => item && item.row)
@@ -367,7 +365,7 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
   async function readGeneralAnswerKeyFile(responsesFileParam) {
     const responseResults = await readLinesFromFile(
       responsesFileParam,
-      (line, lineNumber) => parseResponseLine(line, lineNumber, effectiveFormatConfig()),
+      (line, lineNumber) => parseAnswerKeyResponseLine(line, lineNumber, effectiveFormatConfig()),
     )
     const responseRowsOnly = responseResults.filter((item) => item && item.row)
     const responseErrors = responseResults.filter((item) => item && item.error)
@@ -623,6 +621,7 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
     observationByRowId,
     detectedOffset,
     configuredResponseAnswersOffset,
+    expectedAnswersLength,
     answerKeyAreaOptions,
     answerKeyLookupByMatch,
     answerKeyLookupByAreaTipo,

@@ -192,6 +192,14 @@ function visiblePages(current, total) {
                 {{ row[column.key] || '—' }}
               </span>
               <span
+                v-else-if="column.type === 'answer-count'"
+                class="answer-count"
+                :class="row[column.statusKey || `${column.key}Status`] === 'ok' ? 'answer-count--ok' : 'answer-count--warn'"
+                :title="row[column.titleKey || `${column.key}Title`] || undefined"
+              >
+                {{ row[column.key] }}
+              </span>
+              <span
                 v-else-if="column.badge"
                 class="badge"
                 :class="{
@@ -465,6 +473,26 @@ function visiblePages(current, total) {
 }
 .badge--ok { background: var(--success-100); color: var(--success-600); }
 .badge--warn { background: var(--warning-100); color: var(--warning-600); }
+
+.answer-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+.answer-count--ok {
+  background: var(--success-100);
+  color: var(--success-700);
+}
+.answer-count--warn {
+  background: var(--warning-100);
+  color: var(--warning-700);
+}
 
 /* Row actions — aparecen al hover */
 .col-actions { width: 84px; min-width: 84px; }

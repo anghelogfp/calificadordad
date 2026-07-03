@@ -1,7 +1,8 @@
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import { useToast } from '@/composables/useToast'
+import { DEFAULT_DAT_FORMAT } from '@/constants'
 
 const { showToast } = useToast()
 
@@ -40,13 +41,44 @@ async function saveVacantes(programa) {
 
 const datSaving = ref(false)
 const datFormatUnlocked = ref(false)
+const editableDatConfig = ref({})
+
+function cloneDatConfig() {
+  return { ...(props.datFormat.formatConfig.value || {}) }
+}
+
+function syncEditableDatConfig() {
+  editableDatConfig.value = cloneDatConfig()
+}
+
+syncEditableDatConfig()
+
+watch(
+  () => props.datFormat.formatConfig.value,
+  () => {
+    if (!datFormatUnlocked.value) syncEditableDatConfig()
+  },
+  { deep: true },
+)
+
+function toggleDatFormatLock() {
+  if (datFormatUnlocked.value) {
+    syncEditableDatConfig()
+    datFormatUnlocked.value = false
+    return
+  }
+  syncEditableDatConfig()
+  datFormatUnlocked.value = true
+}
 
 async function saveDatFormat() {
   if (!datFormatUnlocked.value) return
   datSaving.value = true
   try {
+    props.datFormat.formatConfig.value = { ...editableDatConfig.value }
     await props.datFormat.saveFormatConfig()
     datFormatUnlocked.value = false
+    syncEditableDatConfig()
     showToast('Formato DAT guardado correctamente', 'success')
   } catch {
     showToast('Error al guardar el formato DAT', 'error')
@@ -57,7 +89,7 @@ async function saveDatFormat() {
 
 function resetDatFormat() {
   if (!datFormatUnlocked.value) return
-  props.datFormat.resetToDefault()
+  editableDatConfig.value = { ...DEFAULT_DAT_FORMAT }
 }
 
 // ── Gestión de áreas ─────────────────────────────────────────────────────
@@ -383,7 +415,7 @@ function getDatField(key) {
           <button
             type="button"
             class="btn btn--ghost btn--xs"
-            @click="datFormatUnlocked = !datFormatUnlocked"
+            @click="toggleDatFormatLock"
           >
             {{ datFormatUnlocked ? 'Bloquear' : 'Desbloquear edición' }}
           </button>
@@ -403,7 +435,7 @@ function getDatField(key) {
                 </label>
                 <input
                   :id="`dat-${fieldKey}`"
-                  v-model.number="datFormat.formatConfig.value[fieldKey]"
+                  v-model.number="editableDatConfig[fieldKey]"
                   type="number"
                   min="0"
                   class="input input--sm"

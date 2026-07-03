@@ -100,7 +100,7 @@ describe('answer key row helpers', () => {
     })
   })
 
-  it('normaliza área y exige tipo para claves por área', () => {
+  it('normaliza área y permite claves por área sin tipo para simulacro', () => {
     const row = createAnswerKeyRow({
       area: 'ingenieria',
       tipo: '',
@@ -110,7 +110,7 @@ describe('answer key row helpers', () => {
 
     expect(row.area).toBe('Ingeniería')
     expect(row.scope).toBe('area')
-    expect(row.observaciones).toContain('Tipo no informado')
+    expect(row.observaciones).toBe('Sin observaciones')
   })
 
   it('detecta litho y respuestas inválidas', () => {
@@ -140,6 +140,13 @@ describe('answer key row helpers', () => {
       litho: '654321',
       answers: makeAnswers('A', 59),
     })).toContain('Cadena incompleta')
+
+    expect(buildAnswerKeyObservation({
+      area: '',
+      scope: 'general',
+      litho: '654321',
+      answers: `${makeAnswers('A', 59)} `,
+    })).toContain('Cadena incompleta (59/60)')
   })
 })
 
@@ -169,6 +176,27 @@ describe('useAnswerKeys imports', () => {
       scope: 'general',
       validRows: 1,
     })
+  })
+
+  it('importa clave de simulacro sin tipo usando respuestas desde el offset 6', async () => {
+    const answerKeys = makeSubject()
+    const answers = 'BCCCBCADBACABCABBDACBBCABBABCCBBABBCBCECABABCECDBCBCBAABBCDB'
+    const file = makeFile('res_bio.dat', buildDatLine({
+      payload: `039090${answers}`,
+    }))
+
+    await answerKeys.readGeneralAnswerKeyFile(file)
+
+    expect(answerKeys.rows.value).toHaveLength(1)
+    expect(answerKeys.rows.value[0]).toMatchObject({
+      area: '',
+      scope: 'general',
+      tipo: '',
+      litho: '039090',
+      answers,
+      observaciones: 'Sin observaciones',
+    })
+    expect(answerKeys.rows.value[0].answers).toHaveLength(60)
   })
 
   it('importa claves por área usando match exacto con identificador', async () => {
@@ -255,7 +283,6 @@ describe('useAnswerKeys imports', () => {
       litho: '555555',
       answers: makeAnswers('E'),
     })
-    expect(answerKeys.rows.value[0].observaciones).toContain('Tipo no informado')
     expect(answerKeys.rows.value[0].observaciones).toContain('Sin coincidencia en identificador')
   })
 

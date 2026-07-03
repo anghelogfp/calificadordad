@@ -114,7 +114,8 @@ export function parseIdentifierLine(line, lineNumber, formatConfig = DEFAULT_DAT
   const tipoSegment = remainder.slice(formatConfig.tipoOffset, formatConfig.tipoOffset + formatConfig.tipoLength)
   const dniSegment = remainder.slice(formatConfig.dniOffset, formatConfig.dniOffset + formatConfig.dniLength)
   const aulaSegment = remainder.slice(formatConfig.aulaOffset, formatConfig.aulaOffset + formatConfig.aulaLength)
-  const answersSegment = remainder.slice(formatConfig.answersOffset).trim()
+  const answersSegment = remainder
+    .slice(formatConfig.answersOffset, formatConfig.answersOffset + formatConfig.answersLength)
 
   const row = createIdentifierRow({
     rawLine: raw,
@@ -203,6 +204,36 @@ export function buildResponseObservation(row, formatConfig = DEFAULT_DAT_FORMAT)
  * @param {object} [formatConfig] - Configuración de formato DAT
  */
 export function parseResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_FORMAT) {
+  return parseResponseLineInternal(line, lineNumber, formatConfig, false)
+}
+
+export function parseAnswerKeyResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_FORMAT) {
+  return parseResponseLineInternal(line, lineNumber, formatConfig, true)
+}
+
+function scoreAnswersSegment(segment, answersLength) {
+  if (segment.length < answersLength) return -1
+  const window = segment.slice(0, answersLength).toUpperCase()
+  const marked = window.replace(/\s/g, '')
+  if (/[^A-E*]/.test(marked)) return -1
+  return marked.length
+}
+
+function selectAnswerKeyAnswersOffset(remainder, formatConfig) {
+  const configuredOffset = formatConfig.responseAnswersOffset
+    ?? (formatConfig.tipoOffset + formatConfig.tipoLength)
+  const noTypeOffset = formatConfig.lithoOffset + formatConfig.lithoLength
+  const candidates = Array.from(new Set([configuredOffset, noTypeOffset]))
+
+  return candidates
+    .map(offset => ({
+      offset,
+      score: scoreAnswersSegment(remainder.slice(offset), formatConfig.answersLength),
+    }))
+    .sort((a, b) => b.score - a.score || a.offset - b.offset)[0]?.offset ?? configuredOffset
+}
+
+function parseResponseLineInternal(line, lineNumber, formatConfig = DEFAULT_DAT_FORMAT, autoDetectAnswerKeyOffset = false) {
   const raw = line.endsWith('\r') ? line.slice(0, -1) : line
   if (!raw.trim() || raw.trim().length <= 1) {
     return null
@@ -249,11 +280,17 @@ export function parseResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_F
   }
 
   const lithoSegment = remainder.slice(formatConfig.lithoOffset, formatConfig.lithoOffset + formatConfig.lithoLength)
-  const tipoSegment = remainder.slice(formatConfig.tipoOffset, formatConfig.tipoOffset + formatConfig.tipoLength)
   const responseAnswersOffset = formatConfig.responseAnswersOffset
     ?? (formatConfig.tipoOffset + formatConfig.tipoLength)
+  const answersOffset = autoDetectAnswerKeyOffset
+    ? selectAnswerKeyAnswersOffset(remainder, formatConfig)
+    : responseAnswersOffset
+  const typeOverlapsAnswers = answersOffset <= formatConfig.tipoOffset
+  const tipoSegment = typeOverlapsAnswers
+    ? ''
+    : remainder.slice(formatConfig.tipoOffset, formatConfig.tipoOffset + formatConfig.tipoLength)
   const answersSegment = remainder
-    .slice(responseAnswersOffset, responseAnswersOffset + formatConfig.answersLength)
+    .slice(answersOffset, answersOffset + formatConfig.answersLength)
     .toUpperCase()
 
   const row = createResponseRow({
