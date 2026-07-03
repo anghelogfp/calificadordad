@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { useStorage, watchDebounced } from '@vueuse/core'
 import { useTableState } from './useTableState'
-import { STORAGE_KEYS } from '@/constants'
+import { STORAGE_KEYS, DEFAULT_DAT_FORMAT } from '@/constants'
 import { generateId, normalize, stripDigits, buildResponseMatchKey } from '@/utils/helpers'
 import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
 import {
@@ -28,7 +28,8 @@ function summarizeObservations(rows) {
 /**
  * Composable para gestión de respuestas
  */
-export function useResponses(identifierLookup, identifierLookupByLitho) {
+export function useResponses(identifierLookup, identifierLookupByLitho, formatConfig) {
+  const effectiveFormatConfig = () => formatConfig?.value || DEFAULT_DAT_FORMAT
   const tableState = useTableState({
     storageKey: STORAGE_KEYS.RESPONSES,
     pageSize: 10,
@@ -58,6 +59,9 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
 
   // Detección de offset de respuestas
   const detectedOffset = ref(null)
+  const configuredResponseAnswersOffset = computed(() =>
+    effectiveFormatConfig().responseAnswersOffset ?? DEFAULT_DAT_FORMAT.responseAnswersOffset
+  )
 
   async function detectFormat(file) {
     detectedOffset.value = null
@@ -65,7 +69,7 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
       const text = await file.text()
       const sanitized = text.split('\u001a').join('')
       const lines = sanitized.split(/\r?\n/).filter(Boolean)
-      const result = detectResponseAnswersOffset(lines)
+      const result = detectResponseAnswersOffset(lines, effectiveFormatConfig())
       detectedOffset.value = result
     } catch {
       detectedOffset.value = { offset: -1, score: 0, answerPct: 0, digitPct: 1 }
@@ -185,7 +189,7 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
       row.tipo = (row.tipo || '').trim().toUpperCase().slice(0, 1)
     }
 
-    const obs = buildResponseObservation(row)
+    const obs = buildResponseObservation(row, effectiveFormatConfig())
     if (row.observaciones !== obs) {
       row.observaciones = obs
     }
@@ -209,7 +213,7 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
         const fileErrors = []
 
         lines.forEach((line, index) => {
-          const result = parseResponseLine(line, index + 1)
+          const result = parseResponseLine(line, index + 1, effectiveFormatConfig())
           if (!result) return
           if (result.error) {
             fileErrors.push(`${file.name}: ${result.error}`)
@@ -421,6 +425,7 @@ export function useResponses(identifierLookup, identifierLookupByLitho) {
     observationByRowId,
     responsesByDni,
     detectedOffset,
+    configuredResponseAnswersOffset,
 
     // Métodos específicos
     initializeResponses,

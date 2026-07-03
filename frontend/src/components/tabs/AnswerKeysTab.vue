@@ -1,6 +1,6 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
-import { ANSWER_KEY_SUBTABS, DEFAULT_DAT_FORMAT } from '@/constants'
+import { ANSWER_KEY_SUBTABS } from '@/constants'
 import WorkflowIntroCard from '@/components/shared/WorkflowIntroCard.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
 import SubTabs from '@/components/shared/SubTabs.vue'
@@ -16,7 +16,11 @@ const props = defineProps({
   subTab: {
     type: String,
     required: true
-  }
+  },
+  reconciliation: {
+    type: Object,
+    default: null,
+  },
 })
 
 const emit = defineEmits(['update:subTab'])
@@ -39,7 +43,7 @@ function setImportMode(mode) {
   }
 }
 
-const configuredOffset = DEFAULT_DAT_FORMAT.responseAnswersOffset
+const configuredOffset = computed(() => answerKeys.configuredResponseAnswersOffset ?? 7)
 const detectFileInput = ref(null)
 const detecting = ref(false)
 
@@ -47,11 +51,11 @@ const detectStatus = computed(() => {
   const r = answerKeys.detectedOffset
   if (!r) return null
   if (r.offset < 0) return { label: 'Error al detectar', variant: 'error' }
-  const match = r.offset === configuredOffset
+  const match = r.offset === configuredOffset.value
   return {
     label: match
       ? `Offset detectado: ${r.offset} (coincide con config)`
-      : `Offset detectado: ${r.offset} (config: ${configuredOffset})`,
+      : `Offset detectado: ${r.offset} (config: ${configuredOffset.value})`,
     variant: match ? 'success' : 'warn',
   }
 })
@@ -103,6 +107,31 @@ const areaCoverage = computed(() => {
 })
 
 const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).length)
+
+const stepState = computed(() => {
+  if (!answerKeys.answerKeyHasData && !(props.reconciliation?.keysTotal)) {
+    return {
+      variant: 'info',
+      title: 'Pendiente de claves',
+    }
+  }
+  if (props.reconciliation?.missingPairs?.length || props.reconciliation?.duplicatePairs) {
+    return {
+      variant: 'error',
+      title: 'Corregir claves faltantes o duplicadas',
+    }
+  }
+  if (props.reconciliation?.incompleteKeys || coveredCount.value < areaCoverage.value.length) {
+    return {
+      variant: 'warn',
+      title: 'Revisar cobertura de claves',
+    }
+  }
+  return {
+    variant: 'ok',
+    title: 'Claves listas para calificar',
+  }
+})
 </script>
 
 <template>
@@ -122,31 +151,51 @@ const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).len
       </template>
     </WorkflowIntroCard>
 
-    <!-- Cobertura de áreas -->
-    <div v-if="areaCoverage.length" class="area-coverage">
-      <div class="area-coverage__header">
-        <span class="area-coverage__label">Cobertura de claves por área</span>
-        <span class="area-coverage__summary" :class="coveredCount === areaCoverage.length ? 'area-coverage__summary--ok' : ''">
+    <section
+      v-if="areaCoverage.length || (reconciliation && reconciliation.keysTotal)"
+      class="step-state-panel"
+      :class="`step-state-panel--${stepState.variant}`"
+    >
+      <div class="step-state-panel__header">
+        <div>
+          <span class="step-state-panel__eyebrow">Estado de claves</span>
+          <h3>{{ stepState.title }}</h3>
+        </div>
+        <span v-if="areaCoverage.length" class="step-state-panel__summary">
           {{ coveredCount }} / {{ areaCoverage.length }} áreas con clave
         </span>
       </div>
-      <div class="area-coverage__items">
-        <div
+      <div class="step-state-panel__chips">
+        <template v-if="reconciliation && reconciliation.keysTotal">
+          <span class="step-state-chip"><strong>{{ reconciliation.coveredPairs }}</strong> pares cubiertos</span>
+          <span class="step-state-chip"><strong>{{ reconciliation.missingPairs.length }}</strong> pares faltantes</span>
+          <span class="step-state-chip"><strong>{{ reconciliation.generalKeys }}</strong> claves generales</span>
+          <span class="step-state-chip"><strong>{{ reconciliation.duplicatePairs }}</strong> duplicadas</span>
+          <span class="step-state-chip"><strong>{{ reconciliation.incompleteKeys }}</strong> observadas</span>
+        </template>
+        <span
           v-for="area in areaCoverage"
           :key="area.name"
-          class="area-badge"
-          :class="area.hasKey ? 'area-badge--ok' : 'area-badge--missing'"
+          class="step-state-chip"
+          :class="area.hasKey ? 'step-state-chip--ok' : 'step-state-chip--missing'"
         >
-          <svg v-if="area.hasKey" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-          </svg>
-          <svg v-else viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-          </svg>
-          {{ area.name }}
-        </div>
+          <strong>{{ area.hasKey ? 'OK' : 'Falta' }}</strong> {{ area.name }}
+        </span>
       </div>
-    </div>
+      <p v-if="reconciliation?.missingPairs?.length" class="step-state-panel__hint">
+        Faltan:
+        <strong
+          v-for="(pair, index) in reconciliation.missingPairs.slice(0, 8)"
+          :key="`${pair.area}-${pair.type}`"
+        >
+          {{ pair.area }} {{ pair.type }}<span v-if="index < Math.min(reconciliation.missingPairs.length, 8) - 1">, </span>
+        </strong>
+        <span v-if="reconciliation.missingPairs.length > 8"> y {{ reconciliation.missingPairs.length - 8 }} más.</span>
+      </p>
+      <p v-else class="step-state-panel__hint">
+        Este cruce compara las claves cargadas con las áreas y tipos detectados en las respuestas.
+      </p>
+    </section>
 
     <details class="upload-form-card" :open="!answerKeys.answerKeyHasData">
       <summary class="upload-form-card__header">
@@ -767,6 +816,315 @@ const coveredCount = computed(() => areaCoverage.value.filter(a => a.hasKey).len
 
 .btn--danger:hover:not(:disabled) {
   background: linear-gradient(135deg, var(--error-600) 0%, #b91c1c 100%);
+}
+
+.step-state-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+}
+
+.step-state-panel--info {
+  background: var(--slate-50);
+  border: 1px solid var(--slate-200);
+  border-left: 4px solid var(--slate-400);
+}
+
+.step-state-panel--ok {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-left: 4px solid #16a34a;
+}
+
+.step-state-panel--warn {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 4px solid #d97706;
+}
+
+.step-state-panel--error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
+}
+
+.step-state-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.step-state-panel__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.step-state-panel--info .step-state-panel__eyebrow {
+  color: var(--slate-600);
+}
+
+.step-state-panel--ok .step-state-panel__eyebrow {
+  color: #15803d;
+}
+
+.step-state-panel--warn .step-state-panel__eyebrow {
+  color: #92400e;
+}
+
+.step-state-panel--error .step-state-panel__eyebrow {
+  color: #b91c1c;
+}
+
+.step-state-panel h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  line-height: 1.3;
+}
+
+.step-state-panel--info h3 {
+  color: var(--slate-700);
+}
+
+.step-state-panel--ok h3 {
+  color: #14532d;
+}
+
+.step-state-panel--warn h3 {
+  color: #78350f;
+}
+
+.step-state-panel--error h3 {
+  color: #991b1b;
+}
+
+.step-state-panel__summary {
+  flex-shrink: 0;
+  padding: 3px var(--space-3);
+  border-radius: var(--radius-full);
+  background: white;
+  color: #92400e;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.step-state-panel--ok .step-state-panel__summary {
+  color: #15803d;
+}
+
+.step-state-panel--info .step-state-panel__summary {
+  color: var(--slate-600);
+}
+
+.step-state-panel--error .step-state-panel__summary {
+  color: #b91c1c;
+}
+
+.step-state-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.step-state-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-full);
+  background: white;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.step-state-panel--ok .step-state-chip,
+.step-state-chip--ok {
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+}
+
+.step-state-panel--info .step-state-chip {
+  border: 1px solid var(--slate-200);
+  color: var(--slate-600);
+}
+
+.step-state-panel--warn .step-state-chip {
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.step-state-panel--error .step-state-chip {
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.step-state-chip--missing {
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.step-state-chip strong {
+  font-family: var(--font-mono);
+}
+
+.step-state-panel--ok .step-state-chip strong,
+.step-state-chip--ok strong {
+  color: #14532d;
+}
+
+.step-state-panel--info .step-state-chip strong {
+  color: var(--slate-800);
+}
+
+.step-state-panel--warn .step-state-chip strong {
+  color: #78350f;
+}
+
+.step-state-panel--error .step-state-chip strong {
+  color: #991b1b;
+}
+
+.step-state-chip--missing strong {
+  color: #991b1b;
+}
+
+.step-state-panel__hint {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.step-state-panel--ok .step-state-panel__hint {
+  color: #15803d;
+}
+
+.step-state-panel--info .step-state-panel__hint {
+  color: var(--slate-500);
+}
+
+.step-state-panel--warn .step-state-panel__hint {
+  color: #92400e;
+}
+
+.step-state-panel--error .step-state-panel__hint {
+  color: #b91c1c;
+}
+
+.reconciliation-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+}
+
+.reconciliation-panel--ok {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-left: 4px solid #16a34a;
+}
+
+.reconciliation-panel--warn {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 4px solid #d97706;
+}
+
+.reconciliation-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.reconciliation-panel__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reconciliation-panel--ok .reconciliation-panel__eyebrow {
+  color: #15803d;
+}
+
+.reconciliation-panel--warn .reconciliation-panel__eyebrow {
+  color: #92400e;
+}
+
+.reconciliation-panel h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  line-height: 1.3;
+}
+
+.reconciliation-panel--ok h3 {
+  color: #14532d;
+}
+
+.reconciliation-panel--warn h3 {
+  color: #78350f;
+}
+
+.reconciliation-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.reconciliation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-full);
+  background: white;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.reconciliation-panel--ok .reconciliation-chip {
+  border: 1px solid #bbf7d0;
+  color: #15803d;
+}
+
+.reconciliation-panel--warn .reconciliation-chip {
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.reconciliation-chip strong {
+  font-family: var(--font-mono);
+}
+
+.reconciliation-panel--ok .reconciliation-chip strong {
+  color: #14532d;
+}
+
+.reconciliation-panel--warn .reconciliation-chip strong {
+  color: #78350f;
+}
+
+.reconciliation-panel__hint {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.reconciliation-panel--ok .reconciliation-panel__hint {
+  color: #15803d;
+}
+
+.reconciliation-panel--warn .reconciliation-panel__hint {
+  color: #92400e;
 }
 
 .observed-panel {

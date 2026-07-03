@@ -32,7 +32,7 @@ export function useHistory() {
   async function saveProcess(process, customName) {
     if (!process?.id || !Object.keys(process.areas || {}).length) return false
     try {
-      await apiFetch('/procesos/', {
+      const res = await apiFetch('/procesos/', {
         method: 'POST',
         body: JSON.stringify({
           local_id: process.id,
@@ -42,6 +42,7 @@ export function useHistory() {
           areas: process.areas,
         }),
       })
+      if (!res.ok) throw new Error('No se pudo guardar el proceso.')
       await fetchHistory()
       return true
     } catch {

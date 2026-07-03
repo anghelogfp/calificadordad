@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { useStorage, watchDebounced } from '@vueuse/core'
 import { useTableState } from './useTableState'
-import { STORAGE_KEYS, ANSWER_KEY_COLUMNS, ANSWER_KEY_AREAS } from '@/constants'
+import { STORAGE_KEYS, ANSWER_KEY_COLUMNS, ANSWER_KEY_AREAS, DEFAULT_DAT_FORMAT } from '@/constants'
 import {
   generateId,
   normalize,
@@ -28,11 +28,11 @@ function summarizeObservations(rows) {
 /**
  * Crea una fila de clave de respuesta
  */
-export function createAnswerKeyRow(data = {}) {
+export function createAnswerKeyRow(data = {}, areaList = ANSWER_KEY_AREAS, formatConfig = DEFAULT_DAT_FORMAT) {
   const rawArea = data.area == null ? '' : String(data.area).trim()
   const row = {
     id: data.id ?? generateId(),
-    area: rawArea ? normalizeArea(rawArea) : '',
+    area: rawArea ? normalizeArea(rawArea, areaList) : '',
     tipo: data.tipo ?? '',
     answers: data.answers ?? '',
     indicator: data.indicator ?? '',
@@ -43,14 +43,14 @@ export function createAnswerKeyRow(data = {}) {
     sourceId: data.sourceId ?? '',
   }
 
-  row.observaciones = buildAnswerKeyObservation(row)
+  row.observaciones = buildAnswerKeyObservation(row, formatConfig)
   return row
 }
 
 /**
  * Construye observación para una clave de respuesta
  */
-export function buildAnswerKeyObservation(row) {
+export function buildAnswerKeyObservation(row, formatConfig = DEFAULT_DAT_FORMAT) {
   const issues = []
   const isGeneralKey = row.scope === 'general' || !String(row.area || '').trim()
 
@@ -62,17 +62,17 @@ export function buildAnswerKeyObservation(row) {
   const lithoDigits = stripDigits(row.litho)
   if (!lithoDigits) {
     issues.push('Litho sin marcar')
-  } else if (lithoDigits.length !== 6) {
+  } else if (lithoDigits.length !== formatConfig.lithoLength) {
     issues.push(`Litho incompleto (${lithoDigits})`)
   }
 
   const answersRaw = String(row.answers || '').toUpperCase()
-  const answerWindow = answersRaw.slice(0, 60)
+  const answerWindow = answersRaw.slice(0, formatConfig.answersLength)
   const answersNormalized = answerWindow.replace(/\s/g, '')
   if (!answersNormalized) {
     issues.push('Sin respuestas registradas')
-  } else if (answersRaw.length < 60) {
-    issues.push(`Cadena incompleta (${answersRaw.length}/60)`)
+  } else if (answersRaw.length < formatConfig.answersLength) {
+    issues.push(`Cadena incompleta (${answersRaw.length}/${formatConfig.answersLength})`)
   } else if (/[^A-E*]/.test(answersNormalized)) {
     issues.push('Respuestas con marcas no válidas')
   }
@@ -83,11 +83,20 @@ export function buildAnswerKeyObservation(row) {
 /**
  * Composable para gestión de claves de respuestas
  */
-export function useAnswerKeys(archiveRows) {
+export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
+  const effectiveAreaNames = computed(() =>
+    areaNames?.value?.length ? areaNames.value : ANSWER_KEY_AREAS
+  )
+  const effectiveFormatConfig = () => formatConfig?.value || DEFAULT_DAT_FORMAT
+
+  function createConfiguredAnswerKeyRow(data = {}) {
+    return createAnswerKeyRow(data, effectiveAreaNames.value, effectiveFormatConfig())
+  }
+
   const tableState = useTableState({
     storageKey: STORAGE_KEYS.ANSWER_KEYS,
     pageSize: 10,
-    createRow: createAnswerKeyRow,
+    createRow: createConfiguredAnswerKeyRow,
     filterFn: (row, searchValue) => {
       const needle = normalize(searchValue)
       return (
@@ -119,6 +128,9 @@ export function useAnswerKeys(archiveRows) {
 
   // Detección de offset de respuestas
   const detectedOffset = ref(null)
+  const configuredResponseAnswersOffset = computed(() =>
+    effectiveFormatConfig().responseAnswersOffset ?? DEFAULT_DAT_FORMAT.responseAnswersOffset
+  )
 
   async function detectFormat(file) {
     detectedOffset.value = null
@@ -126,7 +138,7 @@ export function useAnswerKeys(archiveRows) {
       const text = await file.text()
       const sanitized = text.split('\u001a').join('')
       const lines = sanitized.split(/\r?\n/).filter(Boolean)
-      const result = detectResponseAnswersOffset(lines)
+      const result = detectResponseAnswersOffset(lines, effectiveFormatConfig())
       detectedOffset.value = result
     } catch {
       detectedOffset.value = { offset: -1, score: 0, answerPct: 0, digitPct: 1 }
@@ -154,10 +166,9 @@ export function useAnswerKeys(archiveRows) {
   // Opciones de área basadas en archivos cargados
   const answerKeyAreaOptions = computed(() => {
     const archiveAreas = (archiveRows?.value || [])
-      .map((row) => normalizeArea(row.area))
-      .filter((area) => ANSWER_KEY_AREAS.includes(area))
-    const unique = new Set([...ANSWER_KEY_AREAS, ...archiveAreas])
-    return ANSWER_KEY_AREAS.filter((area) => unique.has(area))
+      .map((row) => normalizeArea(row.area, effectiveAreaNames.value))
+      .filter((area) => effectiveAreaNames.value.includes(area))
+    return Array.from(new Set([...effectiveAreaNames.value, ...archiveAreas]))
   })
 
   // Lookup por clave de match
@@ -173,7 +184,7 @@ export function useAnswerKeys(archiveRows) {
   const answerKeyLookupByAreaTipo = computed(() => {
     const map = new Map()
     tableState.rows.value.forEach((row) => {
-      const key = buildAreaTipoKey(row.area, row.tipo)
+      const key = buildAreaTipoKey(row.area, row.tipo, effectiveAreaNames.value)
       if (!key) return
       map.set(key, row)
     })
@@ -185,7 +196,7 @@ export function useAnswerKeys(archiveRows) {
     const map = new Map()
     tableState.rows.value.forEach((row) => {
       if (!row.area?.trim()) return
-      const area = normalizeArea(row.area)
+      const area = normalizeArea(row.area, effectiveAreaNames.value)
       if (!area || map.has(area)) return
       map.set(area, row)
     })
@@ -257,8 +268,14 @@ export function useAnswerKeys(archiveRows) {
    * Lee archivos de claves de respuestas
    */
   async function readAnswerKeyFiles(area, identificationFileParam, responsesFileParam) {
-    const identifierResults = await readLinesFromFile(identificationFileParam, parseIdentifierLine)
-    const responseResults = await readLinesFromFile(responsesFileParam, parseResponseLine)
+    const identifierResults = await readLinesFromFile(
+      identificationFileParam,
+      (line, lineNumber) => parseIdentifierLine(line, lineNumber, effectiveFormatConfig()),
+    )
+    const responseResults = await readLinesFromFile(
+      responsesFileParam,
+      (line, lineNumber) => parseResponseLine(line, lineNumber, effectiveFormatConfig()),
+    )
 
     const identifierRowsOnly = identifierResults.filter((item) => item && item.row)
     const responseRowsOnly = responseResults.filter((item) => item && item.row)
@@ -286,7 +303,7 @@ export function useAnswerKeys(archiveRows) {
 
       const tipo = matched ? matched.tipo : ''
 
-      const answerKeyRow = createAnswerKeyRow({
+      const answerKeyRow = createConfiguredAnswerKeyRow({
         area,
         tipo,
         answers: row.answers,
@@ -296,7 +313,7 @@ export function useAnswerKeys(archiveRows) {
         sourceId,
       })
 
-      const baseObservation = buildAnswerKeyObservation(answerKeyRow)
+      const baseObservation = buildAnswerKeyObservation(answerKeyRow, effectiveFormatConfig())
       if (matched) {
         answerKeyRow.observaciones = baseObservation
       } else if (baseObservation === 'Sin observaciones') {
@@ -348,13 +365,16 @@ export function useAnswerKeys(archiveRows) {
   }
 
   async function readGeneralAnswerKeyFile(responsesFileParam) {
-    const responseResults = await readLinesFromFile(responsesFileParam, parseResponseLine)
+    const responseResults = await readLinesFromFile(
+      responsesFileParam,
+      (line, lineNumber) => parseResponseLine(line, lineNumber, effectiveFormatConfig()),
+    )
     const responseRowsOnly = responseResults.filter((item) => item && item.row)
     const responseErrors = responseResults.filter((item) => item && item.error)
 
     const createdAt = new Date().toISOString()
     const sourceId = generateId()
-    const combinedRows = responseRowsOnly.map(({ row }) => createAnswerKeyRow({
+    const combinedRows = responseRowsOnly.map(({ row }) => createConfiguredAnswerKeyRow({
       area: '',
       tipo: row.tipo || '',
       answers: row.answers,
@@ -602,6 +622,7 @@ export function useAnswerKeys(archiveRows) {
     observationSummary,
     observationByRowId,
     detectedOffset,
+    configuredResponseAnswersOffset,
     answerKeyAreaOptions,
     answerKeyLookupByMatch,
     answerKeyLookupByAreaTipo,

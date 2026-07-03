@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { useStorage, watchDebounced } from '@vueuse/core'
 import { useTableState } from './useTableState'
-import { STORAGE_KEYS } from '@/constants'
+import { STORAGE_KEYS, DEFAULT_DAT_FORMAT } from '@/constants'
 import { generateId, normalize, stripDigits, buildResponseMatchKey } from '@/utils/helpers'
 import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
 import {
@@ -27,7 +27,8 @@ function summarizeObservations(rows) {
 /**
  * Composable para gestión de identificadores
  */
-export function useIdentifiers() {
+export function useIdentifiers(formatConfig) {
+  const effectiveFormatConfig = () => formatConfig?.value || DEFAULT_DAT_FORMAT
   const tableState = useTableState({
     storageKey: STORAGE_KEYS.IDENTIFIER,
     pageSize: 10,
@@ -172,7 +173,7 @@ export function useIdentifiers() {
         const fileErrors = []
 
         lines.forEach((line, index) => {
-          const result = parseIdentifierLine(line, index + 1)
+          const result = parseIdentifierLine(line, index + 1, effectiveFormatConfig())
           if (!result) return
           if (result.error) {
             fileErrors.push(`${file.name}: ${result.error}`)

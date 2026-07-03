@@ -12,6 +12,8 @@ const props = defineProps({
   areas:            { type: Object, required: true },
 })
 
+const activeConfigSection = ref('vacantes')
+
 // ── Vacantes ──────────────────────────────────────────────────────────────
 
 const savingPrograma = ref({})
@@ -37,11 +39,14 @@ async function saveVacantes(programa) {
 // ── Formato DAT ───────────────────────────────────────────────────────────
 
 const datSaving = ref(false)
+const datFormatUnlocked = ref(false)
 
 async function saveDatFormat() {
+  if (!datFormatUnlocked.value) return
   datSaving.value = true
   try {
     await props.datFormat.saveFormatConfig()
+    datFormatUnlocked.value = false
     showToast('Formato DAT guardado correctamente', 'success')
   } catch {
     showToast('Error al guardar el formato DAT', 'error')
@@ -51,6 +56,7 @@ async function saveDatFormat() {
 }
 
 function resetDatFormat() {
+  if (!datFormatUnlocked.value) return
   props.datFormat.resetToDefault()
 }
 
@@ -112,26 +118,48 @@ async function confirmDeleteArea(id) {
 }
 
 const DAT_FIELDS = [
-  { key: 'headerLength',  label: 'Longitud cabecera',     hint: 'Bytes antes del contenido útil' },
-  { key: 'answersLength', label: 'Longitud respuestas',   hint: 'Número de preguntas del examen' },
-  { key: 'lithoOffset',   label: 'Offset litho',          hint: 'Posición inicial del litho' },
+  { key: 'headerLength',  label: 'Cabecera',              hint: 'Caracteres antes del contenido útil' },
+  { key: 'answersLength', label: 'Respuestas',            hint: 'Número de preguntas del examen' },
+  { key: 'lithoOffset',   label: 'Offset litho',          hint: 'Inicio del litho' },
   { key: 'lithoLength',   label: 'Longitud litho',        hint: 'Caracteres del litho' },
-  { key: 'tipoOffset',    label: 'Offset tipo',           hint: 'Posición inicial del tipo' },
+  { key: 'tipoOffset',    label: 'Offset tipo',           hint: 'Inicio del tipo' },
   { key: 'tipoLength',    label: 'Longitud tipo',         hint: 'Caracteres del tipo' },
-  { key: 'dniOffset',     label: 'Offset DNI',            hint: 'Posición inicial del DNI' },
+  { key: 'dniOffset',     label: 'Offset DNI',            hint: 'Inicio del DNI' },
   { key: 'dniLength',     label: 'Longitud DNI',          hint: 'Caracteres del DNI' },
-  { key: 'aulaOffset',    label: 'Offset aula',           hint: 'Posición inicial del aula' },
+  { key: 'aulaOffset',    label: 'Offset aula',           hint: 'Inicio del aula' },
   { key: 'aulaLength',    label: 'Longitud aula',         hint: 'Caracteres del aula' },
-  { key: 'answersOffset', label: 'Offset respuestas (identif.)', hint: 'Posición donde inician las respuestas en identificadores' },
-  { key: 'responseAnswersOffset', label: 'Offset respuestas (exam)', hint: 'Posición donde inician las respuestas en archivos de examen' },
+  { key: 'answersOffset', label: 'Offset respuestas',     hint: 'En archivo de identificadores' },
+  { key: 'responseAnswersOffset', label: 'Offset respuestas', hint: 'En archivo de respuestas/examen' },
 ]
+
+const DAT_FIELD_GROUPS = [
+  {
+    title: 'Base del archivo',
+    description: 'Valores comunes para identificadores, respuestas y claves.',
+    keys: ['headerLength', 'answersLength'],
+  },
+  {
+    title: 'Identificadores',
+    description: 'Campos que vienen en el archivo de identificación.',
+    keys: ['lithoOffset', 'lithoLength', 'tipoOffset', 'tipoLength', 'dniOffset', 'dniLength', 'aulaOffset', 'aulaLength', 'answersOffset'],
+  },
+  {
+    title: 'Respuestas / examen',
+    description: 'Inicio de las respuestas en hojas de examen y claves oficiales.',
+    keys: ['responseAnswersOffset'],
+  },
+]
+
+function getDatField(key) {
+  return DAT_FIELDS.find((field) => field.key === key)
+}
 </script>
 
 <template>
   <section class="config-view">
     <StepInfoCard
       title="Configuración"
-      description="Vacantes por programa de estudios y formato del archivo .dat para el lector óptico."
+      description="Formato .dat, áreas de evaluación y vacantes por programa de estudios."
       variant="gold"
     >
       <template #icon>
@@ -142,10 +170,37 @@ const DAT_FIELDS = [
       </template>
     </StepInfoCard>
 
+    <nav class="config-tabs" aria-label="Secciones de configuración">
+      <button
+        type="button"
+        class="config-tab"
+        :class="{ 'config-tab--active': activeConfigSection === 'vacantes' }"
+        @click="activeConfigSection = 'vacantes'"
+      >
+        Vacantes
+      </button>
+      <button
+        type="button"
+        class="config-tab"
+        :class="{ 'config-tab--active': activeConfigSection === 'areas' }"
+        @click="activeConfigSection = 'areas'"
+      >
+        Áreas
+      </button>
+      <button
+        type="button"
+        class="config-tab"
+        :class="{ 'config-tab--active': activeConfigSection === 'dat' }"
+        @click="activeConfigSection = 'dat'"
+      >
+        Formato DAT
+      </button>
+    </nav>
+
     <div class="config-grid">
 
       <!-- ── Vacantes ─────────────────────────────────────────────────── -->
-      <div class="config-card">
+      <div v-show="activeConfigSection === 'vacantes'" class="config-card">
         <div class="card-header">
           <h3 class="card-title">Vacantes por programa</h3>
           <p class="card-desc">
@@ -186,7 +241,7 @@ const DAT_FIELDS = [
                     <svg v-if="successPrograma[prog]" viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
                       <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
                     </svg>
-                    <span v-else>{{ savingPrograma[prog] ? '…' : 'OK' }}</span>
+                    <span v-else>{{ savingPrograma[prog] ? '…' : 'Guardar' }}</span>
                   </button>
                 </div>
               </div>
@@ -198,7 +253,7 @@ const DAT_FIELDS = [
       </div>
 
       <!-- ── Gestión de áreas ───────────────────────────────────────── -->
-      <div class="config-card">
+      <div v-show="activeConfigSection === 'areas'" class="config-card">
         <div class="card-header">
           <h3 class="card-title">Áreas de evaluación</h3>
           <p class="card-desc">Define las áreas del examen (Biomédicas, Ingeniería, etc.) y el número de preguntas por área.</p>
@@ -308,7 +363,7 @@ const DAT_FIELDS = [
       </div>
 
       <!-- ── Formato DAT ──────────────────────────────────────────────── -->
-      <div class="config-card">
+      <div v-show="activeConfigSection === 'dat'" class="config-card config-card--technical">
         <div class="card-header">
           <div class="card-title-row">
             <h3 class="card-title">Formato del archivo .dat</h3>
@@ -319,27 +374,51 @@ const DAT_FIELDS = [
           </p>
         </div>
 
-        <div class="dat-grid">
-          <div v-for="field in DAT_FIELDS" :key="field.key" class="dat-field">
-            <label :for="`dat-${field.key}`" class="dat-label">
-              {{ field.label }}
-              <span class="dat-hint">{{ field.hint }}</span>
-            </label>
-            <input
-              :id="`dat-${field.key}`"
-              v-model.number="datFormat.formatConfig.value[field.key]"
-              type="number"
-              min="0"
-              class="input input--sm"
-            />
+        <div class="dat-lock" :class="{ 'dat-lock--open': datFormatUnlocked }">
+          <span>
+            {{ datFormatUnlocked
+              ? 'Edición desbloqueada. Cambia estos valores solo si el lector óptico cambió de formato.'
+              : 'Bloqueado para proteger el formato que está funcionando actualmente.' }}
+          </span>
+          <button
+            type="button"
+            class="btn btn--ghost btn--xs"
+            @click="datFormatUnlocked = !datFormatUnlocked"
+          >
+            {{ datFormatUnlocked ? 'Bloquear' : 'Desbloquear edición' }}
+          </button>
+        </div>
+
+        <div class="dat-groups">
+          <div v-for="group in DAT_FIELD_GROUPS" :key="group.title" class="dat-group">
+            <div class="dat-group__header">
+              <span class="dat-group__title">{{ group.title }}</span>
+              <span class="dat-group__desc">{{ group.description }}</span>
+            </div>
+            <div class="dat-grid">
+              <div v-for="fieldKey in group.keys" :key="fieldKey" class="dat-field">
+                <label :for="`dat-${fieldKey}`" class="dat-label">
+                  {{ getDatField(fieldKey).label }}
+                  <span class="dat-hint">{{ getDatField(fieldKey).hint }}</span>
+                </label>
+                <input
+                  :id="`dat-${fieldKey}`"
+                  v-model.number="datFormat.formatConfig.value[fieldKey]"
+                  type="number"
+                  min="0"
+                  class="input input--sm"
+                  :disabled="!datFormatUnlocked"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
         <div class="dat-actions">
-          <button type="button" class="btn btn--ghost" @click="resetDatFormat">
+          <button type="button" class="btn btn--ghost" :disabled="!datFormatUnlocked" @click="resetDatFormat">
             Restaurar por defecto
           </button>
-          <button type="button" class="btn btn--primary" :disabled="datSaving" @click="saveDatFormat">
+          <button type="button" class="btn btn--primary" :disabled="!datFormatUnlocked || datSaving" @click="saveDatFormat">
             {{ datSaving ? 'Guardando...' : 'Guardar formato' }}
           </button>
         </div>
@@ -357,32 +436,51 @@ const DAT_FIELDS = [
   min-width: 0;
 }
 
-.config-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: auto auto;
-  gap: var(--space-4);
-  align-items: start;
+.config-tabs {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-lg);
+  background: white;
+  box-shadow: var(--shadow-sm);
 }
 
-/* Formato DAT → col 1, ocupa ambas filas (lo más crítico, va primero) */
-.config-card:nth-child(3) { grid-column: 1; grid-row: 1 / 3; }
-/* Áreas → col 2, row 1 */
-.config-card:nth-child(2) { grid-column: 2; grid-row: 1; }
-/* Vacantes → col 2, row 2 */
-.config-card:nth-child(1) { grid-column: 2; grid-row: 2; }
+.config-tab {
+  flex: 1;
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--slate-500);
+  font-size: 0.86rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
 
-@media (max-width: 900px) {
-  .config-grid {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto;
+.config-tab:hover {
+  background: var(--slate-50);
+  color: var(--slate-800);
+}
+
+.config-tab--active {
+  background: var(--unap-blue-600);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+@media (max-width: 640px) {
+  .config-tabs {
+    flex-direction: column;
   }
-  .config-card:nth-child(1),
-  .config-card:nth-child(2),
-  .config-card:nth-child(3) {
-    grid-column: 1;
-    grid-row: auto;
-  }
+}
+
+.config-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  align-items: stretch;
 }
 
 /* Cards */
@@ -457,6 +555,60 @@ const DAT_FIELDS = [
 }
 
 /* DAT */
+.dat-lock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  background: var(--slate-50);
+  color: var(--slate-500);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+.dat-lock--open {
+  border-color: var(--warning-100);
+  background: var(--warning-50);
+  color: var(--warning-600);
+}
+.dat-lock span {
+  min-width: 0;
+}
+.dat-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.dat-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--slate-100);
+}
+.dat-group:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+.dat-group__header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dat-group__title {
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--slate-700);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.dat-group__desc {
+  font-size: 0.72rem;
+  color: var(--slate-400);
+  line-height: 1.35;
+}
 .dat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .dat-field { display: flex; flex-direction: column; gap: var(--space-1); }
 .dat-label { font-size: 0.75rem; font-weight: 600; color: var(--slate-700); display: flex; flex-direction: column; gap: 1px; }
@@ -470,6 +622,11 @@ const DAT_FIELDS = [
   transition: border-color var(--transition-fast);
 }
 .input:focus { outline: none; border-color: var(--unap-blue-400); box-shadow: 0 0 0 3px rgba(0,82,163,0.08); }
+.input:disabled {
+  background: var(--slate-50);
+  color: var(--slate-400);
+  cursor: not-allowed;
+}
 .input--sm { padding: var(--space-1) var(--space-2); font-size: 0.85rem; width: 64px; text-align: center; }
 
 /* Buttons */

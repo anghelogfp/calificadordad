@@ -76,18 +76,19 @@ watch(activeTab, (tab) => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const archives = useArchives()
-const identifiers = useIdentifiers()
+const areas = useAreas()
+const datFormat = useDatFormat()
+const identifiers = useIdentifiers(datFormat.formatConfig)
 const responses = useResponses(
   identifiers.identifierLookup,
-  identifiers.identifierLookupByLitho
+  identifiers.identifierLookupByLitho,
+  datFormat.formatConfig
 )
-const answerKeys = useAnswerKeys(archives.rows)
-const ponderations = usePonderations()
+const answerKeys = useAnswerKeys(archives.rows, areas.areaNames, datFormat.formatConfig)
+const ponderations = usePonderations(areas.areaNames)
 const history = useHistory()
 const toast = useToast()
 const backup = useBackup()
-const areas = useAreas()
-const datFormat = useDatFormat()
 const exporter = useExport()
 const vacantesPrograma = useVacantesPrograma()
 
@@ -137,6 +138,143 @@ const programasByArea = computed(() => {
   const result = new Map()
   map.forEach((set, area) => result.set(area, Array.from(set).sort()))
   return result
+})
+
+function onlyDigits(value) {
+  const digits = String(value ?? '').match(/\d/g)
+  return digits ? digits.join('') : ''
+}
+
+function firstLetter(value) {
+  return String(value ?? '').trim().toUpperCase().slice(0, 1)
+}
+
+function countDuplicates(values) {
+  const counts = new Map()
+  values.filter(Boolean).forEach((value) => counts.set(value, (counts.get(value) || 0) + 1))
+  return [...counts.values()].filter((count) => count > 1).reduce((sum, count) => sum + count, 0)
+}
+
+const identifierReconciliation = computed(() => {
+  const padronDnis = new Set(archives.rows.value.map(row => onlyDigits(row.dni)).filter(Boolean))
+  const identifierDnis = identifiers.rows.value.map(row => onlyDigits(row.dni)).filter(Boolean)
+  const identifierDniSet = new Set(identifierDnis)
+  const matchedCandidates = [...padronDnis].filter(dni => identifierDniSet.has(dni)).length
+  const missingIdentifiers = [...padronDnis].filter(dni => !identifierDniSet.has(dni)).length
+  const identifiersWithoutCandidate = identifierDnis.filter(dni => !padronDnis.has(dni)).length
+  const duplicateIdentifierDnis = countDuplicates(identifierDnis)
+  const duplicateMatchKeys = countDuplicates(
+    identifiers.rows.value.map(row => {
+      const litho = onlyDigits(row.litho)
+      const indicator = firstLetter(row.indicator)
+      const folio = String(row.folio || '').trim()
+      return litho && folio ? `${litho}|${indicator}|${folio}` : ''
+    }),
+  )
+  const issues = missingIdentifiers + identifiersWithoutCandidate + duplicateIdentifierDnis + duplicateMatchKeys
+  return {
+    padronTotal: padronDnis.size,
+    identifiersTotal: identifiers.rows.value.length,
+    matchedCandidates,
+    missingIdentifiers,
+    identifiersWithoutCandidate,
+    duplicateIdentifierDnis,
+    duplicateMatchKeys,
+    issues,
+    status: issues === 0 && padronDnis.size > 0 && identifiers.rows.value.length > 0 ? 'ok' : issues > 0 ? 'warn' : 'empty',
+  }
+})
+
+const responseReconciliation = computed(() => {
+  const padronDnis = new Set(archives.rows.value.map(row => onlyDigits(row.dni)).filter(Boolean))
+  const identifierDnis = new Set(identifiers.rows.value.map(row => onlyDigits(row.dni)).filter(Boolean))
+  const responseDnis = responses.rows.value.map(row => onlyDigits(row.dni)).filter(Boolean)
+  const responseDniSet = new Set(responseDnis)
+  const linkedResponses = responses.rows.value.filter(row => onlyDigits(row.dni)).length
+  const unlinkedResponses = responses.rows.value.length - linkedResponses
+  const responsesWithoutCandidate = responseDnis.filter(dni => !padronDnis.has(dni)).length
+  const candidatesWithoutResponse = [...padronDnis].filter(dni => !responseDniSet.has(dni)).length
+  const identifiersWithoutResponse = [...identifierDnis].filter(dni => !responseDniSet.has(dni)).length
+  const duplicateResponseDnis = countDuplicates(responseDnis)
+  const issues = unlinkedResponses + responsesWithoutCandidate + candidatesWithoutResponse + duplicateResponseDnis
+  return {
+    responsesTotal: responses.rows.value.length,
+    linkedResponses,
+    unlinkedResponses,
+    responsesWithoutCandidate,
+    candidatesWithoutResponse,
+    identifiersWithoutResponse,
+    duplicateResponseDnis,
+    issues,
+    status: issues === 0 && responses.rows.value.length > 0 ? 'ok' : issues > 0 ? 'warn' : 'empty',
+  }
+})
+
+const answerKeyReconciliation = computed(() => {
+  const processIsReal = calification.processType.value === 'real'
+  const activeAreas = areas.areaNames.value.length ? areas.areaNames.value : []
+  const expectedAreas = activeAreas.filter(area =>
+    archives.rows.value.some(row => String(row.area || '').trim().toLowerCase() === area.toLowerCase())
+  )
+  const areasToCheck = expectedAreas.length ? expectedAreas : activeAreas
+  const areaTypes = new Map()
+  responses.rows.value.forEach((row) => {
+    const dni = onlyDigits(row.dni)
+    const candidate = archives.archiveByDni.value.get(dni)
+    const area = candidate?.area || ''
+    const type = firstLetter(row.tipo)
+    if (!area || !type) return
+    const canonical = areasToCheck.find(a => a.toLowerCase() === String(area).trim().toLowerCase()) || area
+    if (!areaTypes.has(canonical)) areaTypes.set(canonical, new Set())
+    areaTypes.get(canonical).add(type)
+  })
+
+  const keyByAreaType = new Set()
+  const generalKeys = answerKeys.rows.value.filter(row => !String(row.area || '').trim()).length
+  answerKeys.rows.value.forEach((row) => {
+    const area = String(row.area || '').trim()
+    const type = firstLetter(row.tipo)
+    if (area && type) keyByAreaType.add(`${area.toLowerCase()}|${type}`)
+  })
+
+  const requiredPairs = []
+  if (processIsReal) {
+    areasToCheck.forEach((area) => {
+      ;['P', 'Q', 'R', 'S', 'T'].forEach(type => requiredPairs.push({ area, type }))
+    })
+  } else {
+    areaTypes.forEach((types, area) => {
+      types.forEach(type => requiredPairs.push({ area, type }))
+    })
+  }
+
+  const missingPairs = !processIsReal && generalKeys > 0
+    ? []
+    : requiredPairs.filter(({ area, type }) =>
+      !keyByAreaType.has(`${area.toLowerCase()}|${type}`)
+    )
+  const duplicatePairs = countDuplicates(
+    answerKeys.rows.value.map(row => {
+      const area = String(row.area || '').trim().toLowerCase()
+      const type = firstLetter(row.tipo)
+      return area && type ? `${area}|${type}` : ''
+    }),
+  )
+  const incompleteKeys = answerKeys.rows.value.filter(row =>
+    row.observaciones && row.observaciones !== 'Sin observaciones'
+  ).length
+  const issues = missingPairs.length + duplicatePairs + incompleteKeys
+  return {
+    keysTotal: answerKeys.rows.value.length,
+    generalKeys,
+    requiredPairs: requiredPairs.length,
+    coveredPairs: Math.max(0, requiredPairs.length - missingPairs.length),
+    missingPairs,
+    duplicatePairs,
+    incompleteKeys,
+    issues,
+    status: issues === 0 && answerKeys.rows.value.length > 0 ? 'ok' : issues > 0 ? 'warn' : 'empty',
+  }
 })
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -270,6 +408,8 @@ async function initializeAuthenticatedData() {
   authenticatedDataPromise = (async () => {
     localStorage.removeItem('calificador-plantillas')
     localStorage.removeItem('calificador-historial')
+    await areas.fetchAreas()
+    await datFormat.fetchFormatConfig()
     await archives.initializeArchives()
     await identifiers.initializeIdentifiers()
     await responses.initializeResponses()
@@ -417,6 +557,7 @@ watch(
             v-else-if="activeTab === TAB_KEYS.IDENTIFIERS"
             :identifiers="identifiers"
             :sub-tab="identifierSubTab"
+            :reconciliation="identifierReconciliation"
             @update:sub-tab="identifierSubTab = $event"
           />
 
@@ -426,6 +567,7 @@ watch(
             :sub-tab="responsesSubTab"
             :identifiers-loaded="identifiers.rows.value.length > 0"
             :linked-count="linkedResponsesCount"
+            :reconciliation="responseReconciliation"
             @update:sub-tab="responsesSubTab = $event"
           />
 
@@ -433,6 +575,7 @@ watch(
             v-else-if="activeTab === TAB_KEYS.ANSWER_KEYS"
             :answer-keys="answerKeys"
             :sub-tab="answerKeySubTab"
+            :reconciliation="answerKeyReconciliation"
             @update:sub-tab="answerKeySubTab = $event"
           />
 

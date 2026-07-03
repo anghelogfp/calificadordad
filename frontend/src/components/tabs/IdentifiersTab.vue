@@ -12,6 +12,7 @@ import EmptyState from '@/components/shared/EmptyState.vue'
 const props = defineProps({
   identifiers: { type: Object, required: true },
   subTab:      { type: String, required: true },
+  reconciliation: { type: Object, default: null },
 })
 
 const emit = defineEmits(['update:subTab'])
@@ -22,6 +23,31 @@ const showOnlyObserved = ref(false)
 const displayedRows = computed(() => (
   showOnlyObserved.value ? identifiers.observations : identifiers.pagedRows
 ))
+
+const stepState = computed(() => {
+  if (!props.reconciliation || (!props.reconciliation.padronTotal && !props.reconciliation.identifiersTotal)) {
+    return {
+      variant: 'info',
+      title: 'Pendiente de datos',
+    }
+  }
+  if (props.reconciliation.duplicateIdentifierDnis || props.reconciliation.duplicateMatchKeys) {
+    return {
+      variant: 'error',
+      title: 'Corregir duplicados de identificadores',
+    }
+  }
+  if (props.reconciliation.issues || identifiers.observationCount) {
+    return {
+      variant: 'warn',
+      title: 'Revisar identificadores antes de continuar',
+    }
+  }
+  return {
+    variant: 'ok',
+    title: 'Identificadores listos',
+  }
+})
 
 // ── Confirmación inline ──────────────────────────────────────────────────────
 const pendingAction = ref(null)
@@ -113,13 +139,17 @@ function getRowClass(row) {
       {{ identifiers.importError }}
     </div>
 
-    <section v-if="identifiers.observationCount" class="observed-panel">
-      <div class="observed-panel__header">
+    <section
+      v-if="(reconciliation && (reconciliation.padronTotal || reconciliation.identifiersTotal)) || identifiers.observationCount"
+      class="step-state-panel"
+      :class="`step-state-panel--${stepState.variant}`"
+    >
+      <div class="step-state-panel__header">
         <div>
-          <span class="observed-panel__eyebrow">Observados de identificadores</span>
-          <h3>{{ identifiers.observationCount }} registro(s) requieren revisión</h3>
+          <span class="step-state-panel__eyebrow">Estado del paso</span>
+          <h3>{{ stepState.title }}</h3>
         </div>
-        <div class="observed-panel__actions">
+        <div v-if="identifiers.observationCount" class="step-state-panel__actions">
           <button type="button" class="btn btn--ghost" @click="showOnlyObserved = !showOnlyObserved">
             {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
           </button>
@@ -128,13 +158,24 @@ function getRowClass(row) {
           </button>
         </div>
       </div>
-      <div class="observed-panel__chips">
-        <span v-for="item in identifiers.observationSummary" :key="item.label" class="observed-chip">
+
+      <div v-if="reconciliation && (reconciliation.padronTotal || reconciliation.identifiersTotal)" class="step-state-panel__chips">
+        <span class="step-state-chip"><strong>{{ reconciliation.matchedCandidates }}</strong> con identificador</span>
+        <span class="step-state-chip"><strong>{{ reconciliation.missingIdentifiers }}</strong> sin identificador</span>
+        <span class="step-state-chip"><strong>{{ reconciliation.identifiersWithoutCandidate }}</strong> fuera del padrón</span>
+        <span class="step-state-chip"><strong>{{ reconciliation.duplicateIdentifierDnis }}</strong> DNI duplicados</span>
+        <span class="step-state-chip"><strong>{{ reconciliation.duplicateMatchKeys }}</strong> lecturas/litho duplicados</span>
+      </div>
+
+      <div v-if="identifiers.observationCount" class="step-state-panel__detail">
+        <span v-for="item in identifiers.observationSummary" :key="item.label" class="step-state-chip step-state-chip--warn">
           <strong>{{ item.count }}</strong> {{ item.label }}
         </span>
       </div>
-      <p class="observed-panel__hint">
-        Corrige los campos en la tabla y vuelve a vincular las respuestas si el cambio afecta DNI, lectura, aula o tipo.
+
+      <p class="step-state-panel__hint">
+        Este cruce confirma si los DNI del archivo de identificación corresponden al padrón cargado en el Paso 1.
+        <span v-if="identifiers.observationCount">Corrige los campos en la tabla si cambia DNI, lectura, aula o tipo.</span>
       </p>
     </section>
 
@@ -364,6 +405,7 @@ function getRowClass(row) {
   box-shadow: var(--shadow-md);
 }
 
+.step-state-panel,
 .observed-panel {
   display: flex;
   flex-direction: column;
@@ -375,6 +417,31 @@ function getRowClass(row) {
   border-radius: var(--radius-lg);
 }
 
+.step-state-panel--info {
+  background: var(--slate-50);
+  border-color: var(--slate-200);
+  border-left-color: var(--slate-400);
+}
+
+.step-state-panel--ok {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  border-left-color: var(--success-500);
+}
+
+.step-state-panel--warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+  border-left-color: #d97706;
+}
+
+.step-state-panel--error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  border-left-color: #dc2626;
+}
+
+.step-state-panel__header,
 .observed-panel__header {
   display: flex;
   align-items: center;
@@ -382,6 +449,7 @@ function getRowClass(row) {
   gap: var(--space-4);
 }
 
+.step-state-panel__eyebrow,
 .observed-panel__eyebrow {
   display: block;
   margin-bottom: 2px;
@@ -392,12 +460,29 @@ function getRowClass(row) {
   letter-spacing: 0.08em;
 }
 
+.step-state-panel h3,
 .observed-panel h3 {
   margin: 0;
   color: #78350f;
   font-size: 0.98rem;
 }
 
+.step-state-panel--info .step-state-panel__eyebrow,
+.step-state-panel--info h3 {
+  color: var(--slate-600);
+}
+
+.step-state-panel--ok .step-state-panel__eyebrow,
+.step-state-panel--ok h3 {
+  color: #15803d;
+}
+
+.step-state-panel--error .step-state-panel__eyebrow,
+.step-state-panel--error h3 {
+  color: #b91c1c;
+}
+
+.step-state-panel__actions,
 .observed-panel__actions {
   display: flex;
   gap: var(--space-2);
@@ -405,12 +490,22 @@ function getRowClass(row) {
   justify-content: flex-end;
 }
 
+.step-state-panel__chips,
 .observed-panel__chips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
 }
 
+.step-state-panel__detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid rgba(146, 64, 14, 0.18);
+}
+
+.step-state-chip,
 .observed-chip {
   display: inline-flex;
   align-items: center;
@@ -424,13 +519,107 @@ function getRowClass(row) {
   font-weight: 700;
 }
 
+.step-state-chip--warn {
+  border-color: #fcd34d;
+}
+
+.step-state-chip strong,
 .observed-chip strong {
   color: #78350f;
 }
 
+.step-state-panel--ok .step-state-chip {
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.step-state-panel--info .step-state-chip {
+  border-color: var(--slate-200);
+  color: var(--slate-600);
+}
+
+.step-state-panel--error .step-state-chip {
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.step-state-panel--ok .step-state-chip strong {
+  color: #14532d;
+}
+
+.step-state-panel--info .step-state-chip strong {
+  color: var(--slate-800);
+}
+
+.step-state-panel--error .step-state-chip strong {
+  color: #991b1b;
+}
+
+.step-state-panel__hint,
 .observed-panel__hint {
   margin: 0;
   color: #92400e;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.reconciliation-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--slate-200);
+  border-left: 4px solid var(--slate-400);
+  background: white;
+}
+.reconciliation-panel--ok {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  border-left-color: var(--success-500);
+}
+.reconciliation-panel--warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+  border-left-color: #d97706;
+}
+.reconciliation-panel__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--slate-500);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.reconciliation-panel h3 {
+  margin: 0;
+  color: var(--slate-800);
+  font-size: 0.98rem;
+}
+.reconciliation-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.reconciliation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px var(--space-2);
+  background: white;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: var(--radius-full);
+  color: var(--slate-600);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+.reconciliation-chip strong {
+  color: var(--slate-900);
+}
+.reconciliation-panel__hint {
+  margin: 0;
+  color: var(--slate-500);
   font-size: 0.8rem;
   line-height: 1.45;
 }
@@ -446,11 +635,13 @@ function getRowClass(row) {
 }
 
 @media (max-width: 768px) {
+  .step-state-panel__header,
   .observed-panel__header {
     align-items: flex-start;
     flex-direction: column;
   }
 
+  .step-state-panel__actions,
   .observed-panel__actions {
     justify-content: flex-start;
   }

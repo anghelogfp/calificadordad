@@ -95,6 +95,21 @@ const issueCount = computed(() => {
     (summary.unlinkedResponses || 0)
 })
 
+const noCalificados = computed(() =>
+  Array.isArray(calification.calificationSummary?.noCalificados)
+    ? calification.calificationSummary.noCalificados
+    : []
+)
+
+const noCalificadosByMotivo = computed(() => {
+  const counts = new Map()
+  noCalificados.value.forEach((row) => {
+    const motivo = row.motivo || 'Sin motivo'
+    counts.set(motivo, (counts.get(motivo) || 0) + 1)
+  })
+  return Array.from(counts.entries()).map(([motivo, count]) => ({ motivo, count }))
+})
+
 // ── Filtros locales ──────────────────────────────────────────────────────────
 
 const filterPrograma = ref('')
@@ -303,93 +318,6 @@ function handleExportIngresantesPdf() {
           Calcular Puntajes
         </button>
 
-        <!-- Dashboard -->
-        <button
-          v-if="calification.calificationHasResults"
-          type="button"
-          class="btn btn--ghost"
-          @click="emit('openDashboard')"
-        >
-          <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/>
-          </svg>
-          Estadísticas
-        </button>
-
-        <!-- Export buttons — solo con resultados -->
-        <template v-if="calification.calificationHasResults">
-          <button type="button" class="btn btn--outline-green" @click="handleExportExcel">
-            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
-            </svg>
-            Excel
-          </button>
-          <button type="button" class="btn btn--outline-red" @click="handleExportPdf">
-            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
-            </svg>
-            PDF
-          </button>
-          <button
-            v-if="isRealMode && hasIngresanteData"
-            type="button"
-            class="btn btn--primary"
-            @click="handleExportIngresantesPdf"
-          >
-            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V8z" clip-rule="evenodd"/>
-            </svg>
-            PDF Ingresantes
-          </button>
-        </template>
-
-        <template v-if="calification.calificationHasResults && onSaveToHistory">
-          <!-- Input inline de nombre -->
-          <template v-if="savingName">
-            <input
-              v-model="saveNameInput"
-              type="text"
-              class="save-name-input"
-              placeholder="Nombre del proceso..."
-              @keyup.enter="confirmSaveName"
-              @keyup.escape="cancelSaveName"
-              autofocus
-            />
-            <button type="button" class="btn btn--primary" @click="confirmSaveName">Confirmar</button>
-            <button type="button" class="btn btn--ghost" @click="cancelSaveName">Cancelar</button>
-          </template>
-          <!-- Botón normal -->
-          <button v-else type="button" class="btn btn--primary" @click="handleSaveToHistory">
-            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h5a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5v5.586l-1.293-1.293zM9 4a1 1 0 012 0v2H9V4z"/>
-            </svg>
-            Guardar
-          </button>
-        </template>
-
-        <button
-          v-if="calification.calificationHasResults"
-          type="button"
-          class="btn btn--ghost"
-          @click="handleNewProcess"
-        >
-          <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
-          </svg>
-          Nuevo
-        </button>
-
-        <button
-          type="button"
-          class="btn btn--ghost"
-          @click="handleReset"
-          :disabled="!calification.calificationHasResults"
-        >
-          <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
-          </svg>
-          Limpiar
-        </button>
       </template>
       <template #metrics>
         <span class="metric">
@@ -511,6 +439,52 @@ function handleExportIngresantesPdf() {
           <span v-if="calification.calificationSummary?.unlinkedResponses" class="meta-warn">Sin DNI vinculado: {{ calification.calificationSummary.unlinkedResponses }}</span>
         </div>
       </details>
+
+      <section v-if="noCalificados.length" class="not-qualified-panel">
+        <div class="not-qualified-panel__header">
+          <div>
+            <span class="not-qualified-panel__eyebrow">No calificados</span>
+            <h3>{{ noCalificados.length }} postulante(s) quedaron fuera del cálculo</h3>
+          </div>
+          <button type="button" class="btn btn--ghost" @click="handleExportExcel">
+            Exportar Excel
+          </button>
+        </div>
+
+        <div class="not-qualified-panel__chips">
+          <span v-for="item in noCalificadosByMotivo" :key="item.motivo" class="not-qualified-chip">
+            <strong>{{ item.count }}</strong> {{ item.motivo }}
+          </span>
+        </div>
+
+        <div class="not-qualified-table-wrap">
+          <table class="not-qualified-table">
+            <thead>
+              <tr>
+                <th>DNI</th>
+                <th>Apellidos y nombres</th>
+                <th>Área</th>
+                <th>Programa</th>
+                <th>Motivo</th>
+                <th>Detalle</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in noCalificados" :key="`${row.dni}-${row.motivo}-${row.detalle}`">
+                <td class="mono">{{ row.dni || '—' }}</td>
+                <td>{{ [row.paterno, row.materno, row.nombres].filter(Boolean).join(' ') || '—' }}</td>
+                <td>{{ row.area || '—' }}</td>
+                <td>{{ row.programa || '—' }}</td>
+                <td><span class="not-qualified-reason">{{ row.motivo || 'Sin motivo' }}</span></td>
+                <td>{{ row.detalle || '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="not-qualified-panel__hint">
+          El Excel de resultados incluye una hoja “No calificados” con este detalle.
+        </p>
+      </section>
 
       <div class="results-filters">
         <div class="results-search">
@@ -847,7 +821,7 @@ function handleExportIngresantesPdf() {
     </template>
 
     <EmptyState
-      v-else
+      v-if="!calification.calificationHasResults"
       title="Sin resultados de calificación"
       description="Haz clic en 'Calcular Puntajes' para ejecutar la calificación con las ponderaciones configuradas."
       icon="time"
@@ -953,6 +927,119 @@ function handleExportIngresantesPdf() {
   display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6);
   margin-top: var(--space-3); padding: var(--space-3); background: var(--slate-50);
   border-radius: var(--radius-lg); color: var(--slate-600); font-size: 0.82rem;
+}
+
+.not-qualified-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
+  border-radius: var(--radius-lg);
+  background: #fef2f2;
+}
+
+.not-qualified-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.not-qualified-panel__eyebrow {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: #b91c1c;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.not-qualified-panel h3 {
+  margin: 0;
+  color: #7f1d1d;
+  font-size: 0.98rem;
+  line-height: 1.3;
+}
+
+.not-qualified-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.not-qualified-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-full);
+  background: white;
+  color: #991b1b;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.not-qualified-chip strong {
+  color: #7f1d1d;
+  font-family: var(--font-mono);
+}
+
+.not-qualified-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #fecaca;
+  border-radius: var(--radius-md);
+  background: white;
+}
+
+.not-qualified-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.not-qualified-table th {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid #fecaca;
+  background: #fff7f7;
+  color: #991b1b;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.not-qualified-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--slate-100);
+  color: var(--slate-700);
+  vertical-align: top;
+}
+
+.not-qualified-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.not-qualified-reason {
+  display: inline-flex;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.not-qualified-panel__hint {
+  margin: 0;
+  color: #991b1b;
+  font-size: 0.78rem;
 }
 
 .results-filters {
@@ -1263,6 +1350,7 @@ tbody tr.row--ingresante:hover { background: #dcfce7; }
   .results-header { flex-direction: column; }
   .results-header__actions { width: 100%; }
   .results-header__actions > .btn { flex: 1; }
+  .not-qualified-panel__header { flex-direction: column; }
   .summary-strip { grid-template-columns: repeat(2, 1fr); }
   .summary-item:nth-child(2) { border-right: 0; }
   .summary-item:nth-child(-n+2) { border-bottom: 1px solid var(--slate-200); }

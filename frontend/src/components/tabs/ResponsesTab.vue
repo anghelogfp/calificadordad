@@ -1,6 +1,6 @@
 <script setup>
 import { reactive, ref, computed } from 'vue'
-import { RESPONSES_SUBTABS, DEFAULT_DAT_FORMAT } from '@/constants'
+import { RESPONSES_SUBTABS } from '@/constants'
 import WorkflowIntroCard from '@/components/shared/WorkflowIntroCard.vue'
 import FileUploader from '@/components/shared/FileUploader.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
@@ -14,6 +14,7 @@ const props = defineProps({
   subTab:            { type: String,  required: true },
   identifiersLoaded: { type: Boolean, default: false },
   linkedCount:       { type: Number,  default: 0 },
+  reconciliation:    { type: Object,  default: null },
 })
 
 const matchPercent = computed(() => {
@@ -36,21 +37,46 @@ const responses = reactive(props.responses)
 const showOnlyObserved = ref(false)
 const detectFileInput = ref(null)
 const detecting = ref(false)
-const configuredOffset = DEFAULT_DAT_FORMAT.responseAnswersOffset
+const configuredOffset = computed(() => responses.configuredResponseAnswersOffset ?? 7)
 
 const displayedRows = computed(() => (
   showOnlyObserved.value ? responses.observations : responses.pagedRows
 ))
 
+const stepState = computed(() => {
+  if (!responses.responsesHasData && (!props.reconciliation || !props.reconciliation.responsesTotal)) {
+    return {
+      variant: 'info',
+      title: 'Pendiente de respuestas',
+    }
+  }
+  if (props.reconciliation?.duplicateResponseDnis) {
+    return {
+      variant: 'error',
+      title: 'Corregir respuestas duplicadas',
+    }
+  }
+  if (props.reconciliation?.issues || responses.observationCount) {
+    return {
+      variant: 'warn',
+      title: 'Revisar respuestas antes de calificar',
+    }
+  }
+  return {
+    variant: 'ok',
+    title: 'Respuestas listas para calificar',
+  }
+})
+
 const detectStatus = computed(() => {
   const r = responses.detectedOffset
   if (!r) return null
   if (r.offset < 0) return { label: 'Error al detectar', variant: 'error' }
-  const match = r.offset === configuredOffset
+  const match = r.offset === configuredOffset.value
   return {
     label: match
       ? `Offset detectado: ${r.offset} (coincide con config)`
-      : `Offset detectado: ${r.offset} (config: ${configuredOffset})`,
+      : `Offset detectado: ${r.offset} (config: ${configuredOffset.value})`,
     variant: match ? 'success' : 'warn',
   }
 })
@@ -168,35 +194,27 @@ function getRowClass(row) {
       @change="onDetectFileChange"
     >
 
-    <section class="detect-section">
-      <div class="detect-section__info">
-        <span class="detect-section__eyebrow">Formato de archivo</span>
-        <p>Offset configurado: <strong>{{ configuredOffset }}</strong> (respuestas inician en posición {{ configuredOffset }})</p>
-      </div>
-      <div class="detect-section__actions">
-        <button type="button" class="btn btn--ghost" :disabled="detecting" @click="handleDetectFormat">
-          <svg v-if="detecting" class="btn__icon spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12a9 9 0 11-6.219-8.56"/>
-          </svg>
-          <svg v-else class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-          </svg>
-          {{ detecting ? 'Analizando...' : 'Detectar formato' }}
-        </button>
-        <span v-if="detectStatus" class="detect-badge" :class="`detect-badge--${detectStatus.variant}`">
-          {{ detectStatus.label }}
-        </span>
-      </div>
-    </section>
-
-    <section v-if="responses.observationCount" class="observed-panel">
-      <div class="observed-panel__header">
+    <section
+      v-if="responses.responsesHasData || (reconciliation && reconciliation.responsesTotal)"
+      class="step-state-panel"
+      :class="`step-state-panel--${stepState.variant}`"
+    >
+      <div class="step-state-panel__header">
         <div>
-          <span class="observed-panel__eyebrow">Observados de respuestas</span>
-          <h3>{{ responses.observationCount }} registro(s) requieren revisión</h3>
+          <span class="step-state-panel__eyebrow">Estado de respuestas</span>
+          <h3>{{ stepState.title }}</h3>
         </div>
-        <div class="observed-panel__actions">
-          <button type="button" class="btn btn--ghost" @click="showOnlyObserved = !showOnlyObserved">
+        <div class="step-state-panel__actions">
+          <button type="button" class="btn btn--ghost" :disabled="detecting" @click="handleDetectFormat">
+            <svg v-if="detecting" class="btn__icon spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12a9 9 0 11-6.219-8.56"/>
+            </svg>
+            <svg v-else class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            {{ detecting ? 'Analizando...' : 'Detectar formato' }}
+          </button>
+          <button type="button" class="btn btn--ghost" :disabled="!responses.observationCount" @click="showOnlyObserved = !showOnlyObserved">
             {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
           </button>
           <button type="button" class="btn btn--primary" @click="responses.exportResponseObservationsToExcel">
@@ -204,13 +222,39 @@ function getRowClass(row) {
           </button>
         </div>
       </div>
-      <div class="observed-panel__chips">
-        <span v-for="item in responses.observationSummary" :key="item.label" class="observed-chip">
+
+      <div class="step-state-panel__chips">
+        <template v-if="reconciliation && reconciliation.responsesTotal">
+          <span class="step-state-chip"><strong>{{ reconciliation.linkedResponses }}</strong> vinculadas</span>
+          <span class="step-state-chip"><strong>{{ reconciliation.unlinkedResponses }}</strong> sin DNI</span>
+          <span class="step-state-chip"><strong>{{ reconciliation.candidatesWithoutResponse }}</strong> postulantes sin respuesta</span>
+          <span class="step-state-chip"><strong>{{ reconciliation.identifiersWithoutResponse }}</strong> identificadores sin respuesta</span>
+          <span class="step-state-chip"><strong>{{ reconciliation.responsesWithoutCandidate }}</strong> fuera del padrón</span>
+          <span class="step-state-chip"><strong>{{ reconciliation.duplicateResponseDnis }}</strong> duplicadas</span>
+        </template>
+        <span class="step-state-chip"><strong>{{ configuredOffset }}</strong> offset respuestas</span>
+        <span v-if="detectStatus" class="detect-badge" :class="`detect-badge--${detectStatus.variant}`">
+          {{ detectStatus.label }}
+        </span>
+      </div>
+
+      <div v-if="responses.observationCount" class="step-state-panel__detail">
+        <span v-for="item in responses.observationSummary" :key="item.label" class="step-state-chip step-state-chip--warn">
           <strong>{{ item.count }}</strong> {{ item.label }}
         </span>
       </div>
-      <p class="observed-panel__hint">
-        Corrige la lectura, DNI, tipo o respuestas marcadas en la tabla antes de volver a calificar.
+
+      <div class="step-state-panel__progress">
+        <span v-if="!identifiersLoaded">Sin identificadores cargados. Las respuestas no tendrán DNI ni aula asignados.</span>
+        <span v-else><strong>{{ linkedCount }} / {{ responses.totalRows }}</strong> respuestas vinculadas con identificadores</span>
+        <strong>{{ matchPercent }}%</strong>
+      </div>
+      <div class="step-state-panel__track">
+        <div class="step-state-panel__fill" :style="{ width: matchPercent + '%' }"></div>
+      </div>
+
+      <p class="step-state-panel__hint">
+        Este cruce confirma si las hojas de respuestas ya están vinculadas al Paso 2 y corresponden al padrón del Paso 1.
       </p>
     </section>
 
@@ -223,28 +267,6 @@ function getRowClass(row) {
       <div class="confirm-banner__actions">
         <button type="button" class="btn btn--sm btn--danger" @click="executePending">Confirmar</button>
         <button type="button" class="btn btn--sm" @click="cancelPending">Cancelar</button>
-      </div>
-    </div>
-
-    <!-- Barra de vinculación con identificadores -->
-    <div v-if="responses.responsesHasData" class="match-bar" :class="`match-bar--${matchStatus}`">
-      <div class="match-bar__info">
-        <svg viewBox="0 0 20 20" fill="currentColor">
-          <path fill-rule="evenodd" d="M12.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
-        </svg>
-        <span v-if="!identifiersLoaded" class="match-bar__text">
-          Sin identificadores cargados — las respuestas no tendrán DNI ni aula asignados (Paso 2)
-        </span>
-        <span v-else class="match-bar__text">
-          <strong>{{ linkedCount }} / {{ responses.totalRows }}</strong> respuestas vinculadas con identificadores
-          <em v-if="matchStatus === 'complete'">— vinculación completa</em>
-          <em v-else-if="matchStatus === 'good'">— {{ 100 - matchPercent }}% sin vincular</em>
-          <em v-else>— revisar Paso 2</em>
-        </span>
-        <span class="match-bar__pct">{{ matchPercent }}%</span>
-      </div>
-      <div class="match-bar__track">
-        <div class="match-bar__fill" :style="{ width: matchPercent + '%' }"></div>
       </div>
     </div>
 
@@ -462,6 +484,7 @@ function getRowClass(row) {
   box-shadow: var(--shadow-md);
 }
 
+.step-state-panel,
 .observed-panel {
   display: flex;
   flex-direction: column;
@@ -473,6 +496,31 @@ function getRowClass(row) {
   border-radius: var(--radius-lg);
 }
 
+.step-state-panel--info {
+  background: var(--slate-50);
+  border-color: var(--slate-200);
+  border-left-color: var(--slate-400);
+}
+
+.step-state-panel--ok {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  border-left-color: var(--success-500);
+}
+
+.step-state-panel--warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+  border-left-color: #d97706;
+}
+
+.step-state-panel--error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  border-left-color: #dc2626;
+}
+
+.step-state-panel__header,
 .observed-panel__header {
   display: flex;
   align-items: center;
@@ -480,6 +528,7 @@ function getRowClass(row) {
   gap: var(--space-4);
 }
 
+.step-state-panel__eyebrow,
 .observed-panel__eyebrow {
   display: block;
   margin-bottom: 2px;
@@ -490,12 +539,29 @@ function getRowClass(row) {
   letter-spacing: 0.08em;
 }
 
+.step-state-panel h3,
 .observed-panel h3 {
   margin: 0;
   color: #78350f;
   font-size: 0.98rem;
 }
 
+.step-state-panel--info .step-state-panel__eyebrow,
+.step-state-panel--info h3 {
+  color: var(--slate-600);
+}
+
+.step-state-panel--ok .step-state-panel__eyebrow,
+.step-state-panel--ok h3 {
+  color: #15803d;
+}
+
+.step-state-panel--error .step-state-panel__eyebrow,
+.step-state-panel--error h3 {
+  color: #b91c1c;
+}
+
+.step-state-panel__actions,
 .observed-panel__actions {
   display: flex;
   gap: var(--space-2);
@@ -503,12 +569,22 @@ function getRowClass(row) {
   justify-content: flex-end;
 }
 
+.step-state-panel__chips,
 .observed-panel__chips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
 }
 
+.step-state-panel__detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid rgba(146, 64, 14, 0.18);
+}
+
+.step-state-chip,
 .observed-chip {
   display: inline-flex;
   align-items: center;
@@ -522,13 +598,166 @@ function getRowClass(row) {
   font-weight: 700;
 }
 
+.step-state-chip--warn {
+  border-color: #fcd34d;
+}
+
+.step-state-chip strong,
 .observed-chip strong {
   color: #78350f;
 }
 
+.step-state-panel--ok .step-state-chip {
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.step-state-panel--info .step-state-chip {
+  border-color: var(--slate-200);
+  color: var(--slate-600);
+}
+
+.step-state-panel--error .step-state-chip {
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.step-state-panel--ok .step-state-chip strong {
+  color: #14532d;
+}
+
+.step-state-panel--info .step-state-chip strong {
+  color: var(--slate-800);
+}
+
+.step-state-panel--error .step-state-chip strong {
+  color: #991b1b;
+}
+
+.step-state-panel__progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: #92400e;
+  font-size: 0.82rem;
+}
+
+.step-state-panel__track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: rgba(146, 64, 14, 0.14);
+}
+
+.step-state-panel__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #d97706;
+  transition: width var(--transition-fast);
+}
+
+.step-state-panel--ok .step-state-panel__progress {
+  color: #15803d;
+}
+
+.step-state-panel--info .step-state-panel__progress {
+  color: var(--slate-600);
+}
+
+.step-state-panel--error .step-state-panel__progress {
+  color: #b91c1c;
+}
+
+.step-state-panel--ok .step-state-panel__track {
+  background: #dcfce7;
+}
+
+.step-state-panel--info .step-state-panel__track {
+  background: var(--slate-200);
+}
+
+.step-state-panel--error .step-state-panel__track {
+  background: #fee2e2;
+}
+
+.step-state-panel--ok .step-state-panel__fill {
+  background: #16a34a;
+}
+
+.step-state-panel--info .step-state-panel__fill {
+  background: var(--slate-400);
+}
+
+.step-state-panel--error .step-state-panel__fill {
+  background: #dc2626;
+}
+
+.step-state-panel__hint,
 .observed-panel__hint {
   margin: 0;
   color: #92400e;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.reconciliation-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--slate-200);
+  border-left: 4px solid var(--slate-400);
+  background: white;
+}
+.reconciliation-panel--ok {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  border-left-color: var(--success-500);
+}
+.reconciliation-panel--warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+  border-left-color: #d97706;
+}
+.reconciliation-panel__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--slate-500);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.reconciliation-panel h3 {
+  margin: 0;
+  color: var(--slate-800);
+  font-size: 0.98rem;
+}
+.reconciliation-panel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.reconciliation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px var(--space-2);
+  background: white;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: var(--radius-full);
+  color: var(--slate-600);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+.reconciliation-chip strong {
+  color: var(--slate-900);
+}
+.reconciliation-panel__hint {
+  margin: 0;
+  color: var(--slate-500);
   font-size: 0.8rem;
   line-height: 1.45;
 }
@@ -635,13 +864,20 @@ function getRowClass(row) {
 .match-bar--low .match-bar__fill { background: #f87171; }
 
 @media (max-width: 768px) {
+  .step-state-panel__header,
   .observed-panel__header {
     align-items: flex-start;
     flex-direction: column;
   }
 
+  .step-state-panel__actions,
   .observed-panel__actions {
     justify-content: flex-start;
+  }
+
+  .step-state-panel__progress {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

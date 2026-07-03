@@ -227,36 +227,6 @@ const emit = defineEmits(['goConfig'])
       </div>
     </div>
 
-    <details class="form-card">
-      <summary class="form-card__header">
-        <h3>Agregar registro manual</h3>
-        <p>Completa los campos para añadir un nuevo postulante</p>
-      </summary>
-      <form class="form-grid" @submit.prevent="archives.addArchiveRow">
-        <div v-for="column in ARCHIVE_COLUMNS" :key="column.key" class="form-field">
-          <label :for="`new-${column.key}`" class="form-field__label">{{ column.label }}</label>
-          <input
-            :id="`new-${column.key}`"
-            v-model="archives.pendingRow[column.key]"
-            type="text"
-            class="form-field__input"
-            :placeholder="column.placeholder"
-          />
-        </div>
-        <div class="form-actions">
-          <button type="button" class="btn btn--ghost" @click="archives.resetPendingRow">
-            Limpiar campos
-          </button>
-          <button type="submit" class="btn btn--primary">
-            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
-            </svg>
-            Agregar registro
-          </button>
-        </div>
-      </form>
-    </details>
-
     <Toolbar
       v-model:search-value="archives.search"
       search-placeholder="Buscar postulantes..."
@@ -325,6 +295,36 @@ const emit = defineEmits(['goConfig'])
       description="Importa un archivo Excel o agrega registros manualmente para comenzar."
       icon="add"
     />
+
+    <details class="form-card secondary-tool">
+      <summary class="form-card__header">
+        <h3>Agregar registro manual</h3>
+        <p>Herramienta secundaria para correcciones puntuales del padrón.</p>
+      </summary>
+      <form class="form-grid" @submit.prevent="archives.addArchiveRow">
+        <div v-for="column in ARCHIVE_COLUMNS" :key="column.key" class="form-field">
+          <label :for="`new-${column.key}`" class="form-field__label">{{ column.label }}</label>
+          <input
+            :id="`new-${column.key}`"
+            v-model="archives.pendingRow[column.key]"
+            type="text"
+            class="form-field__input"
+            :placeholder="column.placeholder"
+          />
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn--ghost" @click="archives.resetPendingRow">
+            Limpiar campos
+          </button>
+          <button type="submit" class="btn btn--primary">
+            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+            </svg>
+            Agregar registro
+          </button>
+        </div>
+      </form>
+    </details>
 
   </section>
 </template>
