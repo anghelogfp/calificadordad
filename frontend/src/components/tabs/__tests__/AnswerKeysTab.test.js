@@ -58,12 +58,13 @@ function makeAnswerKeys(overrides = {}) {
   }
 }
 
-function mountAnswerKeysTab(reconciliation) {
+function mountAnswerKeysTab(reconciliation, props = {}) {
   return shallowMount(AnswerKeysTab, {
     props: {
       answerKeys: makeAnswerKeys(),
       subTab: ANSWER_KEY_SUBTABS.LIST,
       reconciliation,
+      ...props,
     },
     global: {
       stubs: {
@@ -73,6 +74,7 @@ function mountAnswerKeysTab(reconciliation) {
         DataTable: true,
         SourcesPanel: true,
         EmptyState: true,
+        ProcessPathCard: true,
       },
     },
   })
@@ -134,5 +136,50 @@ describe('AnswerKeysTab', () => {
     expect(wrapper.text()).toContain('la clave general cubre el ranking completo')
     expect(wrapper.text()).not.toContain('Falta Biomédicas')
     expect(wrapper.text()).not.toContain('Falta Ingeniería')
+  })
+
+  it('bloquea clave general cuando el proceso es simulacro por áreas', () => {
+    const wrapper = mountAnswerKeysTab({
+      status: 'warn',
+      keysTotal: 0,
+      coveredPairs: 0,
+      missingPairs: [],
+      generalKeys: 0,
+      duplicatePairs: 0,
+      incompleteKeys: 0,
+      mode: 'simulacro-areas',
+      generalKeyCoversSimulacro: false,
+    }, {
+      processType: 'simulacro',
+      simulacroScope: 'areas',
+    })
+
+    const buttons = wrapper.findAll('.key-mode-btn')
+    expect(buttons[0].attributes('disabled')).toBeDefined()
+    expect(buttons[1].attributes('disabled')).toBeUndefined()
+    expect(buttons[1].classes()).toContain('key-mode-btn--active')
+    expect(wrapper.text()).toContain('Este modo viene del camino definido al crear el proceso.')
+  })
+
+  it('bloquea carga por área cuando el proceso es simulacro general', () => {
+    const wrapper = mountAnswerKeysTab({
+      status: 'ok',
+      keysTotal: 1,
+      coveredPairs: 1,
+      missingPairs: [],
+      generalKeys: 1,
+      duplicatePairs: 0,
+      incompleteKeys: 0,
+      mode: 'simulacro-general',
+      generalKeyCoversSimulacro: true,
+    }, {
+      processType: 'simulacro',
+      simulacroScope: 'general',
+    })
+
+    const buttons = wrapper.findAll('.key-mode-btn')
+    expect(buttons[0].attributes('disabled')).toBeUndefined()
+    expect(buttons[0].classes()).toContain('key-mode-btn--active')
+    expect(buttons[1].attributes('disabled')).toBeDefined()
   })
 })

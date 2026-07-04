@@ -70,6 +70,15 @@ function formatDate(iso) {
   })
 }
 
+function processModeLabel(process) {
+  if (process.type === 'real') return 'Convocatoria real'
+  return process.simulacroScope === 'general' ? 'Simulacro general' : 'Simulacro por áreas'
+}
+
+function processModeClass(process) {
+  return process.type === 'real' ? 'type-badge--real' : 'type-badge--sim'
+}
+
 onMounted(() => {
   props.history.fetchHistory()
 })
@@ -207,8 +216,7 @@ onMounted(() => {
                 <span v-for="area in p.areaNames" :key="area" class="area-tag">{{ area }}</span>
                 <span class="meta-sep" v-if="p.areaNames?.length">·</span>
                 <span class="meta-text">{{ p.totalCandidates }} candidatos</span>
-                <span v-if="p.type === 'real'" class="type-badge type-badge--real">Real</span>
-                <span v-else-if="p.type === 'simulacro'" class="type-badge type-badge--sim">Simulacro</span>
+                <span class="type-badge" :class="processModeClass(p)">{{ processModeLabel(p) }}</span>
               </div>
               <div class="process-item__date">{{ formatDate(p.savedAt) }}</div>
             </div>
@@ -561,8 +569,8 @@ onMounted(() => {
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
-.type-badge--real { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
-.type-badge--sim  { background: var(--slate-100); color: var(--slate-500); border: 1px solid var(--slate-200); }
+.type-badge--real { background: #fff7ed; color: #92400e; border: 1px solid #fed7aa; }
+.type-badge--sim  { background: var(--unap-blue-50); color: var(--unap-blue-700); border: 1px solid var(--unap-blue-100); }
 
 .process-item__date {
   font-size: 0.72rem;

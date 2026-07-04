@@ -38,7 +38,7 @@ Se usa `localStorage` para:
 - Subtabs.
 - Sidebar.
 - Tokens JWT.
-- Metadata del proceso activo.
+- Metadata del proceso activo, incluyendo tipo y alcance del camino.
 
 La regla vigente es que la API/DB manda. Las filas de padron, identificadores, respuestas, claves, sources, vacantes, formato DAT y configuracion de calificacion ya no se guardan en `localStorage`.
 
@@ -62,6 +62,16 @@ La pantalla de resultados y el modal de calificacion se reordenaron para prioriz
 - Resultados muestra primero el estado operativo, no calificados e incidencias, y deja los detalles tecnicos al final.
 - El modal de calificacion agrupa configuracion, salida y validacion en una sola experiencia con separadores suaves.
 - Los bloqueos de preflight ya no quedan silenciosos: el flujo muestra error visible y toast cuando falta informacion para calificar.
+
+## Camino Del Proceso
+
+El camino se define al crear el proceso y queda bloqueado para el resto del flujo:
+
+- `Simulacro general`: usa clave general y la clave general cubre el simulacro.
+- `Simulacro por areas`: exige claves por area; una clave general no cubre este camino.
+- `Convocatoria real`: usa claves por area y tipo, con ponderaciones y resultados de convocatoria.
+
+La UI muestra este camino de forma consistente en claves, ponderaciones, modal de calificacion, resultados, historial y dashboard.
 
 ## Pendientes Tecnicos
 

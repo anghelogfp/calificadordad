@@ -7,6 +7,7 @@ import SubTabs from '@/components/shared/SubTabs.vue'
 import DataTable from '@/components/shared/DataTable.vue'
 import SourcesPanel from '@/components/shared/SourcesPanel.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import ProcessPathCard from '@/components/shared/ProcessPathCard.vue'
 
 const props = defineProps({
   answerKeys: {
@@ -256,16 +257,13 @@ const stepState = computed(() => {
       </p>
     </section>
 
-    <section class="key-mode-context">
-      <div>
-        <span class="key-mode-context__eyebrow">Modo de claves definido por el camino</span>
-        <h3>{{ keyModeLabel }}</h3>
-        <p>{{ keyModeDescription }}</p>
-      </div>
-      <span class="key-mode-context__badge">
-        {{ expectedKeyMode === 'general' ? 'Clave general' : processType === 'real' ? 'Área + tipo' : 'Por áreas' }}
-      </span>
-    </section>
+    <ProcessPathCard
+      eyebrow="Modo de claves definido por el camino"
+      :title="keyModeLabel"
+      :description="keyModeDescription"
+      :badge="expectedKeyMode === 'general' ? 'Clave general' : processType === 'real' ? 'Área + tipo' : 'Por áreas'"
+      :variant="processType === 'real' ? 'real' : 'simulacro'"
+    />
 
     <details class="upload-form-card" :open="!answerKeys.answerKeyHasData">
       <summary class="upload-form-card__header">
@@ -631,57 +629,6 @@ const stepState = computed(() => {
   color: #b91c1c;
 }
 
-.key-mode-context {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-4);
-  border: 1px solid #dbe7f5;
-  border-left: 4px solid var(--unap-blue-500);
-  border-radius: var(--radius-lg);
-  background: #f9fbfe;
-  box-shadow: var(--shadow-sm);
-}
-
-.key-mode-context__eyebrow {
-  display: block;
-  margin-bottom: 3px;
-  color: var(--slate-500);
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.key-mode-context h3 {
-  margin: 0;
-  color: var(--slate-900);
-  font-size: 1rem;
-  line-height: 1.35;
-}
-
-.key-mode-context p {
-  margin: 4px 0 0;
-  color: var(--slate-500);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
-.key-mode-context__badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 4px var(--space-3);
-  border: 1px solid var(--slate-200);
-  border-radius: var(--radius-full);
-  background: white;
-  color: var(--unap-blue-700);
-  font-size: 0.74rem;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
 .upload-form-card {
   background: white;
   border: 1px solid var(--slate-200);
@@ -864,14 +811,6 @@ const stepState = computed(() => {
   .form-field--action { grid-column: 2; }
 }
 @media (max-width: 700px) {
-  .key-mode-context {
-    flex-direction: column;
-  }
-
-  .key-mode-context__badge {
-    white-space: normal;
-  }
-
   .upload-form-grid { grid-template-columns: 1fr; }
   .form-field--action { grid-column: 1; }
   .form-field--action .btn { width: 100%; }

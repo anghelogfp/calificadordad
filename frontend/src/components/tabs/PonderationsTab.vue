@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import WorkflowIntroCard from '@/components/shared/WorkflowIntroCard.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import ProcessPathCard from '@/components/shared/ProcessPathCard.vue'
 
 const props = defineProps({
   ponderations: { type: Object, required: true },
@@ -82,14 +83,13 @@ function handleRename(event) {
       </template>
     </WorkflowIntroCard>
 
-    <section class="ponderation-mode" :class="processType === 'real' ? 'ponderation-mode--real' : 'ponderation-mode--simulacro'">
-      <div>
-        <span class="ponderation-mode__eyebrow">Ponderación definida por el camino</span>
-        <h3>{{ ponderationModeLabel }}</h3>
-        <p>{{ ponderationModeDescription }}</p>
-      </div>
-      <span class="ponderation-mode__badge">{{ ponderationModeBadge }}</span>
-    </section>
+    <ProcessPathCard
+      eyebrow="Ponderación definida por el camino"
+      :title="ponderationModeLabel"
+      :description="ponderationModeDescription"
+      :badge="ponderationModeBadge"
+      :variant="processType === 'real' ? 'real' : 'simulacro'"
+    />
 
     <div class="plantillas-layout">
 
@@ -445,67 +445,6 @@ function handleRename(event) {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.ponderation-mode {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-4);
-  border: 1px solid #dbe7f5;
-  border-left: 4px solid var(--unap-blue-500);
-  border-radius: var(--radius-lg);
-  background: #f9fbfe;
-  box-shadow: var(--shadow-sm);
-}
-
-.ponderation-mode--real {
-  border-color: #f3e1b2;
-  border-left-color: var(--unap-gold-500);
-  background: #fffdf7;
-}
-
-.ponderation-mode__eyebrow {
-  display: block;
-  margin-bottom: 3px;
-  color: var(--slate-500);
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.ponderation-mode h3 {
-  margin: 0;
-  color: var(--slate-900);
-  font-size: 1rem;
-  line-height: 1.35;
-}
-
-.ponderation-mode p {
-  margin: 4px 0 0;
-  color: var(--slate-500);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
-.ponderation-mode__badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 4px var(--space-3);
-  border: 1px solid var(--slate-200);
-  border-radius: var(--radius-full);
-  background: white;
-  color: var(--unap-blue-700);
-  font-size: 0.74rem;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.ponderation-mode--real .ponderation-mode__badge {
-  color: #78350f;
-}
-
 /* ─── LAYOUT 2 COLUMNAS ─── */
 
 .plantillas-layout {
@@ -517,14 +456,6 @@ function handleRename(event) {
 .editor { min-width: 0; max-width: 100%; }
 
 @media (max-width: 900px) {
-  .ponderation-mode {
-    flex-direction: column;
-  }
-
-  .ponderation-mode__badge {
-    white-space: normal;
-  }
-
   .plantillas-layout { grid-template-columns: 1fr; }
 }
 

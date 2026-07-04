@@ -23,6 +23,15 @@ function totalCandidates(process) {
   return Object.values(process.areas || {}).reduce((sum, a) => sum + (a.results?.length || 0), 0)
 }
 
+function processModeLabel(process) {
+  if (process.type === 'real') return 'Convocatoria real'
+  return process.simulacroScope === 'general' ? 'Simulacro general' : 'Simulacro por áreas'
+}
+
+function processModeClass(process) {
+  return process.type === 'real' ? 'type-chip--real' : 'type-chip--sim'
+}
+
 function handleLoad(process) {
   emit('loadProcess', process)
 }
@@ -106,8 +115,7 @@ watch([() => sorted.value.length, historyPageSize], () => { historyPage.value = 
           >
             {{ area }}
           </span>
-          <span v-if="process.type === 'real'" class="type-chip type-chip--real">Real</span>
-          <span v-else-if="process.type === 'simulacro'" class="type-chip type-chip--sim">Simulacro</span>
+          <span class="type-chip" :class="processModeClass(process)">{{ processModeLabel(process) }}</span>
         </div>
 
         <div class="process-card__stats">
@@ -276,8 +284,8 @@ watch([() => sorted.value.length, historyPageSize], () => { historyPage.value = 
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.type-chip--real { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
-.type-chip--sim  { background: var(--slate-100); color: var(--slate-500); border: 1px solid var(--slate-200); }
+.type-chip--real { background: #fff7ed; color: #92400e; border: 1px solid #fed7aa; }
+.type-chip--sim  { background: var(--unap-blue-50); color: var(--unap-blue-700); border: 1px solid var(--unap-blue-100); }
 
 /* Stats */
 .process-card__stats {

@@ -61,16 +61,17 @@ Frontend:
 
 1. Iniciar backend y frontend.
 2. Entrar con usuario creado.
-3. Cargar padron.
-4. Cargar identificadores.
-5. Cargar respuestas.
-6. Cargar claves.
-7. Revisar ponderaciones.
-8. Configurar vacantes si aplica.
-9. Calificar.
-10. Revisar no calificados.
-11. Guardar historial.
-12. Exportar reportes.
+3. Crear un proceso y elegir su camino: `Simulacro general`, `Simulacro por areas` o `Convocatoria real`.
+4. Cargar padron.
+5. Cargar identificadores.
+6. Cargar respuestas.
+7. Cargar claves segun el camino elegido.
+8. Revisar ponderaciones.
+9. Configurar vacantes si aplica.
+10. Calificar.
+11. Revisar no calificados.
+12. Guardar historial.
+13. Exportar reportes.
 
 ## Puntos De UI Que Ya Deben Verse Claros
 
@@ -78,6 +79,8 @@ Frontend:
 - El modal de calificacion debe mostrar contexto superior, configuracion, salida y validacion sin parecer cuatro tarjetas aisladas.
 - Si falta informacion para calificar, el click debe dar feedback visible y no quedarse silencioso.
 - El boton `Calcular Puntajes` debe seguir abriendo el modal aun cuando haya datos incompletos; el bloqueo real se explica dentro del flujo.
+- El camino elegido al crear el proceso debe verse igual en claves, ponderaciones, calculo, resultados, historial y dashboard.
+- `Simulacro por areas` debe cargar claves por area; no queda cubierto por una clave general.
 
 ## Cuidados
 

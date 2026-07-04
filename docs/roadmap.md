@@ -49,6 +49,7 @@ Riesgo conocido:
 - Reducir responsabilidad del orquestador principal.
 - Mantener el motor de calificacion como dominio puro.
 - Ya se mejoraron resultados y modal de calificacion para reducir ruido visual y reforzar estados operativos.
+- Ya se alineo el camino del proceso desde la creacion hasta claves, ponderaciones, calificacion, resultados, historial y dashboard.
 - Pendiente inmediato: seguir afinando el modal si la densidad visual sigue alta en uso real.
 
 ## Prioridad 6 - Modelo De Convocatoria
@@ -66,12 +67,12 @@ Pendiente futuro:
 
 Trabajo actual:
 
-- UI/UX de resultados y modal de calificacion reorganizada.
-- Configuracion de calificacion revisada para que vuelva a leerse como una sola unidad.
-- Bloqueos de preflight con feedback visible.
+- Camino del proceso definido al inicio: `Simulacro general`, `Simulacro por areas` o `Convocatoria real`.
+- Claves, ponderaciones, modal de calificacion, resultados, historial y dashboard ya respetan ese camino.
+- Tests unitarios agregados para el modal inicial, claves, historial y dashboard.
 
 Siguiente paso recomendado:
 
-1. Revisar visualmente el modal en uso real con datos cargados.
+1. Revisar visualmente el flujo completo con datos reales o fixtures representativas.
 2. Ajustar textos y jerarquia si el negocio quiere menos densidad.
-3. Pasar a stepper y estados de los pasos 1 al 5 si el modal ya queda estable.
+3. Pasar a stepper y estados de los pasos 1 al 5 si el flujo ya queda estable.

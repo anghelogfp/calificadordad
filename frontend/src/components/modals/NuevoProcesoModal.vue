@@ -9,54 +9,40 @@ const props = defineProps({
   plantillasCount:{ type: Number,  default: 0 },
 })
 
-const preflightOk = computed(() =>
-  props.areasCount > 0 && props.plantillasCount > 0
-)
-
 const emit = defineEmits(['confirm', 'close'])
 
 const modalRef = ref(null)
 useFocusTrap(modalRef, computed(() => props.show))
 
 const name = ref('')
-const type = ref('simulacro')
-const simulacroScope = ref('')
+const processPath = ref('')
 const submitted = ref(false)
 const shaking = ref(false)
 
 const nameError = computed(() => submitted.value && !name.value.trim() ? 'El nombre es obligatorio' : '')
-const scopeError = computed(() =>
-  submitted.value && type.value === 'simulacro' && !simulacroScope.value
-    ? 'Selecciona el alcance del simulacro'
+const processPathError = computed(() =>
+  submitted.value && !processPath.value
+    ? 'Selecciona el camino del proceso'
     : ''
 )
 
-const processPathLabel = computed(() => {
-  if (type.value === 'real') return 'Convocatoria real'
-  if (simulacroScope.value === 'general') return 'Simulacro general'
-  if (simulacroScope.value === 'areas') return 'Simulacro por áreas'
-  return 'Simulacro pendiente de alcance'
-})
-
-const processPathDescription = computed(() => {
-  if (type.value === 'real') return 'Ranking por carrera, vacantes e ingresantes.'
-  if (simulacroScope.value === 'general') return 'Un solo ranking para todos los postulantes y una clave general.'
-  if (simulacroScope.value === 'areas') return 'Ranking separado por área y claves oficiales por área.'
-  return 'Selecciona si el simulacro usará ranking general o rankings por área.'
-})
-
-const processPathBadge = computed(() => {
-  if (type.value === 'real') return 'Área + tipo'
-  if (simulacroScope.value === 'general') return 'Clave general'
-  if (simulacroScope.value === 'areas') return 'Por áreas'
-  return 'Por definir'
+const selectedPath = computed(() => {
+  if (processPath.value === 'simulacro-general') {
+    return { type: 'simulacro', simulacroScope: 'general' }
+  }
+  if (processPath.value === 'simulacro-areas') {
+    return { type: 'simulacro', simulacroScope: 'areas' }
+  }
+  if (processPath.value === 'real') {
+    return { type: 'real', simulacroScope: '' }
+  }
+  return { type: '', simulacroScope: '' }
 })
 
 watch(() => props.show, (val) => {
   if (val) {
     name.value = ''
-    type.value = 'simulacro'
-    simulacroScope.value = ''
+    processPath.value = ''
     submitted.value = false
     shaking.value = false
   }
@@ -64,15 +50,15 @@ watch(() => props.show, (val) => {
 
 function confirm() {
   submitted.value = true
-  if (!name.value.trim() || scopeError.value) {
+  if (!name.value.trim() || processPathError.value) {
     shaking.value = true
     setTimeout(() => { shaking.value = false }, 400)
     return
   }
   emit('confirm', {
     name: name.value.trim(),
-    type: type.value,
-    simulacroScope: type.value === 'simulacro' ? simulacroScope.value : '',
+    type: selectedPath.value.type,
+    simulacroScope: selectedPath.value.simulacroScope,
   })
 }
 </script>
@@ -92,7 +78,7 @@ function confirm() {
             </div>
             <div>
               <h2>Nuevo proceso de calificación</h2>
-              <p>Define el camino del proceso antes de calcular</p>
+              <p>Elige cómo se calcularán claves, ponderaciones y resultados</p>
             </div>
             <button type="button" class="modal-close" @click="emit('close')">
               <svg viewBox="0 0 20 20" fill="currentColor">
@@ -103,42 +89,8 @@ function confirm() {
 
           <!-- Body -->
           <div class="modal-body">
-
-            <!-- Pre-flight checklist -->
-            <div class="preflight">
-              <div class="preflight__title">Verificación de configuración</div>
-              <div class="preflight__items">
-                <div class="preflight__item" :class="areasCount > 0 ? 'preflight__item--ok' : 'preflight__item--warn'">
-                  <svg v-if="areasCount > 0" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                  </svg>
-                  <svg v-else viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                  </svg>
-                  <span>
-                    <strong>Áreas de evaluación</strong>
-                    <em v-if="areasCount > 0">{{ areasCount }} área(s) configurada(s)</em>
-                    <em v-else>Sin áreas — ve a Configuración</em>
-                  </span>
-                </div>
-                <div class="preflight__item" :class="plantillasCount > 0 ? 'preflight__item--ok' : 'preflight__item--warn'">
-                  <svg v-if="plantillasCount > 0" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                  </svg>
-                  <svg v-else viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                  </svg>
-                  <span>
-                    <strong>Plantillas de ponderación</strong>
-                    <em v-if="plantillasCount > 0">{{ plantillasCount }} plantilla(s) disponible(s)</em>
-                    <em v-else>Sin plantillas — ve a Ponderaciones</em>
-                  </span>
-                </div>
-              </div>
-            </div>
-
             <!-- Nombre -->
-            <div class="field" :class="{ 'field--error': nameError, 'field--shake': shaking }">
+            <div class="field" :class="{ 'field--error': nameError, 'field--shake': shaking && nameError }">
               <label class="field-label" for="proc-name">
                 Nombre del proceso
                 <span class="field-required">*</span>
@@ -164,94 +116,82 @@ function confirm() {
               </div>
               <div class="field-footer">
                 <span v-if="nameError" class="field-error">{{ nameError }}</span>
-                <span v-else class="field-hint">Puedes cambiarlo después en el paso de calificación.</span>
+                <span v-else class="field-hint">Usa un nombre claro para ubicarlo luego en historial.</span>
                 <span class="field-counter" :class="{ 'field-counter--warn': name.length > 100 }">
                   {{ name.length }}/120
                 </span>
               </div>
             </div>
 
-            <!-- Tipo -->
-            <div class="field">
-              <label class="field-label">Tipo de proceso</label>
-              <div class="type-options">
-                <button
-                  type="button"
-                  class="type-option"
-                  :class="{ 'type-option--active': type === 'simulacro' }"
-                  @click="type = 'simulacro'"
-                >
-                  <span class="type-option__radio">
-                    <span v-if="type === 'simulacro'" class="type-option__dot" />
-                  </span>
-                  <div class="type-option__info">
-                    <span class="type-option__name">Simulacro</span>
-                    <span class="type-option__desc">Resultados en tabla plana, sin ranking por carrera</span>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  class="type-option"
-                  :class="{ 'type-option--active': type === 'real' }"
-                  @click="type = 'real'"
-                >
-                  <span class="type-option__radio">
-                    <span v-if="type === 'real'" class="type-option__dot" />
-                  </span>
-                  <div class="type-option__info">
-                    <span class="type-option__name">Convocatoria Real</span>
-                    <span class="type-option__desc">Ranking por carrera, ingresantes con vacantes</span>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            <div v-if="type === 'simulacro'" class="field" :class="{ 'field--error': scopeError }">
+            <div class="field" :class="{ 'field--error': processPathError, 'field--shake': shaking && processPathError }">
               <label class="field-label">
-                Alcance del simulacro
+                Camino del proceso
                 <span class="field-required">*</span>
               </label>
-              <div class="type-options">
+              <div class="path-options">
                 <button
                   type="button"
-                  class="type-option"
-                  :class="{ 'type-option--active': simulacroScope === 'general' }"
-                  @click="simulacroScope = 'general'"
+                  class="path-option"
+                  :class="{ 'path-option--active': processPath === 'simulacro-general' }"
+                  @click="processPath = 'simulacro-general'"
                 >
-                  <span class="type-option__radio">
-                    <span v-if="simulacroScope === 'general'" class="type-option__dot" />
+                  <span class="path-option__radio">
+                    <span v-if="processPath === 'simulacro-general'" class="path-option__dot" />
                   </span>
-                  <div class="type-option__info">
-                    <span class="type-option__name">General</span>
-                    <span class="type-option__desc">Un solo ranking para todos los postulantes</span>
+                  <div class="path-option__info">
+                    <span class="path-option__eyebrow">Simulacro</span>
+                    <span class="path-option__name">Simulacro general</span>
+                    <span class="path-option__desc">Una clave general y ranking general para todos los postulantes.</span>
                   </div>
+                  <span class="path-option__badge">Clave general</span>
                 </button>
                 <button
                   type="button"
-                  class="type-option"
-                  :class="{ 'type-option--active': simulacroScope === 'areas' }"
-                  @click="simulacroScope = 'areas'"
+                  class="path-option"
+                  :class="{ 'path-option--active': processPath === 'simulacro-areas' }"
+                  @click="processPath = 'simulacro-areas'"
                 >
-                  <span class="type-option__radio">
-                    <span v-if="simulacroScope === 'areas'" class="type-option__dot" />
+                  <span class="path-option__radio">
+                    <span v-if="processPath === 'simulacro-areas'" class="path-option__dot" />
                   </span>
-                  <div class="type-option__info">
-                    <span class="type-option__name">Por áreas</span>
-                    <span class="type-option__desc">Un ranking separado por área de evaluación</span>
+                  <div class="path-option__info">
+                    <span class="path-option__eyebrow">Simulacro</span>
+                    <span class="path-option__name">Simulacro por áreas</span>
+                    <span class="path-option__desc">Claves por área y ranking separado por área de evaluación.</span>
                   </div>
+                  <span class="path-option__badge">Por áreas</span>
+                </button>
+                <button
+                  type="button"
+                  class="path-option path-option--real"
+                  :class="{ 'path-option--active': processPath === 'real' }"
+                  @click="processPath = 'real'"
+                >
+                  <span class="path-option__radio">
+                    <span v-if="processPath === 'real'" class="path-option__dot" />
+                  </span>
+                  <div class="path-option__info">
+                    <span class="path-option__eyebrow">Proceso oficial</span>
+                    <span class="path-option__name">Convocatoria real</span>
+                    <span class="path-option__desc">Claves por área/tipo, vacantes, ranking por carrera e ingresantes.</span>
+                  </div>
+                  <span class="path-option__badge">Área + tipo</span>
                 </button>
               </div>
-              <span v-if="scopeError" class="field-error">{{ scopeError }}</span>
+              <span v-if="processPathError" class="field-error">{{ processPathError }}</span>
             </div>
 
-            <section class="process-path" :class="type === 'real' ? 'process-path--real' : 'process-path--simulacro'">
-              <div>
-                <span class="process-path__eyebrow">Camino del proceso</span>
-                <h3>{{ processPathLabel }}</h3>
-                <p>{{ processPathDescription }}</p>
+            <div class="setup-summary">
+              <span class="setup-summary__label">Configuración disponible</span>
+              <div class="setup-summary__items">
+                <span :class="areasCount > 0 ? 'setup-summary__item--ok' : 'setup-summary__item--warn'">
+                  {{ areasCount > 0 ? `${areasCount} área(s)` : 'Sin áreas' }}
+                </span>
+                <span :class="plantillasCount > 0 ? 'setup-summary__item--ok' : 'setup-summary__item--warn'">
+                  {{ plantillasCount > 0 ? `${plantillasCount} plantilla(s)` : 'Sin plantillas' }}
+                </span>
               </div>
-              <span class="process-path__badge">{{ processPathBadge }}</span>
-            </section>
+            </div>
 
             <!-- Advertencia si hay datos -->
             <div v-if="hasData" class="warning-row">
@@ -286,13 +226,15 @@ function confirm() {
   backdrop-filter: blur(3px);
   display: flex; align-items: center; justify-content: center;
   padding: var(--space-4);
+  overflow-y: auto;
 }
 
 .modal {
   background: white;
   border-radius: var(--radius-xl);
   width: 100%;
-  max-width: 460px;
+  max-width: 620px;
+  max-height: calc(100vh - 32px);
   box-shadow: 0 24px 64px rgba(0, 20, 51, 0.25);
   display: flex; flex-direction: column;
   overflow: hidden;
@@ -304,6 +246,7 @@ function confirm() {
   padding: var(--space-5) var(--space-6);
   background: linear-gradient(135deg, var(--unap-blue-700), var(--unap-blue-800));
   color: white;
+  flex-shrink: 0;
 }
 
 .modal-header__icon {
@@ -331,6 +274,8 @@ function confirm() {
 .modal-body {
   padding: var(--space-5) var(--space-6);
   display: flex; flex-direction: column; gap: var(--space-4);
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .field { display: flex; flex-direction: column; gap: var(--space-2); }
@@ -394,162 +339,155 @@ function confirm() {
   80% { transform: translateX(4px); }
 }
 
-/* Type options */
-.type-options { display: flex; flex-direction: column; gap: var(--space-2); }
-
-.type-option {
-  display: flex; align-items: center; gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border: 2px solid var(--slate-200); border-radius: var(--radius-lg);
-  background: white; cursor: pointer; transition: all 0.15s; text-align: left; width: 100%;
+/* Path options */
+.path-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
-.type-option:hover { border-color: var(--unap-blue-300); background: var(--unap-blue-50); }
-.type-option--active { border-color: var(--unap-blue-500); background: var(--unap-blue-50); }
 
-.type-option__radio {
-  width: 18px; height: 18px; flex-shrink: 0;
-  border: 2px solid var(--slate-300); border-radius: 50%;
-  display: flex; align-items: center; justify-content: center; transition: border-color 0.15s;
-}
-.type-option--active .type-option__radio { border-color: var(--unap-blue-500); }
-.type-option__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--unap-blue-500); }
-
-.type-option__info { display: flex; flex-direction: column; gap: 2px; }
-.type-option__name { font-size: 0.88rem; font-weight: 600; color: var(--slate-800); }
-.type-option__desc { font-size: 0.75rem; color: var(--slate-500); }
-
-.process-path {
+.path-option {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: var(--space-3);
+  width: 100%;
   padding: var(--space-4);
-  border: 1px solid #dbe7f5;
-  border-left: 4px solid var(--unap-blue-500);
+  border: 1.5px solid var(--slate-200);
   border-radius: var(--radius-lg);
-  background: #f9fbfe;
+  background: white;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 
-.process-path--real {
-  border-color: #f3e1b2;
-  border-left-color: var(--unap-gold-500);
+.path-option:hover {
+  border-color: var(--unap-blue-300);
+  background: #f8fbff;
+}
+
+.path-option--active {
+  border-color: var(--unap-blue-500);
+  background: var(--unap-blue-50);
+  box-shadow: 0 0 0 3px rgba(0, 82, 163, 0.08);
+}
+
+.path-option--real.path-option--active {
+  border-color: var(--unap-gold-500);
   background: #fffdf7;
+  box-shadow: 0 0 0 3px rgba(217, 160, 41, 0.12);
 }
 
-.process-path__eyebrow {
-  display: block;
-  margin-bottom: 3px;
-  color: var(--slate-500);
+.path-option__radio {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  border: 2px solid var(--slate-300);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s;
+}
+
+.path-option--active .path-option__radio {
+  border-color: var(--unap-blue-500);
+}
+
+.path-option--real.path-option--active .path-option__radio {
+  border-color: var(--unap-gold-500);
+}
+
+.path-option__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--unap-blue-500);
+}
+
+.path-option--real .path-option__dot {
+  background: var(--unap-gold-500);
+}
+
+.path-option__info {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.path-option__eyebrow {
+  color: var(--slate-400);
   font-size: 0.68rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
-.process-path h3 {
-  margin: 0;
+.path-option__name {
   color: var(--slate-900);
-  font-size: 1rem;
-  line-height: 1.35;
+  font-size: 0.96rem;
+  font-weight: 800;
 }
 
-.process-path p {
-  margin: 4px 0 0;
+.path-option__desc {
   color: var(--slate-500);
   font-size: 0.8rem;
-  line-height: 1.45;
+  line-height: 1.4;
 }
 
-.process-path__badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 4px var(--space-3);
+.path-option__badge {
+  flex-shrink: 0;
+  margin-top: 1px;
+  padding: 4px var(--space-2);
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-full);
   background: white;
   color: var(--unap-blue-700);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 800;
   white-space: nowrap;
 }
 
-.process-path--real .process-path__badge {
+.path-option--real .path-option__badge {
   color: #78350f;
 }
 
-@media (max-width: 520px) {
-  .process-path {
-    flex-direction: column;
-  }
-
-  .process-path__badge {
-    white-space: normal;
-  }
-}
-
-/* Pre-flight */
-.preflight {
-  background: var(--slate-50);
+.setup-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-lg);
-  padding: var(--space-3) var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  background: var(--slate-50);
 }
 
-.preflight__title {
-  font-size: 0.68rem;
+.setup-summary__label {
+  color: var(--slate-500);
+  font-size: 0.76rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--slate-400);
-  margin-bottom: 2px;
 }
 
-.preflight__items {
+.setup-summary__items {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--space-2);
 }
 
-.preflight__item {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  font-size: 0.82rem;
+.setup-summary__items span {
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-full);
+  background: white;
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
-.preflight__item svg {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-
-.preflight__item span {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.preflight__item strong {
-  font-weight: 600;
-  color: var(--slate-700);
-  font-size: 0.82rem;
-}
-
-.preflight__item em {
-  font-style: normal;
-  font-size: 0.75rem;
-}
-
-.preflight__item--ok svg  { color: var(--success-500); }
-.preflight__item--ok em   { color: var(--success-600); }
-
-.preflight__item--warn svg { color: #d97706; }
-.preflight__item--warn em  { color: #b45309; font-weight: 500; }
+.setup-summary__item--ok { color: var(--success-600); }
+.setup-summary__item--warn { color: #b45309; }
 
 /* Warning */
 .warning-row {
@@ -567,6 +505,7 @@ function confirm() {
   padding: var(--space-4) var(--space-6);
   border-top: 1px solid var(--slate-100);
   background: var(--slate-50);
+  flex-shrink: 0;
 }
 
 .btn {
@@ -587,4 +526,16 @@ function confirm() {
 .modal-fade-leave-active .modal { transition: transform 0.15s ease; }
 .modal-fade-enter-from .modal { transform: scale(0.93) translateY(8px); }
 .modal-fade-leave-to .modal { transform: scale(0.96); }
+
+@media (max-width: 640px) {
+  .modal-overlay { align-items: flex-start; overflow-y: auto; }
+  .modal { max-width: 100%; }
+  .modal-header { padding: var(--space-4); }
+  .modal-body { padding: var(--space-4); }
+  .modal-footer { padding: var(--space-4); }
+  .path-option { flex-wrap: wrap; }
+  .path-option__badge { margin-left: 32px; }
+  .setup-summary { align-items: flex-start; flex-direction: column; }
+  .setup-summary__items { justify-content: flex-start; }
+}
 </style>

@@ -1,6 +1,7 @@
 <script setup>
 import { reactive, ref, watch, computed, unref } from 'vue'
 import { useFocusTrap } from '@/composables/useFocusTrap'
+import ProcessPathCard from '@/components/shared/ProcessPathCard.vue'
 
 const props = defineProps({
   show: { type: Boolean, required: true },
@@ -155,26 +156,22 @@ function setVacantes(programa, val) {
               />
             </div>
 
-            <div class="process-context" :class="isRealMode ? 'process-context--real' : 'process-context--simulacro'">
-              <div class="process-context__header">
-                <span class="process-context__eyebrow">Camino definido al crear proceso</span>
-                <span class="process-context__locked">No editable aquí</span>
-              </div>
-              <strong>
-                {{ isRealMode ? 'Convocatoria real' : isGeneralSimulacro ? 'Simulacro general' : 'Simulacro por áreas' }}
-              </strong>
-              <p>
-                {{ isRealMode
-                  ? 'Ranking por programa, vacantes e ingresantes.'
-                  : isGeneralSimulacro
-                    ? 'Un solo ranking para todos los postulantes.'
-                    : 'Ranking separado por área de evaluación.' }}
-              </p>
-              <div class="mode-summary" :class="isRealMode ? 'mode-summary--real' : 'mode-summary--simulacro'">
-                <span class="mode-chip">{{ isRealMode ? 'Tipo P/Q/R/S/T obligatorio' : 'Tipo no requerido' }}</span>
-                <span class="mode-chip">{{ isRealMode ? 'Área y programa requeridos' : isGeneralSimulacro ? 'Padrón sin área permitido' : 'Áreas del padrón' }}</span>
-                <span class="mode-chip">{{ isRealMode ? 'Vacantes por programa' : isGeneralSimulacro ? 'Ranking general' : 'Ranking por área' }}</span>
-              </div>
+            <ProcessPathCard
+              eyebrow="Camino definido al crear proceso"
+              :title="isRealMode ? 'Convocatoria real' : isGeneralSimulacro ? 'Simulacro general' : 'Simulacro por áreas'"
+              :description="isRealMode
+                ? 'Ranking por programa, vacantes e ingresantes.'
+                : isGeneralSimulacro
+                  ? 'Un solo ranking para todos los postulantes.'
+                  : 'Ranking separado por área de evaluación.'"
+              :badge="isRealMode ? 'Vacantes por programa' : isGeneralSimulacro ? 'Ranking general' : 'Ranking por área'"
+              :variant="isRealMode ? 'real' : 'simulacro'"
+              locked-label="No editable aquí"
+            />
+            <div class="mode-summary" :class="isRealMode ? 'mode-summary--real' : 'mode-summary--simulacro'">
+              <span class="mode-chip">{{ isRealMode ? 'Tipo P/Q/R/S/T obligatorio' : 'Tipo no requerido' }}</span>
+              <span class="mode-chip">{{ isRealMode ? 'Área y programa requeridos' : isGeneralSimulacro ? 'Padrón sin área permitido' : 'Áreas del padrón' }}</span>
+              <span class="mode-chip">{{ isRealMode ? 'Vacantes por programa' : isGeneralSimulacro ? 'Ranking general' : 'Ranking por área' }}</span>
             </div>
           </div>
 
@@ -859,72 +856,6 @@ function setVacantes(programa, val) {
   outline: none;
   border-color: var(--unap-blue-400);
   box-shadow: 0 0 0 3px rgba(0, 82, 163, 0.1);
-}
-
-.process-context {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-4);
-  border: 1px solid var(--slate-200);
-  border-left-width: 4px;
-  border-radius: var(--radius-lg);
-  background: #fbfcfd;
-}
-
-.process-context--real {
-  border-color: #f3e1b2;
-  border-left-color: var(--unap-gold-500);
-  background: #fffdf7;
-}
-
-.process-context--simulacro {
-  border-color: #dbe7f5;
-  border-left-color: var(--unap-blue-500);
-  background: #f9fbfe;
-}
-
-.process-context__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-.process-context__eyebrow {
-  color: var(--slate-400);
-  font-size: 0.66rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.process-context__locked {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(148, 163, 184, 0.35);
-  color: var(--slate-500);
-  font-size: 0.68rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.process-context strong {
-  color: var(--slate-900);
-  font-size: 1rem;
-  font-weight: 750;
-  line-height: 1.3;
-}
-
-.process-context p {
-  margin: 0;
-  color: var(--slate-500);
-  font-size: 0.78rem;
-  line-height: 1.45;
 }
 
 /* ── Tipo de proceso ─────────────────────────────────────────────────────── */
