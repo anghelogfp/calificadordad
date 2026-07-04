@@ -8,7 +8,7 @@ Sistema web para calificar examenes de admision de la Direccion de Admision. Pro
 - Backend: Django + Django REST Framework.
 - Autenticacion: JWT.
 - Base de datos local: SQLite.
-- Datos principales: API/DB como fuente principal, con `localStorage` como cache/fallback temporal.
+- Datos principales: API/DB como fuente principal; `localStorage` queda para preferencias, tokens y metadata liviana.
 - Motor critico de calificacion: separado en funciones de dominio testeables.
 - UI/UX en curso: pantalla de resultados, modal de calificacion y pasos 1 al 5 ya reorganizados para reforzar estados operativos y verificacion por etapa.
 - CI: frontend tests/build y backend tests en GitHub Actions.

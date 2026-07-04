@@ -2,8 +2,8 @@
 
 ## Requisitos
 
-- Node.js compatible con el proyecto.
-- Python compatible con Django configurado.
+- Node.js 22 recomendado, alineado con CI.
+- Python 3.13 recomendado, alineado con CI y Django 6.
 - Dependencias instaladas en `frontend` y en el entorno Python usado por `backend`.
 
 ## Instalacion Local
@@ -52,6 +52,8 @@ Backend:
 - `DJANGO_CORS_ALLOWED_ORIGINS`
 - `DJANGO_SECURE_SSL_REDIRECT`
 - `DJANGO_SECURE_HSTS_SECONDS`
+- `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS`
+- `DJANGO_SECURE_HSTS_PRELOAD`
 
 Frontend:
 

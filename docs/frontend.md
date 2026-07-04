@@ -88,6 +88,22 @@ El camino se define al crear el proceso y queda bloqueado para el resto del fluj
 
 La UI muestra este camino de forma consistente en claves, ponderaciones, modal de calificacion, resultados, historial y dashboard.
 
+## Verificador Manual
+
+El verificador manual es una herramienta auxiliar independiente del flujo principal de calificacion. No modifica padron, respuestas, claves ni resultados del proceso operativo.
+
+Estado actual:
+
+- Permite ingresar clave oficial y respuestas del postulante en grillas separadas.
+- La clave oficial se representa en azul, respuestas correctas del postulante en verde, incorrectas en rojo y blancos en gris.
+- La tabla de detalle se muestra en dos columnas y conserva `N°`, curso, marcada, correcta, ponderacion, puntos y acumulado.
+- El calculo del verificador usa tres decimales para puntos y acumulado.
+- Permite pegar cadenas completas de respuestas desde cualquier celda.
+- Permite guardar y reutilizar una clave frecuente por plantilla desde `localStorage`.
+- Valida faltantes de clave oficial antes de guardar o exportar PDF.
+- Muestra resumen por curso.
+- El historial del verificador permite buscar, duplicar sesiones y exportar CSV.
+
 ## Pendientes Tecnicos
 
 - Extraer reconciliaciones de `App.vue` a composables dedicados.

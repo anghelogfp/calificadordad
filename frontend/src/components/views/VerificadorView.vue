@@ -15,6 +15,8 @@ const verificador = useVerificador()
 
 // ── Sub-tabs ──────────────────────────────────────────────────────────────────
 const subTab = ref('nueva') // 'nueva' | 'historial'
+const historySearch = ref('')
+const savedKeyVersion = ref(0)
 
 // ── Estado del formulario ─────────────────────────────────────────────────────
 const selectedPlantillaId = ref(null)
@@ -49,6 +51,13 @@ const selectedPlantilla = computed(() =>
   plantillasList.value.find(p => p.id === selectedPlantillaId.value) ?? null
 )
 
+function plantillaOptionLabel(plantilla) {
+  const name = String(plantilla?.name || 'Sin nombre')
+  const area = String(plantilla?.area || '').trim()
+  if (!area) return name
+  return name.toLowerCase().includes(area.toLowerCase()) ? name : `${name} : ${area}`
+}
+
 const questionPlan = computed(() =>
   selectedPlantilla.value
     ? buildQuestionPlan(selectedPlantilla.value.items || [])
@@ -57,12 +66,24 @@ const questionPlan = computed(() =>
 
 const totalQuestions = computed(() => questionPlan.value.length || 60)
 
+const savedKeyStorageId = computed(() =>
+  selectedPlantilla.value
+    ? `calificador-verificador-clave-${selectedPlantilla.value.id}`
+    : ''
+)
+
+const hasSavedCorrectKey = computed(() => {
+  savedKeyVersion.value
+  return !!(savedKeyStorageId.value && localStorage.getItem(savedKeyStorageId.value))
+})
+
 // ── Cálculo reactivo pregunta × pregunta ──────────────────────────────────────
 const rows = computed(() => {
   const plan = questionPlan.value
   const corrVal   = Number(correctValue.value)   || 0
   const incorrVal = Number(incorrectValue.value) || 0
   const blkVal    = Number(blankValue.value)     || 0
+  const roundScore = (value) => Math.round(value * 1000) / 1000
 
   let acum = 0
   return plan.map((item, i) => {
@@ -76,16 +97,16 @@ const rows = computed(() => {
     let status, pts
     if (isCorrectValid && isMarkedValid && marked === correct) {
       status = 'correct'
-      pts    = Math.round(corrVal * weight * 100) / 100
+      pts    = roundScore(corrVal * weight)
     } else if (isMarkedValid) {
       status = 'incorrect'
-      pts    = Math.round(incorrVal * weight * 100) / 100
+      pts    = roundScore(incorrVal * weight)
     } else {
       status = 'blank'
-      pts    = Math.round(blkVal * weight * 100) / 100
+      pts    = roundScore(blkVal * weight)
     }
 
-    acum = Math.round((acum + pts) * 100) / 100
+    acum = roundScore(acum + pts)
 
     // Para display: mostrar tal como lo ingresó (número o letra)
     const rawMarked  = (answerCells[i]  || '').toUpperCase()
@@ -104,6 +125,14 @@ const rows = computed(() => {
   })
 })
 
+const detailColumns = computed(() => {
+  const midpoint = Math.ceil(rows.value.length / 2)
+  return [
+    rows.value.slice(0, midpoint),
+    rows.value.slice(midpoint),
+  ].filter(column => column.length > 0)
+})
+
 const stats = computed(() => {
   let correctCount = 0, incorrectCount = 0, blankCount = 0
   rows.value.forEach(r => {
@@ -113,6 +142,42 @@ const stats = computed(() => {
   })
   const score = rows.value.length ? rows.value[rows.value.length - 1].acum : 0
   return { correctCount, incorrectCount, blankCount, score }
+})
+
+const missingSummary = computed(() => {
+  const total = totalQuestions.value
+  const missingCorrect = correctCells.slice(0, total).filter(c => !normalizeCell(c)).length
+  const missingAnswers = answerCells.slice(0, total).filter(c => !normalizeCell(c)).length
+  return { missingCorrect, missingAnswers }
+})
+
+const subjectSummary = computed(() => {
+  const map = new Map()
+  rows.value.forEach((row) => {
+    const key = row.subject || 'Sin curso'
+    if (!map.has(key)) map.set(key, { subject: key, correct: 0, incorrect: 0, blank: 0, points: 0 })
+    const item = map.get(key)
+    if (row.status === 'correct') item.correct += 1
+    else if (row.status === 'incorrect') item.incorrect += 1
+    else item.blank += 1
+    item.points = Math.round((item.points + row.pts) * 1000) / 1000
+  })
+  return Array.from(map.values())
+})
+
+const filteredSesiones = computed(() => {
+  const needle = historySearch.value.trim().toLowerCase()
+  if (!needle) return verificador.sesiones.value
+  return verificador.sesiones.value.filter((s) => [
+    s.dni,
+    s.nombre,
+    s.proceso,
+    s.area,
+    s.programa,
+    s.aula,
+    s.tipo_prueba,
+    s.plantilla_name,
+  ].some(value => String(value || '').toLowerCase().includes(needle)))
 })
 
 // Mostrar tabla solo si hay al menos una respuesta ingresada (A-E o 1-5)
@@ -128,10 +193,29 @@ function normalizeCell(c) {
   return KEY_MAP[(c || '').toUpperCase()] || ''
 }
 
+function extractAnswerChars(text) {
+  return String(text || '')
+    .toUpperCase()
+    .split('')
+    .map(ch => KEY_MAP[ch])
+    .filter(Boolean)
+}
+
 function setCell(index, gridType, val) {
   // Guarda el carácter tal como lo ingresó el usuario (letra o número)
   if (gridType === 'correct') correctCells[index] = val
   else                        answerCells[index]  = val
+}
+
+function fillCellsFromText(gridType, text, startIndex = 0) {
+  const chars = extractAnswerChars(text)
+  if (!chars.length) return 0
+  const target = gridType === 'correct' ? correctCells : answerCells
+  const max = Math.min(totalQuestions.value, startIndex + chars.length)
+  for (let i = startIndex; i < max; i++) {
+    target[i] = chars[i - startIndex]
+  }
+  return max - startIndex
 }
 
 // ── Navegación de celdas ──────────────────────────────────────────────────────
@@ -150,6 +234,17 @@ function handleCellInput(e, index, gridType) {
       refs[index + 1]?.focus()
     })
   }
+}
+
+function handleCellPaste(e, index, gridType) {
+  const text = e.clipboardData?.getData('text') || ''
+  const chars = extractAnswerChars(text)
+  if (chars.length <= 1) return
+  e.preventDefault()
+  const filled = fillCellsFromText(gridType, text, index)
+  const refs = gridType === 'correct' ? correctRefs.value : answerRefs.value
+  const nextIndex = Math.min(index + filled, totalQuestions.value - 1)
+  nextTick(() => refs[nextIndex]?.focus())
 }
 
 function handleCellKeydown(e, index, gridType) {
@@ -216,6 +311,10 @@ async function guardar() {
     toast.showToast('Selecciona una plantilla antes de guardar', 'warning')
     return
   }
+  if (missingSummary.value.missingCorrect > 0) {
+    toast.showToast(`Completa la clave oficial: faltan ${missingSummary.value.missingCorrect} respuesta(s).`, 'warning')
+    return
+  }
 
   const payload = {
     plantilla_id:       selectedPlantilla.value.id,
@@ -279,6 +378,13 @@ function cargarSesion(sesion) {
   subTab.value = 'nueva'
 }
 
+function duplicarSesion(sesion) {
+  cargarSesion(sesion)
+  editingId.value = null
+  candidatoNombre.value = candidatoNombre.value ? `${candidatoNombre.value} (copia)` : ''
+  toast.showToast('Verificación duplicada como nueva', 'success')
+}
+
 async function eliminarSesion(id) {
   await verificador.deleteSesion(id)
   if (editingId.value === id) {
@@ -290,6 +396,64 @@ async function eliminarSesion(id) {
 function abrirHistorial() {
   subTab.value = 'historial'
   verificador.fetchSesiones()
+}
+
+function saveCorrectKey() {
+  if (!selectedPlantilla.value) {
+    toast.showToast('Selecciona una plantilla para guardar la clave', 'warning')
+    return
+  }
+  const key = correctCells.map(normalizeCell).join('').slice(0, totalQuestions.value)
+  if (!key.trim() || missingSummary.value.missingCorrect > 0) {
+    toast.showToast('Completa la clave correcta antes de guardarla', 'warning')
+    return
+  }
+  localStorage.setItem(savedKeyStorageId.value, key)
+  savedKeyVersion.value += 1
+  toast.showToast('Clave frecuente guardada', 'success')
+}
+
+function useSavedCorrectKey() {
+  const key = savedKeyStorageId.value ? localStorage.getItem(savedKeyStorageId.value) : ''
+  if (!key) {
+    toast.showToast('No hay clave guardada para esta plantilla', 'warning')
+    return
+  }
+  fillCellsFromText('correct', key)
+  toast.showToast('Clave frecuente cargada', 'success')
+}
+
+function exportHistoryCsv() {
+  const rowsToExport = filteredSesiones.value
+  if (!rowsToExport.length) {
+    toast.showToast('No hay verificaciones para exportar', 'warning')
+    return
+  }
+  const headers = ['Fecha', 'Proceso', 'DNI', 'Nombre', 'Area', 'Programa', 'Aula', 'Posicion', 'Tipo', 'Plantilla', 'Puntaje']
+  const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+  const lines = [
+    headers.map(escapeCsv).join(','),
+    ...rowsToExport.map(s => [
+      formatFecha(s.created_at),
+      s.proceso,
+      s.dni,
+      s.nombre,
+      s.area,
+      s.programa,
+      s.aula,
+      s.posicion,
+      s.tipo_prueba,
+      s.plantilla_name,
+      Number(s.score).toFixed(3),
+    ].map(escapeCsv).join(',')),
+  ]
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `historial-verificador-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 // ── PDF ───────────────────────────────────────────────────────────────────────
@@ -315,6 +479,10 @@ async function _loadLogo() {
 async function exportPdf() {
   if (!hasAnyAnswer.value) {
     toast.showToast('Ingresa respuestas antes de exportar', 'warning')
+    return
+  }
+  if (missingSummary.value.missingCorrect > 0) {
+    toast.showToast(`Completa la clave oficial: faltan ${missingSummary.value.missingCorrect} respuesta(s).`, 'warning')
     return
   }
 
@@ -612,33 +780,45 @@ function formatFecha(iso) {
     <!-- ══ SUB-TAB: NUEVA VERIFICACIÓN ══════════════════════════════════════════ -->
     <div v-if="subTab === 'nueva'" class="verificador__body">
 
-      <!-- Config row -->
-      <div class="vcard">
-        <div class="vcard__title">Configuración</div>
-        <div class="config-row">
-          <!-- Plantilla -->
-          <div class="config-field config-field--wide">
-            <label class="config-label">Plantilla de Ponderaciones</label>
-            <select v-model.number="selectedPlantillaId" class="config-select">
-              <option :value="null">Sin Plantilla</option>
-              <option v-for="p in plantillasList" :key="p.id" :value="p.id">
-                {{ p.name }}{{ p.area ? ` : ${p.area}` : '' }}
-              </option>
-            </select>
+      <!-- Control operativo -->
+      <div class="vcard vcard--control">
+        <div class="control-panel">
+          <div class="control-panel__main">
+            <div class="vcard__title">Configuración</div>
+            <div class="config-row">
+              <div class="config-field config-field--wide">
+                <label class="config-label">Plantilla de Ponderaciones</label>
+                <select v-model.number="selectedPlantillaId" class="config-select">
+                  <option :value="null">Sin Plantilla</option>
+                  <option v-for="p in plantillasList" :key="p.id" :value="p.id">
+                    {{ plantillaOptionLabel(p) }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="config-field">
+                <label class="config-label">Correcta ×</label>
+                <input v-model.number="correctValue" type="number" step="0.1" min="0" class="config-input" />
+              </div>
+              <div class="config-field">
+                <label class="config-label">Incorrecta ×</label>
+                <input v-model.number="incorrectValue" type="number" step="0.1" class="config-input" />
+              </div>
+              <div class="config-field">
+                <label class="config-label">Blanco ×</label>
+                <input v-model.number="blankValue" type="number" step="0.1" class="config-input" />
+              </div>
+            </div>
           </div>
 
-          <!-- Valores de puntuación -->
-          <div class="config-field">
-            <label class="config-label">Correcta ×</label>
-            <input v-model.number="correctValue" type="number" step="0.1" min="0" class="config-input" />
-          </div>
-          <div class="config-field">
-            <label class="config-label">Incorrecta ×</label>
-            <input v-model.number="incorrectValue" type="number" step="0.1" class="config-input" />
-          </div>
-          <div class="config-field">
-            <label class="config-label">Blanco ×</label>
-            <input v-model.number="blankValue" type="number" step="0.1" class="config-input" />
+          <div class="score-panel" :class="{ 'score-panel--empty': !hasAnyAnswer }">
+            <span class="score-panel__label">Puntaje</span>
+            <strong class="score-panel__value">{{ stats.score.toFixed(3) }}</strong>
+            <div class="score-panel__meta">
+              <span class="score-chip score-chip--correct">{{ stats.correctCount }} C</span>
+              <span class="score-chip score-chip--incorrect">{{ stats.incorrectCount }} I</span>
+              <span class="score-chip score-chip--blank">{{ stats.blankCount }} B</span>
+            </div>
           </div>
         </div>
 
@@ -701,7 +881,6 @@ function formatFecha(iso) {
               v-for="i in totalQuestions"
               :key="`c-${i}`"
               class="cell-wrapper"
-              :class="`cell-wrapper--${rows[i-1]?.status ?? 'blank'}`"
             >
               <span class="cell-num">{{ i }}</span>
               <input
@@ -709,10 +888,11 @@ function formatFecha(iso) {
                 :value="correctCells[i-1]"
                 type="text"
                 maxlength="1"
-                class="cell-input cell-input--correct"
+                class="cell-input cell-input--key"
                 autocomplete="off"
                 @input="e => handleCellInput(e, i-1, 'correct')"
                 @keydown="e => handleCellKeydown(e, i-1, 'correct')"
+                @paste="e => handleCellPaste(e, i-1, 'correct')"
               />
             </div>
           </div>
@@ -739,8 +919,36 @@ function formatFecha(iso) {
                 autocomplete="off"
                 @input="e => handleCellInput(e, i-1, 'answer')"
                 @keydown="e => handleCellKeydown(e, i-1, 'answer')"
+                @paste="e => handleCellPaste(e, i-1, 'answer')"
               />
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Utilidades -->
+      <div class="helper-row">
+        <div class="helper-panel">
+          <div>
+            <strong>Clave frecuente</strong>
+            <span>Guarda o reutiliza la clave correcta para la plantilla seleccionada.</span>
+          </div>
+          <div class="helper-actions">
+            <button type="button" class="btn btn--outline" @click="useSavedCorrectKey" :disabled="!hasSavedCorrectKey">
+              Usar clave
+            </button>
+            <button type="button" class="btn btn--ghost" @click="saveCorrectKey">
+              Guardar clave
+            </button>
+          </div>
+        </div>
+        <div class="helper-panel helper-panel--validation">
+          <div>
+            <strong>Validación</strong>
+            <span>
+              {{ missingSummary.missingCorrect }} clave(s) faltante(s) ·
+              {{ missingSummary.missingAnswers }} respuesta(s) faltante(s)
+            </span>
           </div>
         </div>
       </div>
@@ -774,36 +982,62 @@ function formatFecha(iso) {
         </div>
 
         <!-- Tabla detalle -->
-        <div class="detail-table-wrap">
-          <table class="detail-table">
-            <thead>
-              <tr>
-                <th>N°</th>
-                <th>Curso</th>
-                <th>Marc.</th>
-                <th>Corr.</th>
-                <th>Pond.</th>
-                <th>Pts</th>
-                <th>Acum.</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="row in rows"
-                :key="row.n"
-                :class="['detail-row', `detail-row--${row.status}`, { 'detail-row--last': row.n === rows.length }]"
-              >
-                <td class="cell-n">{{ row.n }}</td>
-                <td class="cell-subject">{{ row.subject || '—' }}</td>
-                <td class="cell-marked" :class="`marked--${row.status}`">{{ row.marked }}</td>
-                <td class="cell-correct">{{ row.correct }}</td>
-                <td class="cell-weight">{{ row.weight.toFixed(3) }}</td>
-                <td class="cell-pts">{{ row.pts.toFixed(3) }}</td>
-                <td class="cell-acum">{{ row.acum.toFixed(3) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <details class="result-details" open>
+          <summary>
+            <span>Detalle por pregunta</span>
+            <strong>{{ rows.length }} preguntas</strong>
+          </summary>
+          <div class="detail-table-wrap detail-table-wrap--columns">
+            <table
+              v-for="(columnRows, columnIndex) in detailColumns"
+              :key="`detail-col-${columnIndex}`"
+              class="detail-table detail-table--compact"
+            >
+              <thead>
+                <tr>
+                  <th>N°</th>
+                  <th>Curso</th>
+                  <th>Marc.</th>
+                  <th>Corr.</th>
+                  <th>Pond.</th>
+                  <th>Pts</th>
+                  <th>Acum.</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="row in columnRows"
+                  :key="row.n"
+                  :class="['detail-row', `detail-row--${row.status}`, { 'detail-row--last': row.n === rows.length }]"
+                >
+                  <td class="cell-n">{{ row.n }}</td>
+                  <td class="cell-subject">{{ row.subject || '—' }}</td>
+                  <td class="cell-marked" :class="`marked--${row.status}`">{{ row.marked }}</td>
+                  <td class="cell-correct">{{ row.correct }}</td>
+                  <td class="cell-weight">{{ row.weight.toFixed(3) }}</td>
+                  <td class="cell-pts">{{ row.pts.toFixed(3) }}</td>
+                  <td class="cell-acum">{{ row.acum.toFixed(3) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+
+        <details class="result-details subject-details">
+          <summary>
+            <span>Resumen por curso</span>
+            <strong>{{ subjectSummary.length }} curso(s)</strong>
+          </summary>
+          <div class="subject-summary">
+            <div v-for="item in subjectSummary" :key="item.subject" class="subject-item">
+              <span class="subject-item__name">{{ item.subject }}</span>
+              <span class="subject-pill subject-pill--correct">{{ item.correct }}</span>
+              <span class="subject-pill subject-pill--incorrect">{{ item.incorrect }}</span>
+              <span class="subject-pill subject-pill--blank">{{ item.blank }}</span>
+              <strong>{{ item.points.toFixed(3) }}</strong>
+            </div>
+          </div>
+        </details>
       </div>
 
       <!-- Acciones -->
@@ -837,6 +1071,17 @@ function formatFecha(iso) {
 
     <!-- ══ SUB-TAB: HISTORIAL ════════════════════════════════════════════════════ -->
     <div v-else class="verificador__body">
+      <div class="history-toolbar">
+        <input
+          v-model="historySearch"
+          type="search"
+          class="history-search"
+          placeholder="Buscar por DNI, nombre, proceso, área o plantilla"
+        />
+        <button type="button" class="btn btn--outline" @click="exportHistoryCsv">
+          Exportar CSV
+        </button>
+      </div>
       <div v-if="verificador.loading.value" class="empty-state">
         Cargando historial...
       </div>
@@ -844,17 +1089,23 @@ function formatFecha(iso) {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3" stroke-linecap="round"/></svg>
         <p>No hay verificaciones guardadas</p>
       </div>
+      <div v-else-if="!filteredSesiones.length" class="empty-state">
+        No hay verificaciones que coincidan con la búsqueda
+      </div>
       <div v-else class="history-list">
         <div
-          v-for="s in verificador.sesiones.value"
+          v-for="s in filteredSesiones"
           :key="s.id"
           class="history-item"
           :class="{ 'history-item--active': editingId === s.id }"
         >
+          <div class="history-item__scorebox">
+            <span>Puntaje</span>
+            <strong>{{ Number(s.score).toFixed(3) }}</strong>
+          </div>
           <div class="history-item__info">
             <div class="history-item__top">
               <span class="history-item__plantilla">{{ s.plantilla_name || 'Sin plantilla' }}</span>
-              <span class="history-item__score">{{ Number(s.score).toFixed(3) }} pts</span>
             </div>
             <div v-if="s.proceso" class="history-item__proceso">{{ s.proceso }}</div>
             <div class="history-item__mid">
@@ -870,6 +1121,9 @@ function formatFecha(iso) {
             <div class="history-item__date">{{ formatFecha(s.created_at) }}</div>
           </div>
           <div class="history-item__actions">
+            <button type="button" class="btn-icon btn-icon--copy" title="Duplicar" @click="duplicarSesion(s)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
             <button type="button" class="btn-icon btn-icon--load" title="Cargar" @click="cargarSesion(s)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
@@ -970,6 +1224,7 @@ function formatFecha(iso) {
   padding: var(--space-5);
 }
 .vcard--grid { padding: var(--space-4); }
+.vcard--control { padding: var(--space-4); }
 
 .vcard__title {
   font-size: 0.78rem;
@@ -979,8 +1234,82 @@ function formatFecha(iso) {
   color: var(--slate-500);
   margin-bottom: var(--space-3);
 }
-.vcard__title--correct { color: #15803d; }
+.vcard__title--correct { color: #2563eb; }
 .vcard__title--answer  { color: var(--unap-blue-700); }
+
+/* ── Control operativo ─────────────────────────────────────────────────────── */
+.control-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+.control-panel__main {
+  min-width: 0;
+}
+
+.score-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-md);
+  background: #fffbeb;
+  min-height: 112px;
+}
+
+.score-panel--empty {
+  border-color: var(--slate-200);
+  background: var(--slate-50);
+}
+
+.score-panel__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.score-panel--empty .score-panel__label {
+  color: var(--slate-500);
+}
+
+.score-panel__value {
+  font-size: 2rem;
+  line-height: 1;
+  color: #92400e;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-panel--empty .score-panel__value {
+  color: var(--slate-500);
+}
+
+.score-panel__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.score-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 800;
+  background: white;
+  border: 1px solid transparent;
+}
+
+.score-chip--correct { color: #15803d; border-color: #bbf7d0; }
+.score-chip--incorrect { color: #dc2626; border-color: #fecaca; }
+.score-chip--blank { color: var(--slate-500); border-color: var(--slate-200); }
 
 /* ── Config (plantilla + valores) ────────────────────────────────────────────── */
 .config-row {
@@ -1118,8 +1447,9 @@ function formatFecha(iso) {
 }
 
 .cell-num {
-  font-size: 0.6rem;
-  color: var(--slate-400);
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--slate-600);
   line-height: 1;
 }
 
@@ -1136,6 +1466,7 @@ function formatFecha(iso) {
   cursor: text;
   transition: all 0.1s;
   caret-color: transparent;
+  min-width: 0;
 }
 .cell-input:focus {
   outline: none;
@@ -1149,8 +1480,54 @@ function formatFecha(iso) {
 .cell-input--incorrect { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
 .cell-input--blank     { background: var(--slate-50); }
 
-/* La celda de claves correctas siempre neutral */
-.cell-input--correct-grid { background: #eff6ff; border-color: #93c5fd; color: #1e40af; }
+/* La celda de claves correctas siempre azul, igual que la columna Corr. */
+.cell-input--key {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+/* ── Utilidades del verificador ─────────────────────────────────────────────── */
+.helper-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
+  gap: var(--space-3);
+}
+
+.helper-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-lg);
+  background: white;
+}
+
+.helper-panel strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 0.86rem;
+  color: var(--slate-800);
+}
+
+.helper-panel span {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--slate-500);
+}
+
+.helper-panel--validation {
+  background: var(--slate-50);
+}
+
+.helper-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
 
 /* ── Stats bar ──────────────────────────────────────────────────────────────── */
 .stats-bar {
@@ -1177,24 +1554,132 @@ function formatFecha(iso) {
   gap: var(--space-3);
   font-size: 0.75rem;
   color: var(--slate-500);
+  flex-wrap: wrap;
 }
 
 /* ── Tabla detalle ──────────────────────────────────────────────────────────── */
+.result-details {
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.result-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  color: var(--slate-700);
+  background: var(--slate-50);
+  font-size: 0.84rem;
+  font-weight: 700;
+  list-style: none;
+}
+
+.result-details > summary::-webkit-details-marker { display: none; }
+.result-details > summary::after {
+  content: '+';
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  color: var(--unap-blue-700);
+  background: white;
+  border: 1px solid var(--slate-200);
+  font-weight: 800;
+}
+.result-details[open] > summary::after { content: '-'; }
+.result-details > summary strong {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--slate-500);
+  font-weight: 700;
+}
+
 .detail-table-wrap {
   overflow-x: auto;
   max-height: none;
   overflow-y: visible;
+}
+
+.detail-table-wrap--columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(430px, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: white;
+}
+
+.subject-details {
+  margin-top: var(--space-3);
+}
+
+.subject-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: white;
+}
+
+.subject-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 34px) 72px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--slate-200);
   border-radius: var(--radius-md);
+  background: var(--slate-50);
 }
+
+.subject-item__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--slate-700);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subject-item strong {
+  text-align: right;
+  color: #92400e;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.subject-pill {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  height: 22px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.subject-pill--correct { color: #15803d; background: #dcfce7; }
+.subject-pill--incorrect { color: #dc2626; background: #fee2e2; }
+.subject-pill--blank { color: var(--slate-600); background: #e2e8f0; }
+
 .detail-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.8rem;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
 }
+.detail-table--compact { table-layout: fixed; }
 .detail-table thead tr { background: var(--unap-blue-900); }
 .detail-table th {
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2);
   text-align: left;
   color: white;
   font-size: 0.72rem;
@@ -1202,29 +1687,70 @@ function formatFecha(iso) {
   white-space: nowrap;
 }
 .detail-table td {
-  padding: 5px var(--space-3);
+  padding: 5px var(--space-2);
   border-bottom: 1px solid var(--slate-100);
   white-space: nowrap;
   font-size: 0.88rem;
 }
-.detail-row:hover td { background: var(--slate-50); }
+.detail-table th:nth-child(1),
+.detail-table td:nth-child(1) { width: 38px; text-align: center; }
+.detail-table th:nth-child(2),
+.detail-table td:nth-child(2) { width: auto; }
+.detail-table th:nth-child(3),
+.detail-table td:nth-child(3),
+.detail-table th:nth-child(4),
+.detail-table td:nth-child(4) { width: 52px; text-align: center; }
+.detail-table th:nth-child(5),
+.detail-table td:nth-child(5),
+.detail-table th:nth-child(6),
+.detail-table td:nth-child(6),
+.detail-table th:nth-child(7),
+.detail-table td:nth-child(7) { width: 76px; text-align: right; }
+
+.detail-row--correct td { background: #f0fdf4; }
+.detail-row--incorrect td { background: #fff1f2; }
+.detail-row--blank td { background: var(--slate-50); }
+.detail-row:hover td { filter: brightness(0.98); }
 
 /* Última fila — solo el acumulado en dorado */
 .detail-row--last .cell-acum {
   background: #fef3c7;
   color: #92400e;
   font-weight: 800;
-  font-size: 1rem;
 }
 
-.cell-n       { color: var(--slate-400); font-size: 0.75rem; }
-.cell-subject { color: var(--slate-600); }
-.cell-correct { color: #2563eb; font-weight: 700; }
+.cell-n {
+  color: var(--slate-500);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.cell-subject {
+  color: var(--slate-700);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cell-correct {
+  color: #2563eb;
+  font-weight: 800;
+  background: #dbeafe !important;
+}
 .cell-weight, .cell-pts, .cell-acum { font-family: monospace; color: var(--slate-700); }
 
-.marked--correct   { color: #15803d; font-weight: 700; }
-.marked--incorrect { color: #dc2626; font-weight: 700; }
-.marked--blank     { color: var(--slate-400); }
+.marked--correct {
+  color: #15803d;
+  font-weight: 800;
+  background: #dcfce7 !important;
+}
+.marked--incorrect {
+  color: #dc2626;
+  font-weight: 800;
+  background: #fee2e2 !important;
+}
+.marked--blank {
+  color: var(--slate-500);
+  font-weight: 800;
+  background: #e2e8f0 !important;
+}
 
 /* ── Acciones ───────────────────────────────────────────────────────────────── */
 .actions-bar {
@@ -1260,6 +1786,32 @@ function formatFecha(iso) {
 .btn--primary:hover:not(:disabled) { background: var(--unap-blue-700); }
 
 /* ── Historial ──────────────────────────────────────────────────────────────── */
+.history-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-lg);
+  background: white;
+}
+
+.history-search {
+  flex: 1;
+  min-width: 180px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  color: var(--slate-800);
+  font: inherit;
+}
+
+.history-search:focus {
+  outline: none;
+  border-color: var(--unap-blue-400);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -1293,6 +1845,36 @@ function formatFecha(iso) {
 }
 .history-item:hover { border-color: var(--slate-300); }
 
+.history-item__scorebox {
+  width: 116px;
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid #fde68a;
+  border-radius: var(--radius-md);
+  background: #fffbeb;
+  flex-shrink: 0;
+}
+
+.history-item__scorebox span {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.history-item__scorebox strong {
+  font-size: 1.05rem;
+  line-height: 1;
+  color: #92400e;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .history-item__info { flex: 1; min-width: 0; }
 
 .history-item__top {
@@ -1306,11 +1888,6 @@ function formatFecha(iso) {
   font-size: 0.88rem;
   font-weight: 600;
   color: var(--slate-800);
-}
-.history-item__score {
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: #ca8a04;
 }
 .history-item__proceso {
   font-size: 0.72rem;
@@ -1361,6 +1938,8 @@ function formatFecha(iso) {
   transition: all 0.15s;
 }
 .btn-icon svg { width: 15px; height: 15px; }
+.btn-icon--copy { color: var(--slate-600); }
+.btn-icon--copy:hover { background: var(--slate-50); border-color: var(--slate-300); }
 .btn-icon--load { color: var(--unap-blue-600); }
 .btn-icon--load:hover { background: var(--unap-blue-50); border-color: var(--unap-blue-300); }
 .btn-icon--delete { color: #dc2626; }
@@ -1368,9 +1947,40 @@ function formatFecha(iso) {
 
 @media (max-width: 1100px) {
   .grids-row { grid-template-columns: 1fr; }
+  .control-panel { grid-template-columns: 1fr; }
+  .score-panel { min-height: 0; }
+  .detail-table-wrap--columns { grid-template-columns: minmax(430px, 1fr); }
+  .helper-row { grid-template-columns: 1fr; }
 }
 
 @media (min-width: 1100px) {
   .answer-grid { grid-template-columns: repeat(10, minmax(30px, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .history-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .history-item__scorebox {
+    width: auto;
+    min-height: 0;
+  }
+  .history-item__actions {
+    justify-content: flex-end;
+  }
+  .actions-right {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+  .helper-panel,
+  .history-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .helper-actions {
+    justify-content: flex-start;
+  }
 }
 </style>

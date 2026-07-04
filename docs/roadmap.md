@@ -52,6 +52,7 @@ Riesgo conocido:
 - Ya se alineo el camino del proceso desde la creacion hasta claves, ponderaciones, calificacion, resultados, historial y dashboard.
 - Ya se implemento el stepper con estados, descripciones y acciones para los pasos 1 al 5.
 - Ya se agregaron paneles de verificacion para padron, identificadores, respuestas, claves y resultados.
+- Ya se mejoro el verificador manual como herramienta auxiliar independiente: pegado masivo, clave frecuente, validacion, resumen por curso, tabla en dos columnas, busqueda, duplicado y export CSV.
 - Pendiente inmediato: seguir afinando el modal si la densidad visual sigue alta en uso real.
 
 ## Prioridad 6 - Modelo De Convocatoria
@@ -73,6 +74,7 @@ Trabajo actual:
 - Claves, ponderaciones, modal de calificacion, resultados, historial y dashboard ya respetan ese camino.
 - Stepper de pasos 1 al 5 ya muestra estados `Listo`, `Revisar` y `Pendiente`, con accion contextual.
 - Paneles de verificacion ya resumen estado, observaciones y faltantes en padron, identificadores, respuestas, claves y resultados.
+- Verificador manual ya cuenta con mejoras visuales y operativas sin afectar el core del flujo principal.
 - Tests unitarios agregados para stepper, paneles compartidos, insignia de camino, claves, respuestas, parsers y calculo.
 
 Siguiente paso recomendado:

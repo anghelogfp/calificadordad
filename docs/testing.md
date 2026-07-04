@@ -52,7 +52,7 @@ Notas del entorno:
 
 - Se instalo `frontend/node_modules` con `npm install`.
 - Se creo `.venv` local y se instalaron dependencias Python desde `requirements.txt`.
-- `npm ci` fallaba porque `package-lock.json` no estaba sincronizado; `npm install` actualizo el lockfile.
+- `npm ci` fallo previamente porque `package-lock.json` no estaba sincronizado; `npm install` actualizo el lockfile y CI usa `npm ci`.
 - Vite/Vitest requirieron ejecucion fuera del sandbox local por `spawn EPERM`.
 - En esta iteracion se corrigio un error de render del modal al tratar `processAreas` como arreglo directo en vez de `ref/computed`.
 - La documentacion fue actualizada despues del commit `6b61871`; no se ejecuto una nueva corrida completa de tests durante esta actualizacion documental.
