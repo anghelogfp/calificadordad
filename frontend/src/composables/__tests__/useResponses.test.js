@@ -222,3 +222,19 @@ describe('useResponses.responsesByDni', () => {
     expect(responses.responsesByDni.value.has('')).toBe(false)
   })
 })
+
+describe('useResponses.observationSummary', () => {
+  it('agrupa blancos finales asumidos sin perder el total de posiciones', () => {
+    const responses = makeSubject()
+    responses.rows.value = [
+      { id: '1', observaciones: 'Blancos finales asumidos (5)' },
+      { id: '2', observaciones: 'Blancos finales asumidos (2)' },
+      { id: '3', observaciones: 'Tipo no vinculado' },
+    ]
+
+    expect(responses.observationSummary.value).toEqual(expect.arrayContaining([
+      { label: 'Blancos finales asumidos (7 posiciones)', count: 2 },
+      { label: 'Tipo no vinculado', count: 1 },
+    ]))
+  })
+})

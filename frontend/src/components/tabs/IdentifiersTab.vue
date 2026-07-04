@@ -8,11 +8,14 @@ import SubTabs from '@/components/shared/SubTabs.vue'
 import DataTable from '@/components/shared/DataTable.vue'
 import SourcesPanel from '@/components/shared/SourcesPanel.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import StepVerificationPanel from '@/components/shared/StepVerificationPanel.vue'
 
 const props = defineProps({
   identifiers: { type: Object, required: true },
   subTab:      { type: String, required: true },
   reconciliation: { type: Object, default: null },
+  processType: { type: String, default: 'simulacro' },
+  simulacroScope: { type: String, default: '' },
 })
 
 const emit = defineEmits(['update:subTab'])
@@ -117,6 +120,8 @@ function getRowClass(row) {
       :count="identifiers.totalRows"
       count-label="registros cargados"
       :ready="identifiers.identifierHasData"
+      :process-type="processType"
+      :simulacro-scope="simulacroScope"
     >
       <template #icon>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -153,45 +158,39 @@ function getRowClass(row) {
       {{ identifiers.importError }}
     </div>
 
-    <section
+    <StepVerificationPanel
       v-if="(reconciliation && (reconciliation.padronTotal || reconciliation.identifiersTotal)) || identifiers.observationCount"
-      class="step-state-panel"
-      :class="`step-state-panel--${stepState.variant}`"
+      eyebrow="Verificación de identificadores"
+      :title="stepState.title"
     >
-      <div class="step-state-panel__header">
-        <div>
-          <span class="step-state-panel__eyebrow">Estado del paso</span>
-          <h3>{{ stepState.title }}</h3>
-        </div>
-        <div v-if="identifiers.observationCount" class="step-state-panel__actions">
+      <template v-if="identifiers.observationCount" #actions>
           <button type="button" class="btn btn--ghost" @click="showOnlyObserved = !showOnlyObserved">
             {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
           </button>
           <button type="button" class="btn btn--primary" @click="identifiers.exportIdentifierObservationsToExcel">
             Exportar observados
           </button>
-        </div>
-      </div>
+      </template>
 
-      <div v-if="reconciliation && (reconciliation.padronTotal || reconciliation.identifiersTotal)" class="step-state-panel__chips">
-        <span class="step-state-chip"><strong>{{ reconciliation.matchedCandidates }}</strong> con identificador</span>
-        <span class="step-state-chip"><strong>{{ reconciliation.missingIdentifiers }}</strong> sin identificador</span>
-        <span class="step-state-chip"><strong>{{ reconciliation.identifiersWithoutCandidate }}</strong> fuera del padrón</span>
-        <span class="step-state-chip"><strong>{{ reconciliation.duplicateIdentifierDnis }}</strong> DNI duplicados</span>
-        <span class="step-state-chip"><strong>{{ reconciliation.duplicateMatchKeys }}</strong> lecturas/litho duplicados</span>
-      </div>
+      <template v-if="reconciliation && (reconciliation.padronTotal || reconciliation.identifiersTotal)" #chips>
+        <span class="verification-chip verification-chip--ok"><strong>{{ reconciliation.matchedCandidates }}</strong> con identificador</span>
+        <span class="verification-chip" :class="reconciliation.missingIdentifiers ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.missingIdentifiers }}</strong> sin identificador</span>
+        <span class="verification-chip" :class="reconciliation.identifiersWithoutCandidate ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.identifiersWithoutCandidate }}</strong> fuera del padrón</span>
+        <span class="verification-chip" :class="reconciliation.duplicateIdentifierDnis ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.duplicateIdentifierDnis }}</strong> DNI duplicados</span>
+        <span class="verification-chip" :class="reconciliation.duplicateMatchKeys ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.duplicateMatchKeys }}</strong> lecturas/litho duplicados</span>
+      </template>
 
-      <div v-if="identifiers.observationCount" class="step-state-panel__detail">
-        <span v-for="item in identifiers.observationSummary" :key="item.label" class="step-state-chip step-state-chip--warn">
+      <template v-if="identifiers.observationCount" #detail>
+        <span v-for="item in identifiers.observationSummary" :key="item.label" class="verification-chip verification-chip--warn">
           <strong>{{ item.count }}</strong> {{ item.label }}
         </span>
-      </div>
+      </template>
 
-      <p class="step-state-panel__hint">
+      <template #hint>
         Este cruce confirma si los DNI del archivo de identificación corresponden al padrón cargado en el Paso 1.
         <span v-if="identifiers.observationCount">Corrige los campos en la tabla si cambia DNI, lectura, aula o tipo.</span>
-      </p>
-    </section>
+      </template>
+    </StepVerificationPanel>
 
     <!-- Confirmación inline -->
     <div v-if="pendingAction" class="confirm-banner">

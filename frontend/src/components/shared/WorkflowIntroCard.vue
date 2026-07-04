@@ -1,4 +1,6 @@
 <script setup>
+import ProcessPathBadge from './ProcessPathBadge.vue'
+
 defineProps({
   eyebrow: { type: String, default: '' },
   title: { type: String, required: true },
@@ -6,6 +8,8 @@ defineProps({
   count: { type: Number, default: 0 },
   countLabel: { type: String, default: 'registros' },
   ready: { type: Boolean, default: false },
+  processType: { type: String, default: '' },
+  simulacroScope: { type: String, default: '' },
 })
 </script>
 
@@ -16,7 +20,14 @@ defineProps({
         <div class="workflow-card__icon"><slot name="icon" /></div>
         <div>
           <span v-if="eyebrow" class="workflow-card__eyebrow">{{ eyebrow }}</span>
-          <h2>{{ title }}</h2>
+          <div class="workflow-card__title-row">
+            <h2>{{ title }}</h2>
+            <ProcessPathBadge
+              v-if="processType"
+              :process-type="processType"
+              :simulacro-scope="simulacroScope"
+            />
+          </div>
           <p>{{ description }}</p>
         </div>
       </div>
@@ -52,6 +63,12 @@ defineProps({
   font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
 }
 .workflow-card h2 { margin: 0; color: var(--slate-900); font-size: 1.2rem; line-height: 1.25; }
+.workflow-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
 .workflow-card__identity p { margin: 3px 0 0; color: var(--slate-500); font-size: 0.82rem; }
 .workflow-card__status {
   display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0;

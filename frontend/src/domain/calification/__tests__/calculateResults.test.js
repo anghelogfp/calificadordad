@@ -153,6 +153,7 @@ describe('calculateAreaResults', () => {
           subject: 'Verbal',
           weight: 1,
           answer: '',
+          blankSource: 'assumed-final',
           correctAnswer: 'C',
           status: 'blank',
           score: 2,

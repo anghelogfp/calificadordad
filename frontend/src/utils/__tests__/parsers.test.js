@@ -223,7 +223,7 @@ describe('buildResponseObservation', () => {
     expect(obs).toContain('Respuestas con marcas no válidas')
   })
 
-  it('detecta respuestas muy cortas', () => {
+  it('detecta blancos finales asumidos cuando la línea de respuestas es corta', () => {
     const row = {
       answers: 'ABCD',
       dni: '12345678',
@@ -231,7 +231,7 @@ describe('buildResponseObservation', () => {
       litho: '123456',
     }
     const obs = buildResponseObservation(row, DEFAULT_DAT_FORMAT)
-    expect(obs).toContain('Cadena incompleta')
+    expect(obs).toContain('Blancos finales asumidos (56)')
   })
 
   it('detecta respuestas vacías', () => {

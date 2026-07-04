@@ -368,13 +368,27 @@ async function handleLoadProcess(process) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function getStepStatus(key) {
-  if (key === TAB_KEYS.ARCHIVES) return archives.rows.value.length > 0 ? 'completed' : ''
-  if (key === TAB_KEYS.IDENTIFIERS) return identifiers.rows.value.length > 0 ? 'completed' : ''
-  if (key === TAB_KEYS.RESPONSES) return responses.rows.value.length > 0 ? 'completed' : ''
-  if (key === TAB_KEYS.ANSWER_KEYS) return answerKeys.rows.value.length > 0 ? 'completed' : ''
-  if (key === TAB_KEYS.PONDERATIONS) return ponderations.ponderationRows.value.length > 0 ? 'completed' : ''
-  if (key === TAB_KEYS.RESULTS || key === TAB_KEYS.SCORES) return calification.calificationHasResults.value ? 'completed' : ''
-  return ''
+  if (key === TAB_KEYS.ARCHIVES) return archives.rows.value.length > 0 ? 'completed' : 'pending'
+  if (key === TAB_KEYS.IDENTIFIERS) {
+    if (identifiers.rows.value.length === 0) return 'pending'
+    return identifierReconciliation.value.issues > 0 ? 'warning' : 'completed'
+  }
+  if (key === TAB_KEYS.RESPONSES) {
+    if (responses.rows.value.length === 0) return 'pending'
+    return responseReconciliation.value.issues > 0 ? 'warning' : 'completed'
+  }
+  if (key === TAB_KEYS.ANSWER_KEYS) {
+    if (answerKeyReconciliation.value.status === 'ok') return 'completed'
+    if (answerKeys.rows.value.length > 0 && answerKeyReconciliation.value.status === 'warn') return 'warning'
+    return 'pending'
+  }
+  if (key === TAB_KEYS.RESULTS || key === TAB_KEYS.SCORES) {
+    if (calification.calificationHasResults.value) return 'completed'
+    if (calification.preflightCheck.value.hasBlockers) return 'pending'
+    if (calification.preflightCheck.value.hasWarnings) return 'warning'
+    return 'pending'
+  }
+  return 'pending'
 }
 
 function getStepLabel(key) {
@@ -387,27 +401,54 @@ function getStepLabel(key) {
 function getStepDescription(key) {
   if (key === TAB_KEYS.ARCHIVES) {
     const n = archives.rows.value.length
-    return n > 0 ? `${n} postulantes` : 'Sin cargar'
+    return n > 0 ? `${n} postulantes cargados` : 'Base obligatoria'
   }
   if (key === TAB_KEYS.IDENTIFIERS) {
     const n = identifiers.rows.value.length
-    return n > 0 ? `${n} registros` : 'Sin cargar'
+    if (n === 0) return 'Vincula aula y lectura'
+    return identifierReconciliation.value.issues > 0 ? `${n} registros con observaciones` : `${n} registros listos`
   }
   if (key === TAB_KEYS.RESPONSES) {
     const n = responses.rows.value.length
-    return n > 0 ? `${n} respuestas` : 'Sin cargar'
+    if (n === 0) return 'Necesarias para calificar'
+    return responseReconciliation.value.issues > 0 ? `${n} respuestas con observaciones` : `${n} respuestas listas`
   }
   if (key === TAB_KEYS.ANSWER_KEYS) {
-    const n = answerKeys.rows.value.length
-    return n > 0 ? `${n} claves` : 'Sin cargar'
-  }
-  if (key === TAB_KEYS.PONDERATIONS) {
-    const n = ponderations.plantillas.value.length
-    return n > 0 ? `${n} plantilla${n !== 1 ? 's' : ''}` : 'Sin configurar'
+    const { keysTotal, missingPairs, incompleteKeys, duplicatePairs } = answerKeyReconciliation.value
+    const issues = missingPairs.length + incompleteKeys + duplicatePairs
+    if (keysTotal === 0) return 'Sin claves cargadas'
+    return issues > 0 ? `${keysTotal} claves, ${issues} observación(es)` : `${keysTotal} claves listas`
   }
   if (key === TAB_KEYS.RESULTS || key === TAB_KEYS.SCORES) {
     const processAreas = calification.processAreas.value
-    return processAreas.length > 0 ? `${processAreas.length} área(s) calculada(s)` : 'Sin calificar'
+    if (processAreas.length > 0) return `${processAreas.length} área(s) calculada(s)`
+    if (calification.preflightCheck.value.hasBlockers) return 'Hay faltantes obligatorios'
+    if (calification.preflightCheck.value.hasWarnings) return 'Listo con observaciones'
+    return 'Pendiente de cálculo'
+  }
+  return ''
+}
+
+function getStepAction(key) {
+  if (key === TAB_KEYS.ARCHIVES) {
+    return archives.rows.value.length > 0 ? 'Revisar padrón' : 'Cargar padrón Excel'
+  }
+  if (key === TAB_KEYS.IDENTIFIERS) {
+    if (identifiers.rows.value.length === 0) return 'Cargar identificadores'
+    return identifierReconciliation.value.issues > 0 ? 'Revisar cruces' : 'Continuar'
+  }
+  if (key === TAB_KEYS.RESPONSES) {
+    if (responses.rows.value.length === 0) return 'Cargar respuestas'
+    return responseReconciliation.value.issues > 0 ? 'Revisar vinculaciones' : 'Continuar'
+  }
+  if (key === TAB_KEYS.ANSWER_KEYS) {
+    if (answerKeys.rows.value.length === 0) return 'Cargar claves'
+    return answerKeyReconciliation.value.issues > 0 ? 'Corregir faltantes' : 'Continuar'
+  }
+  if (key === TAB_KEYS.RESULTS || key === TAB_KEYS.SCORES) {
+    if (calification.calificationHasResults.value) return 'Revisar resultados'
+    if (calification.preflightCheck.value.hasBlockers) return 'Resolver faltantes'
+    return 'Calcular puntajes'
   }
   return ''
 }
@@ -520,6 +561,7 @@ watch(
           :get-step-status="getStepStatus"
           :get-step-label="getStepLabel"
           :get-step-description="getStepDescription"
+          :get-step-action="getStepAction"
           @update:active-tab="activeTab = $event"
         />
 
@@ -566,6 +608,8 @@ watch(
             v-else-if="activeTab === TAB_KEYS.ARCHIVES"
             :archives="archives"
             :area-names="areas.areaNames.value"
+            :process-type="calification.processType.value"
+            :simulacro-scope="calification.simulacroScope.value"
             @go-config="activeTab = 'config'"
           />
 
@@ -574,6 +618,8 @@ watch(
             :identifiers="identifiers"
             :sub-tab="identifierSubTab"
             :reconciliation="identifierReconciliation"
+            :process-type="calification.processType.value"
+            :simulacro-scope="calification.simulacroScope.value"
             @update:sub-tab="identifierSubTab = $event"
           />
 
@@ -584,6 +630,8 @@ watch(
             :identifiers-loaded="identifiers.rows.value.length > 0"
             :linked-count="linkedResponsesCount"
             :reconciliation="responseReconciliation"
+            :process-type="calification.processType.value"
+            :simulacro-scope="calification.simulacroScope.value"
             @update:sub-tab="responsesSubTab = $event"
           />
 

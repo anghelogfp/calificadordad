@@ -6,6 +6,8 @@ import Toolbar from '@/components/shared/Toolbar.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import CandidateDetailModal from '@/components/shared/CandidateDetailModal.vue'
 import PaginationBar from '@/components/shared/PaginationBar.vue'
+import StepVerificationPanel from '@/components/shared/StepVerificationPanel.vue'
+import ProcessPathBadge from '@/components/shared/ProcessPathBadge.vue'
 
 const props = defineProps({
   calification: { type: Object, required: true },
@@ -300,6 +302,8 @@ function handleExportIngresantesPdf() {
       title="Calificación Final"
       :description="`Genera los puntajes para ${processModeLabel.toLowerCase()}. ${processModeDescription}`"
       variant="gold"
+      :process-type="calification.activeProcess?.type ?? 'simulacro'"
+      :simulacro-scope="calification.activeProcess?.simulacroScope ?? ''"
       :stats="calification.calificationHasResults
         ? calification.processAreas.map(area => ({
             value: (calification.activeProcess?.areas?.[area]?.results?.length ?? 0),
@@ -345,7 +349,13 @@ function handleExportIngresantesPdf() {
       <header class="results-header">
         <div class="results-header__identity">
           <span class="results-header__eyebrow">Resultados de calificación</span>
-          <h2>{{ calification.processName || 'Proceso sin nombre' }}</h2>
+          <div class="results-header__title-row">
+            <h2>{{ calification.processName || 'Proceso sin nombre' }}</h2>
+            <ProcessPathBadge
+              :process-type="calification.activeProcess?.type ?? 'simulacro'"
+              :simulacro-scope="calification.activeProcess?.simulacroScope ?? ''"
+            />
+          </div>
           <div class="results-header__context">
             <span>{{ calification.calificationDisplayArea }}</span>
             <span>·</span>
@@ -443,28 +453,24 @@ function handleExportIngresantesPdf() {
         </div>
       </div>
 
-      <div class="review-board" :class="{ 'review-board--clear': issueCount === 0 && !noCalificados.length }">
-        <div class="review-board__main">
-          <span class="review-board__eyebrow">Revisión operativa</span>
-          <h3 v-if="noCalificados.length || issueCount">
-            Revisa las incidencias antes de publicar o exportar resultados oficiales.
-          </h3>
-          <h3 v-else>
-            El cálculo no reporta incidencias pendientes.
-          </h3>
-        </div>
-        <div class="review-board__chips">
-          <span class="review-chip" :class="{ 'review-chip--danger': noCalificados.length }">
+      <StepVerificationPanel
+        eyebrow="Verificación del cálculo"
+        :title="noCalificados.length || issueCount
+          ? 'Revisa las incidencias antes de publicar o exportar resultados oficiales.'
+          : 'El cálculo no reporta incidencias pendientes.'"
+      >
+        <template #chips>
+          <span class="verification-chip" :class="noCalificados.length ? 'verification-chip--error' : 'verification-chip--muted'">
             <strong>{{ noCalificados.length }}</strong> no calificados
           </span>
-          <span class="review-chip" :class="{ 'review-chip--warn': issueCount }">
+          <span class="verification-chip" :class="issueCount ? 'verification-chip--warn' : 'verification-chip--muted'">
             <strong>{{ issueCount }}</strong> observaciones
           </span>
-          <span class="review-chip">
+          <span class="verification-chip verification-chip--info">
             <strong>{{ localFilteredResults.length }}</strong> visibles
           </span>
-        </div>
-      </div>
+        </template>
+      </StepVerificationPanel>
 
       <section v-if="noCalificados.length" class="not-qualified-panel">
         <div class="not-qualified-panel__header">
@@ -768,12 +774,20 @@ function handleExportIngresantesPdf() {
   gap: var(--space-5);
 }
 .results-header__identity { min-width: 0; }
+.results-header__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
 .results-header__eyebrow {
   display: block; margin-bottom: var(--space-1); color: var(--unap-blue-600);
   font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
 }
 .results-header h2 {
   margin: 0; color: var(--slate-900); font-size: 1.35rem; line-height: 1.25;
+  max-width: min(100%, 620px);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .results-header__context {

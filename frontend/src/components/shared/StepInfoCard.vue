@@ -1,4 +1,6 @@
 <script setup>
+import ProcessPathBadge from './ProcessPathBadge.vue'
+
 defineProps({
   title: {
     type: String,
@@ -15,7 +17,9 @@ defineProps({
   stats: {
     type: Array,
     default: () => []
-  }
+  },
+  processType: { type: String, default: '' },
+  simulacroScope: { type: String, default: '' },
 })
 </script>
 
@@ -30,7 +34,14 @@ defineProps({
       </slot>
     </div>
     <div class="step-info-content">
-      <h2>{{ title }}</h2>
+      <div class="step-info-title-row">
+        <h2>{{ title }}</h2>
+        <ProcessPathBadge
+          v-if="processType"
+          :process-type="processType"
+          :simulacro-scope="simulacroScope"
+        />
+      </div>
       <p>{{ description }}</p>
     </div>
     <div class="step-info-stats" v-if="stats.length > 0">
@@ -92,6 +103,13 @@ defineProps({
   font-weight: 700;
   color: white;
   margin: 0 0 var(--space-1);
+}
+
+.step-info-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
 .step-info-content p {

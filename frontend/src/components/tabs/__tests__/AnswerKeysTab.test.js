@@ -74,7 +74,7 @@ function mountAnswerKeysTab(reconciliation, props = {}) {
         DataTable: true,
         SourcesPanel: true,
         EmptyState: true,
-        ProcessPathCard: true,
+        StepVerificationPanel: false,
       },
     },
   })
@@ -95,8 +95,8 @@ describe('AnswerKeysTab', () => {
       incompleteKeys: 1,
     })
 
-    expect(wrapper.find('.step-state-panel--error').exists()).toBe(true)
-    expect(wrapper.text()).toContain('Estado de claves')
+    expect(wrapper.find('.step-verification-panel').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Verificación de claves')
     expect(wrapper.text()).toContain('Corregir claves faltantes o duplicadas')
     expect(wrapper.text()).toContain('2 pares faltantes')
     expect(wrapper.text()).toContain('Ingeniería Q')
@@ -114,7 +114,7 @@ describe('AnswerKeysTab', () => {
       incompleteKeys: 0,
     })
 
-    expect(wrapper.find('.step-state-panel').exists()).toBe(true)
+    expect(wrapper.find('.step-verification-panel').exists()).toBe(true)
     expect(wrapper.text()).toContain('0 / 2 áreas con clave')
   })
 
@@ -131,7 +131,7 @@ describe('AnswerKeysTab', () => {
       generalKeyCoversSimulacro: true,
     })
 
-    expect(wrapper.find('.step-state-panel--ok').exists()).toBe(true)
+    expect(wrapper.find('.step-verification-panel').exists()).toBe(true)
     expect(wrapper.text()).toContain('Clave general activa')
     expect(wrapper.text()).toContain('la clave general cubre el ranking completo')
     expect(wrapper.text()).not.toContain('Falta Biomédicas')

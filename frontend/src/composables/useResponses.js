@@ -16,12 +16,28 @@ export { createResponseRow, buildResponseObservation }
 
 function summarizeObservations(rows) {
   const summary = new Map()
+  let assumedFinalBlankRows = 0
+  let assumedFinalBlankTotal = 0
   rows.forEach((row) => {
     String(row.observaciones || '')
       .split(' · ')
       .filter(Boolean)
-      .forEach((issue) => summary.set(issue, (summary.get(issue) || 0) + 1))
+      .forEach((issue) => {
+        const assumedBlanks = issue.match(/^Blancos finales asumidos \((\d+)\)$/)
+        if (assumedBlanks) {
+          assumedFinalBlankRows += 1
+          assumedFinalBlankTotal += Number(assumedBlanks[1]) || 0
+          return
+        }
+        summary.set(issue, (summary.get(issue) || 0) + 1)
+      })
   })
+  if (assumedFinalBlankRows) {
+    summary.set(
+      `Blancos finales asumidos (${assumedFinalBlankTotal} posiciones)`,
+      assumedFinalBlankRows
+    )
+  }
   return Array.from(summary.entries()).map(([label, count]) => ({ label, count }))
 }
 

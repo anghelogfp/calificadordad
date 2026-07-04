@@ -5,10 +5,14 @@ import FileUploader from '@/components/shared/FileUploader.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
 import DataTable from '@/components/shared/DataTable.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import StepVerificationPanel from '@/components/shared/StepVerificationPanel.vue'
+import ProcessPathBadge from '@/components/shared/ProcessPathBadge.vue'
 
 const props = defineProps({
   archives:  { type: Object, required: true },
   areaNames: { type: Array,  default: () => [] },
+  processType: { type: String, default: 'simulacro' },
+  simulacroScope: { type: String, default: '' },
 })
 
 const archives = reactive(props.archives)
@@ -56,6 +60,12 @@ const unknownAreas = computed(() => {
     if (a && !knownNorm.has(a.toLowerCase())) unknown.add(a)
   })
   return Array.from(unknown).sort()
+})
+
+const archiveVerificationTitle = computed(() => {
+  if (archives.archiveIssueCount || unknownAreas.value.length) return 'Revisar observaciones del padrón'
+  if (archives.hasData) return 'Padrón listo para continuar'
+  return 'Pendiente de padrón'
 })
 
 function getRowClass(row) {
@@ -112,7 +122,13 @@ const emit = defineEmits(['goConfig'])
           </div>
           <div>
             <span class="archive-import-card__eyebrow">Paso 1 · Datos de entrada</span>
-            <h2>Padrón de postulantes</h2>
+            <div class="archive-import-card__title-row">
+              <h2>Padrón de postulantes</h2>
+              <ProcessPathBadge
+                :process-type="processType"
+                :simulacro-scope="simulacroScope"
+              />
+            </div>
             <p>Importa desde Excel los candidatos inscritos para el proceso.</p>
           </div>
         </div>
@@ -161,59 +177,49 @@ const emit = defineEmits(['goConfig'])
       <span>{{ archives.importError }}</span>
     </div>
 
-    <section v-if="simulacroDetection" class="scope-panel">
-      <div>
-        <span class="scope-panel__eyebrow">Detección para simulacro</span>
-        <h3>
-          {{ simulacroDetection.scope === 'general' ? 'Simulacro general detectado' : 'Simulacro por áreas detectado' }}
-        </h3>
-      </div>
-      <p>
-        {{
-          simulacroDetection.scope === 'general'
-            ? `El padrón no trae área. En simulacro se puede generar un ranking general de ${simulacroDetection.total} postulante(s).`
-            : `${simulacroDetection.withArea} postulante(s) tienen área. En simulacro se puede calificar por áreas.`
-        }}
-      </p>
-    </section>
-
-    <!-- Advertencia de áreas no reconocidas -->
-    <div v-if="unknownAreas.length" class="alert alert--warn">
-      <svg class="alert__icon" viewBox="0 0 20 20" fill="currentColor">
-        <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-      </svg>
-      <span>
-        El padrón contiene área(s) no configuradas en el sistema:
-        <strong v-for="(a, i) in unknownAreas" :key="a">{{ a }}<span v-if="i < unknownAreas.length - 1">, </span></strong>.
-        Las claves de respuestas del Paso 4 no podrán vincularse con estos postulantes.
-        <a class="alert__link" href="#" @click.prevent="$emit('goConfig')">Ir a Configuración →</a>
-      </span>
-    </div>
-
-    <section v-if="archives.archiveIssueCount" class="observed-panel">
-      <div class="observed-panel__header">
-        <div>
-          <span class="observed-panel__eyebrow">Observados del padrón</span>
-          <h3>{{ archives.archiveIssueCount }} registro(s) requieren revisión</h3>
-        </div>
-        <div class="observed-panel__actions">
+    <StepVerificationPanel
+      v-if="archives.hasData"
+      eyebrow="Verificación del padrón"
+      :title="archiveVerificationTitle"
+      :summary="`${archives.totalRows} postulante(s)`"
+    >
+      <template v-if="archives.archiveIssueCount" #actions>
           <button type="button" class="btn btn--ghost" @click="showOnlyObserved = !showOnlyObserved">
             {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
           </button>
           <button type="button" class="btn btn--primary" @click="archives.exportArchiveIssuesToExcel">
             Exportar observados
           </button>
-        </div>
-      </div>
-      <div class="observed-panel__chips">
-        <span v-for="item in archives.archiveIssueSummary" :key="item.label" class="observed-chip">
+      </template>
+      <template #chips>
+        <span class="verification-chip verification-chip--ok"><strong>{{ archives.totalRows }}</strong> postulantes</span>
+        <span v-if="simulacroDetection" class="verification-chip verification-chip--info"><strong>{{ simulacroDetection.withArea }}</strong> con área</span>
+        <span v-if="simulacroDetection" class="verification-chip" :class="simulacroDetection.withoutArea ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ simulacroDetection.withoutArea }}</strong> sin área</span>
+        <span class="verification-chip" :class="unknownAreas.length ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ unknownAreas.length }}</strong> áreas no configuradas</span>
+        <span class="verification-chip" :class="archives.archiveIssueCount ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ archives.archiveIssueCount }}</strong> observados</span>
+      </template>
+      <template v-if="archives.archiveIssueCount" #detail>
+        <span v-for="item in archives.archiveIssueSummary" :key="item.label" class="verification-chip verification-chip--warn">
           <strong>{{ item.count }}</strong> {{ item.label }}
         </span>
-      </div>
-      <p class="observed-panel__hint">
-        Puedes corregir el DNI directamente en la tabla con el botón editar. Al guardar, la observación se recalcula automáticamente.
-      </p>
-    </section>
+      </template>
+      <template #hint>
+        <span v-if="unknownAreas.length">
+          Hay áreas del padrón que no están configuradas:
+          <strong v-for="(a, i) in unknownAreas" :key="a">{{ a }}<span v-if="i < unknownAreas.length - 1">, </span></strong>.
+          <a class="alert__link" href="#" @click.prevent="$emit('goConfig')">Ir a Configuración</a>.
+        </span>
+        <span v-else-if="archives.archiveIssueCount">
+          Puedes corregir el DNI directamente en la tabla con el botón editar. Al guardar, la observación se recalcula automáticamente.
+        </span>
+        <span v-else-if="simulacroDetection?.scope === 'general'">
+          El padrón no trae área. En simulacro general puede calcularse un ranking único para todos los postulantes.
+        </span>
+        <span v-else>
+          El padrón trae áreas y queda listo para vincular identificadores, respuestas y claves.
+        </span>
+      </template>
+    </StepVerificationPanel>
 
     <!-- Banner de confirmación inline -->
     <div v-if="pendingAction" class="confirm-banner">
@@ -360,6 +366,12 @@ const emit = defineEmits(['goConfig'])
   font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
 }
 .archive-import-card h2 { margin: 0; color: var(--slate-900); font-size: 1.2rem; line-height: 1.25; }
+.archive-import-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
 .archive-import-card__identity p { margin: 3px 0 0; color: var(--slate-500); font-size: 0.82rem; }
 .archive-import-card__status {
   display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0;

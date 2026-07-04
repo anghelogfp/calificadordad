@@ -189,7 +189,7 @@ export function buildResponseObservation(row, formatConfig = DEFAULT_DAT_FORMAT)
   if (!answersRaw.trim()) {
     issues.push('Sin respuestas marcadas')
   } else if (answersRaw.length < formatConfig.answersLength) {
-    issues.push(`Cadena incompleta (${answersRaw.length}/${formatConfig.answersLength})`)
+    issues.push(`Blancos finales asumidos (${formatConfig.answersLength - answersRaw.length})`)
   } else if (/[^A-E*]/.test(markedAnswers)) {
     issues.push('Respuestas con marcas no válidas')
   }

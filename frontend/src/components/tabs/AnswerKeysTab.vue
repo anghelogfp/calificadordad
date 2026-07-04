@@ -7,7 +7,7 @@ import SubTabs from '@/components/shared/SubTabs.vue'
 import DataTable from '@/components/shared/DataTable.vue'
 import SourcesPanel from '@/components/shared/SourcesPanel.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
-import ProcessPathCard from '@/components/shared/ProcessPathCard.vue'
+import StepVerificationPanel from '@/components/shared/StepVerificationPanel.vue'
 
 const props = defineProps({
   answerKeys: {
@@ -41,17 +41,6 @@ const importMode = ref('general')
 const expectedKeyMode = computed(() => {
   if (props.processType === 'real') return 'area'
   return props.simulacroScope === 'general' ? 'general' : 'area'
-})
-
-const keyModeLabel = computed(() => {
-  if (props.processType === 'real') return 'Convocatoria real'
-  return props.simulacroScope === 'general' ? 'Simulacro general' : 'Simulacro por áreas'
-})
-
-const keyModeDescription = computed(() => {
-  if (props.processType === 'real') return 'Este proceso exige claves por área y tipo de prueba P/Q/R/S/T.'
-  if (props.simulacroScope === 'general') return 'Este proceso usa una única clave general para todo el ranking.'
-  return 'Este proceso exige claves oficiales por cada área de evaluación.'
 })
 
 watch(expectedKeyMode, (mode) => {
@@ -196,6 +185,8 @@ const stepState = computed(() => {
       :count="answerKeys.totalRows"
       count-label="claves cargadas"
       :ready="answerKeys.answerKeyHasData"
+      :process-type="processType"
+      :simulacro-scope="simulacroScope"
     >
       <template #icon>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -204,43 +195,49 @@ const stepState = computed(() => {
       </template>
     </WorkflowIntroCard>
 
-    <section
+    <StepVerificationPanel
       v-if="areaCoverage.length || (reconciliation && reconciliation.keysTotal)"
-      class="step-state-panel"
-      :class="`step-state-panel--${stepState.variant}`"
+      eyebrow="Verificación de claves"
+      :title="stepState.title"
+      :summary="areaCoverage.length && !reconciliation?.generalKeyCoversSimulacro
+        ? `${coveredCount} / ${areaCoverage.length} áreas con clave`
+        : reconciliation?.generalKeyCoversSimulacro
+          ? 'Clave general activa'
+          : ''"
     >
-      <div class="step-state-panel__header">
-        <div>
-          <span class="step-state-panel__eyebrow">Estado de claves</span>
-          <h3>{{ stepState.title }}</h3>
-        </div>
-        <span v-if="areaCoverage.length && !reconciliation?.generalKeyCoversSimulacro" class="step-state-panel__summary">
-          {{ coveredCount }} / {{ areaCoverage.length }} áreas con clave
-        </span>
-        <span v-else-if="reconciliation?.generalKeyCoversSimulacro" class="step-state-panel__summary">
-          Clave general activa
-        </span>
-      </div>
-      <div class="step-state-panel__chips">
+      <template v-if="answerKeys.observationCount" #actions>
+        <button type="button" class="btn btn--ghost" @click="showOnlyObserved = !showOnlyObserved">
+          {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
+        </button>
+        <button type="button" class="btn btn--primary" @click="answerKeys.exportAnswerKeyObservationsToExcel">
+          Exportar observados
+        </button>
+      </template>
+      <template #chips>
         <template v-if="reconciliation && reconciliation.keysTotal">
-          <span class="step-state-chip"><strong>{{ reconciliation.coveredPairs }}</strong> {{ coverageUnit }} cubiertos</span>
-          <span class="step-state-chip"><strong>{{ reconciliation.missingPairs.length }}</strong> {{ coverageUnit }} faltantes</span>
-          <span class="step-state-chip"><strong>{{ reconciliation.generalKeys }}</strong> claves generales</span>
-          <span class="step-state-chip"><strong>{{ reconciliation.duplicatePairs }}</strong> duplicadas</span>
-          <span class="step-state-chip"><strong>{{ reconciliation.incompleteKeys }}</strong> observadas</span>
+          <span class="verification-chip verification-chip--ok"><strong>{{ reconciliation.coveredPairs }}</strong> {{ coverageUnit }} cubiertos</span>
+          <span class="verification-chip" :class="reconciliation.missingPairs.length ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.missingPairs.length }}</strong> {{ coverageUnit }} faltantes</span>
+          <span class="verification-chip verification-chip--info"><strong>{{ reconciliation.generalKeys }}</strong> claves generales</span>
+          <span class="verification-chip" :class="reconciliation.duplicatePairs ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.duplicatePairs }}</strong> duplicadas</span>
+          <span class="verification-chip" :class="reconciliation.incompleteKeys ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.incompleteKeys }}</strong> observadas</span>
         </template>
         <template v-if="!reconciliation?.generalKeyCoversSimulacro">
           <span
             v-for="area in areaCoverage"
             :key="area.name"
-            class="step-state-chip"
-            :class="area.hasKey ? 'step-state-chip--ok' : 'step-state-chip--missing'"
+            class="verification-chip"
+            :class="area.hasKey ? 'verification-chip--ok' : 'verification-chip--warn'"
           >
             <strong>{{ area.hasKey ? 'OK' : 'Falta' }}</strong> {{ area.name }}
           </span>
         </template>
-      </div>
-      <p v-if="reconciliation?.missingPairs?.length" class="step-state-panel__hint">
+      </template>
+      <template v-if="answerKeys.observationCount" #detail>
+        <span v-for="item in answerKeys.observationSummary" :key="item.label" class="verification-chip verification-chip--warn">
+          <strong>{{ item.count }}</strong> {{ item.label }}
+        </span>
+      </template>
+      <template v-if="reconciliation?.missingPairs?.length" #hint>
         Faltan:
         <strong
           v-for="(pair, index) in reconciliation.missingPairs.slice(0, 8)"
@@ -249,21 +246,13 @@ const stepState = computed(() => {
           {{ pair.type ? `${pair.area} ${pair.type}` : pair.area }}<span v-if="index < Math.min(reconciliation.missingPairs.length, 8) - 1">, </span>
         </strong>
         <span v-if="reconciliation.missingPairs.length > 8"> y {{ reconciliation.missingPairs.length - 8 }} más.</span>
-      </p>
-      <p v-else class="step-state-panel__hint">
+      </template>
+      <template v-else #hint>
         {{ reconciliation?.generalKeyCoversSimulacro
           ? 'En simulacro, la clave general cubre el ranking completo sin exigir claves por área.'
           : 'Este cruce compara las claves cargadas con las áreas y tipos detectados en las respuestas.' }}
-      </p>
-    </section>
-
-    <ProcessPathCard
-      eyebrow="Modo de claves definido por el camino"
-      :title="keyModeLabel"
-      :description="keyModeDescription"
-      :badge="expectedKeyMode === 'general' ? 'Clave general' : processType === 'real' ? 'Área + tipo' : 'Por áreas'"
-      :variant="processType === 'real' ? 'real' : 'simulacro'"
-    />
+      </template>
+    </StepVerificationPanel>
 
     <details class="upload-form-card" :open="!answerKeys.answerKeyHasData">
       <summary class="upload-form-card__header">
@@ -407,31 +396,6 @@ const stepState = computed(() => {
           {{ detectStatus.label }}
         </span>
       </div>
-    </section>
-
-    <section v-if="answerKeys.observationCount" class="observed-panel">
-      <div class="observed-panel__header">
-        <div>
-          <span class="observed-panel__eyebrow">Observados de claves</span>
-          <h3>{{ answerKeys.observationCount }} registro(s) requieren revisión</h3>
-        </div>
-        <div class="observed-panel__actions">
-          <button type="button" class="btn btn--ghost" @click="showOnlyObserved = !showOnlyObserved">
-            {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
-          </button>
-          <button type="button" class="btn btn--primary" @click="answerKeys.exportAnswerKeyObservationsToExcel">
-            Exportar observados
-          </button>
-        </div>
-      </div>
-      <div class="observed-panel__chips">
-        <span v-for="item in answerKeys.observationSummary" :key="item.label" class="observed-chip">
-          <strong>{{ item.count }}</strong> {{ item.label }}
-        </span>
-      </div>
-      <p class="observed-panel__hint">
-        Corrige área, tipo o respuestas oficiales en la tabla antes de ejecutar la calificación.
-      </p>
     </section>
 
     <Toolbar

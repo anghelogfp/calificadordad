@@ -8,6 +8,7 @@ import SubTabs from '@/components/shared/SubTabs.vue'
 import DataTable from '@/components/shared/DataTable.vue'
 import SourcesPanel from '@/components/shared/SourcesPanel.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
+import StepVerificationPanel from '@/components/shared/StepVerificationPanel.vue'
 
 const props = defineProps({
   responses:         { type: Object,  required: true },
@@ -15,6 +16,8 @@ const props = defineProps({
   identifiersLoaded: { type: Boolean, default: false },
   linkedCount:       { type: Number,  default: 0 },
   reconciliation:    { type: Object,  default: null },
+  processType:       { type: String,  default: 'simulacro' },
+  simulacroScope:    { type: String,  default: '' },
 })
 
 const matchPercent = computed(() => {
@@ -162,6 +165,8 @@ function getRowClass(row) {
       :count="responses.totalRows"
       count-label="respuestas cargadas"
       :ready="responses.responsesHasData"
+      :process-type="processType"
+      :simulacro-scope="simulacroScope"
     >
       <template #icon>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -208,17 +213,12 @@ function getRowClass(row) {
       @change="onDetectFileChange"
     >
 
-    <section
+    <StepVerificationPanel
       v-if="responses.responsesHasData || (reconciliation && reconciliation.responsesTotal)"
-      class="step-state-panel"
-      :class="`step-state-panel--${stepState.variant}`"
+      eyebrow="Verificación de respuestas"
+      :title="stepState.title"
     >
-      <div class="step-state-panel__header">
-        <div>
-          <span class="step-state-panel__eyebrow">Estado de respuestas</span>
-          <h3>{{ stepState.title }}</h3>
-        </div>
-        <div class="step-state-panel__actions">
+      <template #actions>
           <button type="button" class="btn btn--ghost" :disabled="detecting" @click="handleDetectFormat">
             <svg v-if="detecting" class="btn__icon spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 12a9 9 0 11-6.219-8.56"/>
@@ -234,43 +234,42 @@ function getRowClass(row) {
           <button type="button" class="btn btn--primary" @click="responses.exportResponseObservationsToExcel">
             Exportar observados
           </button>
-        </div>
-      </div>
+      </template>
 
-      <div class="step-state-panel__chips">
+      <template #chips>
         <template v-if="reconciliation && reconciliation.responsesTotal">
-          <span class="step-state-chip"><strong>{{ reconciliation.linkedResponses }}</strong> vinculadas</span>
-          <span class="step-state-chip"><strong>{{ reconciliation.unlinkedResponses }}</strong> sin DNI</span>
-          <span class="step-state-chip"><strong>{{ reconciliation.candidatesWithoutResponse }}</strong> postulantes sin respuesta</span>
-          <span class="step-state-chip"><strong>{{ reconciliation.identifiersWithoutResponse }}</strong> identificadores sin respuesta</span>
-          <span class="step-state-chip"><strong>{{ reconciliation.responsesWithoutCandidate }}</strong> fuera del padrón</span>
-          <span class="step-state-chip"><strong>{{ reconciliation.duplicateResponseDnis }}</strong> duplicadas</span>
+          <span class="verification-chip verification-chip--ok"><strong>{{ reconciliation.linkedResponses }}</strong> vinculadas</span>
+          <span class="verification-chip" :class="reconciliation.unlinkedResponses ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.unlinkedResponses }}</strong> sin DNI</span>
+          <span class="verification-chip" :class="reconciliation.candidatesWithoutResponse ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.candidatesWithoutResponse }}</strong> postulantes sin respuesta</span>
+          <span class="verification-chip" :class="reconciliation.identifiersWithoutResponse ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.identifiersWithoutResponse }}</strong> identificadores sin respuesta</span>
+          <span class="verification-chip" :class="reconciliation.responsesWithoutCandidate ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.responsesWithoutCandidate }}</strong> fuera del padrón</span>
+          <span class="verification-chip" :class="reconciliation.duplicateResponseDnis ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.duplicateResponseDnis }}</strong> duplicadas</span>
         </template>
-        <span class="step-state-chip"><strong>{{ configuredOffset }}</strong> offset respuestas</span>
+        <span class="verification-chip verification-chip--info"><strong>{{ configuredOffset }}</strong> offset respuestas</span>
         <span v-if="detectStatus" class="detect-badge" :class="`detect-badge--${detectStatus.variant}`">
           {{ detectStatus.label }}
         </span>
-      </div>
+      </template>
 
-      <div v-if="responses.observationCount" class="step-state-panel__detail">
-        <span v-for="item in responses.observationSummary" :key="item.label" class="step-state-chip step-state-chip--warn">
+      <template v-if="responses.observationCount" #detail>
+        <span v-for="item in responses.observationSummary" :key="item.label" class="verification-chip verification-chip--warn">
           <strong>{{ item.count }}</strong> {{ item.label }}
         </span>
-      </div>
+      </template>
 
-      <div class="step-state-panel__progress">
+      <div class="step-state-panel__progress" :class="`step-state-panel__progress--${matchStatus}`">
         <span v-if="!identifiersLoaded">Sin identificadores cargados. Las respuestas no tendrán DNI ni aula asignados.</span>
         <span v-else><strong>{{ linkedCount }} / {{ responses.totalRows }}</strong> respuestas vinculadas con identificadores</span>
         <strong>{{ matchPercent }}%</strong>
       </div>
-      <div class="step-state-panel__track">
+      <div class="step-state-panel__track" :class="`step-state-panel__track--${matchStatus}`">
         <div class="step-state-panel__fill" :style="{ width: matchPercent + '%' }"></div>
       </div>
 
-      <p class="step-state-panel__hint">
+      <template #hint>
         Este cruce confirma si las hojas de respuestas ya están vinculadas al Paso 2 y corresponden al padrón del Paso 1.
-      </p>
-    </section>
+      </template>
+    </StepVerificationPanel>
 
     <!-- Confirmación inline -->
     <div v-if="pendingAction" class="confirm-banner">
@@ -653,7 +652,7 @@ function getRowClass(row) {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  color: #92400e;
+  color: var(--slate-600);
   font-size: 0.82rem;
 }
 
@@ -661,49 +660,52 @@ function getRowClass(row) {
   height: 8px;
   overflow: hidden;
   border-radius: var(--radius-full);
-  background: rgba(146, 64, 14, 0.14);
+  background: var(--slate-200);
 }
 
 .step-state-panel__fill {
   height: 100%;
   border-radius: inherit;
-  background: #d97706;
+  background: var(--slate-400);
   transition: width var(--transition-fast);
 }
 
-.step-state-panel--ok .step-state-panel__progress {
+.step-state-panel__progress--complete,
+.step-state-panel__progress--good {
   color: #15803d;
 }
 
-.step-state-panel--info .step-state-panel__progress {
-  color: var(--slate-600);
+.step-state-panel__progress--partial {
+  color: #92400e;
 }
 
-.step-state-panel--error .step-state-panel__progress {
+.step-state-panel__progress--low {
   color: #b91c1c;
 }
 
-.step-state-panel--ok .step-state-panel__track {
+.step-state-panel__track--complete,
+.step-state-panel__track--good {
   background: #dcfce7;
 }
 
-.step-state-panel--info .step-state-panel__track {
-  background: var(--slate-200);
+.step-state-panel__track--partial {
+  background: #fef3c7;
 }
 
-.step-state-panel--error .step-state-panel__track {
+.step-state-panel__track--low {
   background: #fee2e2;
 }
 
-.step-state-panel--ok .step-state-panel__fill {
+.step-state-panel__track--complete .step-state-panel__fill,
+.step-state-panel__track--good .step-state-panel__fill {
   background: #16a34a;
 }
 
-.step-state-panel--info .step-state-panel__fill {
-  background: var(--slate-400);
+.step-state-panel__track--partial .step-state-panel__fill {
+  background: #d97706;
 }
 
-.step-state-panel--error .step-state-panel__fill {
+.step-state-panel__track--low .step-state-panel__fill {
   background: #dc2626;
 }
 

@@ -185,6 +185,7 @@ export function calculateAreaResults({
     const { row: responseRow, answer: answerRow } = matchForArea
     const answersRaw = (responseRow?.answers || '').toUpperCase()
     const correctAnswersRaw = (answerRow?.answers || '').toUpperCase()
+    const originalAnswersLength = answersRaw.length
     const answers = answersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
     const correctAnswers = correctAnswersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
 
@@ -201,6 +202,7 @@ export function calculateAreaResults({
       const correctChar = correctAnswers[index] || ' '
       const isCorrectCharValid = /^[A-E]$/.test(correctChar)
       const isResponseCharValid = /^[A-E]$/.test(responseChar)
+      const isAssumedFinalBlank = index >= originalAnswersLength
 
       if (!isCorrectCharValid) {
         throw new Error(`La clave oficial contiene una respuesta inválida en la pregunta ${index + 1}.`)
@@ -225,6 +227,7 @@ export function calculateAreaResults({
         subject,
         weight,
         answer: responseChar.trim(),
+        blankSource: status === 'blank' ? (isAssumedFinalBlank ? 'assumed-final' : 'dat') : '',
         correctAnswer: correctChar,
         status,
         score: roundedContribution,
