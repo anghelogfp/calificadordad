@@ -8,6 +8,7 @@ import DataTable from '@/components/shared/DataTable.vue'
 import SourcesPanel from '@/components/shared/SourcesPanel.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import StepVerificationPanel from '@/components/shared/StepVerificationPanel.vue'
+import AnswerSheetPreviewModal from '@/components/shared/AnswerSheetPreviewModal.vue'
 
 const props = defineProps({
   answerKeys: {
@@ -38,6 +39,11 @@ const answerKeys = reactive(props.answerKeys)
 const showOnlyObserved = ref(false)
 const importMode = ref('general')
 const showUploadForm = ref(false)
+const showSheetModal = ref(false)
+const sheetModalTitle = ref('Cartilla de clave')
+const sheetModalSubtitle = ref('')
+const sheetModalAnswers = ref('')
+const sheetModalMode = ref('inspect-key')
 
 const expectedKeyMode = computed(() => {
   if (props.processType === 'real') return 'area'
@@ -124,6 +130,7 @@ const tableColumns = [
   { key: 'tipo', label: 'Tip', maxlength: 1, tight: true, class: 'column--code', width: '65px', minWidth: '65px' },
   { key: 'litho', label: 'Litho', maxlength: 6, class: 'column--code', width: '105px', minWidth: '105px' },
   { key: 'answers', label: 'Respuestas', type: 'textarea', rows: 2, class: 'column--answers', minWidth: '470px' },
+  { key: 'sheetPreview', label: 'Vista', type: 'button', buttonLabel: 'Ver clave', buttonTitle: 'Abrir cartilla visual', buttonClass: 'cell-action-btn--sheet', minWidth: '110px' },
   { key: 'answerCount', label: 'Conteo', type: 'answer-count', width: '92px', minWidth: '92px' },
   { key: 'observaciones', label: 'Observaciones', badge: true, class: 'column--observations', minWidth: '240px' },
 ]
@@ -142,6 +149,20 @@ function getRowClass(row) {
   return {
     'row--issue': Boolean(answerKeys.observationByRowId?.get(row.id))
   }
+}
+
+function openSheetPreview(row) {
+  sheetModalTitle.value = 'Cartilla de clave'
+  sheetModalSubtitle.value = [row?.area, row?.tipo ? `Tip ${row.tipo}` : '', row?.litho ? `Litho ${row.litho}` : '']
+    .filter(Boolean)
+    .join(' · ')
+  sheetModalAnswers.value = String(row?.answers || '')
+  sheetModalMode.value = 'inspect-key'
+  showSheetModal.value = true
+}
+
+function closeSheetPreview() {
+  showSheetModal.value = false
 }
 
 // Cobertura de áreas
@@ -485,6 +506,7 @@ const stepState = computed(() => {
         @toggle-select-all="answerKeys.toggleSelectAll"
         @toggle-edit="answerKeys.toggleEdit"
         @remove-row="answerKeys.removeRow"
+        @cell-action="({ row, column }) => { if (column.key === 'sheetPreview') openSheetPreview(row) }"
         @change-page="answerKeys.goToPage"
         @change-page-size="answerKeys.setPageSize"
       />
@@ -505,6 +527,16 @@ const stepState = computed(() => {
       :total-rows="answerKeys.totalRows"
       :columns="sourcesColumns"
       @remove-source="answerKeys.removeAnswerKeySource"
+    />
+
+    <AnswerSheetPreviewModal
+      :show="showSheetModal"
+      :title="sheetModalTitle"
+      :subtitle="sheetModalSubtitle"
+      :answers="sheetModalAnswers"
+      :total-questions="answerKeys.expectedAnswersLength ?? 60"
+      :mode="sheetModalMode"
+      @close="closeSheetPreview"
     />
   </section>
 </template>
@@ -1293,6 +1325,10 @@ const stepState = computed(() => {
   background: #fee2e2;
   color: #991b1b;
   border: 1px solid #fecaca;
+}
+
+.cell-action-btn--sheet {
+  min-width: 92px;
 }
 
 .spin {

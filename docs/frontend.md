@@ -64,6 +64,7 @@ La pantalla de resultados, el modal de calificacion y el flujo de pasos se reord
 - Los bloqueos de preflight ya no quedan silenciosos: el flujo muestra error visible y toast cuando falta informacion para calificar.
 - El stepper de los pasos 1 al 5 muestra estado, descripcion y accion contextual por etapa.
 - Los pasos de padron, identificadores, respuestas, claves y resultados usan paneles de verificacion para resumir carga, cruces, observaciones y faltantes.
+- Las tablas de Respuestas y Claves exponen un boton de vista que abre una cartilla visual en modal para revisar la cadena cargada sin alterar el dato original.
 - El camino del proceso se muestra con una insignia compartida para mantener consistencia visual entre las etapas.
 
 ## Verificacion Por Pasos
@@ -103,6 +104,7 @@ Estado actual:
 - Valida faltantes de clave oficial antes de guardar o exportar PDF.
 - Muestra resumen por curso.
 - El historial del verificador permite buscar, duplicar sesiones y exportar CSV.
+- La vista del verificador manual usa la misma cartilla visual en modo comparacion, pero sigue fuera del core operativo de calificacion.
 
 ## Pendientes Tecnicos
 

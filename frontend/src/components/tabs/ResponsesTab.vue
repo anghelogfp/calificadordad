@@ -9,6 +9,7 @@ import DataTable from '@/components/shared/DataTable.vue'
 import SourcesPanel from '@/components/shared/SourcesPanel.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import StepVerificationPanel from '@/components/shared/StepVerificationPanel.vue'
+import AnswerSheetPreviewModal from '@/components/shared/AnswerSheetPreviewModal.vue'
 
 const props = defineProps({
   responses:         { type: Object,  required: true },
@@ -41,6 +42,11 @@ const showOnlyObserved = ref(false)
 const detectFileInput = ref(null)
 const detecting = ref(false)
 const configuredOffset = computed(() => responses.configuredResponseAnswersOffset ?? 7)
+const showSheetModal = ref(false)
+const sheetModalTitle = ref('Cartilla de respuestas')
+const sheetModalSubtitle = ref('')
+const sheetModalAnswers = ref('')
+const sheetModalMode = ref('inspect-answers')
 
 const displayedRows = computed(() => (
   showOnlyObserved.value ? responses.observations : responses.pagedRows
@@ -145,6 +151,7 @@ const tableColumns = [
   { key: 'tipo', label: 'Tip', maxlength: 1, tight: true, class: 'column--code', width: '65px', minWidth: '65px' },
   { key: 'litho', label: 'Litho', maxlength: 6, class: 'column--code', width: '105px', minWidth: '105px' },
   { key: 'answers', label: 'Respuestas', type: 'textarea', rows: 2, class: 'column--answers', minWidth: '470px' },
+  { key: 'sheetPreview', label: 'Vista', type: 'button', buttonLabel: 'Ver cartilla', buttonTitle: 'Abrir cartilla visual', buttonClass: 'cell-action-btn--sheet', minWidth: '122px' },
   { key: 'answerCount', label: 'Conteo', type: 'answer-count', width: '92px', minWidth: '92px' },
   { key: 'observaciones', label: 'Observaciones', badge: true, class: 'column--observations', minWidth: '240px' },
 ]
@@ -153,6 +160,18 @@ function getRowClass(row) {
   return {
     'row--issue': Boolean(responses.observationByRowId?.get(row.id))
   }
+}
+
+function openSheetPreview(row) {
+  sheetModalTitle.value = 'Cartilla de respuestas'
+  sheetModalSubtitle.value = row?.dni ? `DNI ${row.dni}${row.litho ? ` · Litho ${row.litho}` : ''}` : (row?.litho ? `Litho ${row.litho}` : '')
+  sheetModalAnswers.value = String(row?.answers || '')
+  sheetModalMode.value = 'inspect-answers'
+  showSheetModal.value = true
+}
+
+function closeSheetPreview() {
+  showSheetModal.value = false
 }
 </script>
 
@@ -364,6 +383,7 @@ function getRowClass(row) {
         @toggle-edit="responses.toggleEdit"
         @cancel-edit="responses.toggleEdit"
         @remove-row="responses.removeRow"
+        @cell-action="({ row, column }) => { if (column.key === 'sheetPreview') openSheetPreview(row) }"
         @change-page="responses.goToPage"
         @change-page-size="responses.setPageSize"
       />
@@ -385,6 +405,16 @@ function getRowClass(row) {
       upload-input-id="responses-input"
       upload-hint="Los nuevos archivos se añadirán a la lista y podrás combinar áreas distintas."
       @remove-source="responses.removeResponsesSource"
+    />
+
+    <AnswerSheetPreviewModal
+      :show="showSheetModal"
+      :title="sheetModalTitle"
+      :subtitle="sheetModalSubtitle"
+      :answers="sheetModalAnswers"
+      :total-questions="responses.expectedAnswersLength ?? 60"
+      :mode="sheetModalMode"
+      @close="closeSheetPreview"
     />
   </section>
 </template>
@@ -958,6 +988,10 @@ function getRowClass(row) {
   background: #fee2e2;
   color: #991b1b;
   border: 1px solid #fecaca;
+}
+
+.cell-action-btn--sheet {
+  min-width: 104px;
 }
 
 .spin {

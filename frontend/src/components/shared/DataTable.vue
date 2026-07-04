@@ -31,6 +31,7 @@ const emit = defineEmits([
   'removeRow',
   'changePage',
   'changePageSize',
+  'cellAction',
 ])
 
 // Snapshot de valores originales para cancel
@@ -209,6 +210,22 @@ function visiblePages(current, total) {
                   'badge--warn': row[column.key] !== 'Sin observaciones',
                 }"
               >{{ row[column.key] }}</span>
+              <button
+                v-else-if="column.type === 'button'"
+                type="button"
+                class="cell-action-btn"
+                :class="column.buttonClass"
+                :title="column.buttonTitle || column.label"
+                :aria-label="column.buttonAriaLabel || column.label"
+                @click="emit('cellAction', { row, column })"
+              >
+                <span v-if="column.buttonIcon" class="cell-action-btn__icon" aria-hidden="true">
+                  <svg viewBox="0 0 20 20" fill="currentColor">
+                    <path :d="column.buttonIcon" />
+                  </svg>
+                </span>
+                <span class="cell-action-btn__label">{{ column.buttonLabel || column.label }}</span>
+              </button>
               <input
                 v-else
                 v-model="row[column.key]"
@@ -496,6 +513,37 @@ function visiblePages(current, total) {
 }
 .badge--ok { background: var(--success-100); color: var(--success-600); }
 .badge--warn { background: var(--warning-100); color: var(--warning-600); }
+
+.cell-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  background: white;
+  color: var(--slate-700);
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cell-action-btn:hover {
+  border-color: var(--unap-blue-300);
+  background: var(--unap-blue-50);
+  color: var(--unap-blue-700);
+}
+
+.cell-action-btn__icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.cell-action-btn__label {
+  white-space: nowrap;
+}
 
 .answer-count {
   display: inline-flex;

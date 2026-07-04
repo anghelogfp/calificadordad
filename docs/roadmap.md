@@ -53,6 +53,7 @@ Riesgo conocido:
 - Ya se implemento el stepper con estados, descripciones y acciones para los pasos 1 al 5.
 - Ya se agregaron paneles de verificacion para padron, identificadores, respuestas, claves y resultados.
 - Ya se mejoro el verificador manual como herramienta auxiliar independiente: pegado masivo, clave frecuente, validacion, resumen por curso, tabla en dos columnas, busqueda, duplicado y export CSV.
+- Ya se agrego una cartilla visual en modal para Respuestas y Claves, separada del verificador manual y del core de calificacion.
 - Pendiente inmediato: seguir afinando el modal si la densidad visual sigue alta en uso real.
 
 ## Prioridad 6 - Modelo De Convocatoria

@@ -4,6 +4,7 @@ import { buildQuestionPlan } from '@/utils/helpers'
 import { useVerificador } from '@/composables/useVerificador'
 import { useToast } from '@/composables/useToast'
 import { loadPdfExportDeps } from '@/utils/exportLoaders'
+import AnswerSheetPreview from '@/components/shared/AnswerSheetPreview.vue'
 
 const props = defineProps({
   ponderations: { type: Object, required: true },
@@ -184,6 +185,14 @@ const filteredSesiones = computed(() => {
 const hasAnyAnswer = computed(() =>
   answerCells.some(c => !!KEY_MAP[c?.toUpperCase()]) ||
   correctCells.some(c => !!KEY_MAP[c?.toUpperCase()])
+)
+
+const answerString = computed(() =>
+  answerCells.map(normalizeCell).join('').slice(0, totalQuestions.value)
+)
+
+const correctString = computed(() =>
+  correctCells.map(normalizeCell).join('').slice(0, totalQuestions.value)
 )
 
 // ── Mapa de normalización: 1-5 → A-E, A-E → A-E (solo para cálculo/guardado) ─
@@ -1038,6 +1047,22 @@ function formatFecha(iso) {
             </div>
           </div>
         </details>
+
+        <details class="result-details sheet-details">
+          <summary>
+            <span>Cartilla visual</span>
+            <strong>Comparación física</strong>
+          </summary>
+          <div class="sheet-details__body">
+            <AnswerSheetPreview
+              :answers="answerString"
+              :correct-answers="correctString"
+              :total-questions="totalQuestions"
+              mode="compare"
+              title="Hoja de respuestas"
+            />
+          </div>
+        </details>
       </div>
 
       <!-- Acciones -->
@@ -1616,6 +1641,18 @@ function formatFecha(iso) {
 
 .subject-details {
   margin-top: var(--space-3);
+}
+
+.sheet-details {
+  margin-top: var(--space-3);
+}
+
+.sheet-details__body {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-4);
+  background: white;
+  overflow-x: auto;
 }
 
 .subject-summary {

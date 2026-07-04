@@ -11,6 +11,8 @@ Sistema web para calificar examenes de admision de la Direccion de Admision. Pro
 - Datos principales: API/DB como fuente principal; `localStorage` queda para preferencias, tokens y metadata liviana.
 - Motor critico de calificacion: separado en funciones de dominio testeables.
 - UI/UX en curso: pantalla de resultados, modal de calificacion y pasos 1 al 5 ya reorganizados para reforzar estados operativos y verificacion por etapa.
+- Respuestas y Claves incluyen un modal de cartilla visual para inspeccionar las cadenas cargadas sin salir de la tabla.
+- El verificador manual sigue siendo una herramienta auxiliar independiente del core principal.
 - CI: frontend tests/build y backend tests en GitHub Actions.
 
 ## Documentacion Vigente

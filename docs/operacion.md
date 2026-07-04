@@ -75,6 +75,8 @@ Frontend:
 12. Guardar historial.
 13. Exportar reportes.
 
+En las tablas de Respuestas y Claves tambien existe una vista de cartilla en modal para revisar la cadena cargada antes de seguir con el proceso.
+
 ## Puntos De UI Que Ya Deben Verse Claros
 
 - El stepper superior debe mostrar cinco pasos operativos con estado `Listo`, `Revisar` o `Pendiente`.
