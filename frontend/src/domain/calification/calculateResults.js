@@ -1,5 +1,6 @@
 import {
   normalizeArea,
+  normalizeAreaStrict,
   stripDigits,
   buildAreaTipoKey,
   buildQuestionPlan,
@@ -48,11 +49,11 @@ export function calculateAreaResults({
 
   let candidates = generalSimulacro
     ? archiveRows
-    : archiveRows.filter((row) => normalizeArea(row.area, areaList) === area)
+    : archiveRows.filter((row) => normalizeAreaStrict(row.area, areaList) === area)
 
   if (isRealProcess) {
     const areaAnswerKeys = answerKeyRows.filter(
-      k => k.area?.trim() && normalizeArea(k.area, areaList) === area
+      k => k.area?.trim() && normalizeAreaStrict(k.area, areaList) === area
     )
     const keyTypes = new Set(areaAnswerKeys.map(k => (k.tipo || '').trim().toUpperCase().slice(0, 1)).filter(Boolean))
     const missingRealKeyTypes = REAL_TEST_TYPES.filter(tipo => !keyTypes.has(tipo))
@@ -202,6 +203,7 @@ export function calculateAreaResults({
       const correctChar = correctAnswers[index] || ' '
       const isCorrectCharValid = /^[A-E]$/.test(correctChar)
       const isResponseCharValid = /^[A-E]$/.test(responseChar)
+      const isMultipleMark = responseChar === '*'
       const isAssumedFinalBlank = index >= originalAnswersLength
 
       if (!isCorrectCharValid) {
@@ -216,6 +218,9 @@ export function calculateAreaResults({
       } else if (isResponseCharValid) {
         contribution = incorrectValue * weight
         status = 'incorrect'
+      } else if (isMultipleMark) {
+        contribution = 0
+        status = 'multiple'
       } else {
         contribution = blankValue * weight
       }
@@ -239,6 +244,7 @@ export function calculateAreaResults({
           questions: 0,
           correct: 0,
           incorrect: 0,
+          multiple: 0,
           blank: 0,
           score: 0,
           totalWeight: 0,

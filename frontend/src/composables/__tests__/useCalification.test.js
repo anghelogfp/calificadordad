@@ -323,7 +323,7 @@ describe('useCalification', () => {
     expect(calification.calificationError.value).toContain('Faltan claves para Ingeniería: T')
   })
 
-  it('audita resultados inválidos sin bloquear la calificación', () => {
+  it('bloquea resultados inválidos detectados por la auditoría', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     validateCalificationResultMock.mockReturnValue({
       valid: false,
@@ -347,7 +347,8 @@ describe('useCalification', () => {
     calification.calificationPlantillaId.value = 'tpl-general'
     calification.runCalification()
 
-    expect(calification.calificationResults.value).toHaveLength(1)
+    expect(calification.calificationResults.value).toHaveLength(0)
+    expect(calification.calificationError.value).toBe('Invariante de prueba')
     expect(validateCalificationResultMock).toHaveBeenCalledWith(expect.objectContaining({
       processType: 'simulacro',
       answersLength: 60,

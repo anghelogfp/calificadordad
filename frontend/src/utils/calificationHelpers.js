@@ -1,4 +1,4 @@
-import { normalizeArea, stripDigits } from './helpers'
+import { normalizeAreaStrict, stripDigits } from './helpers'
 
 export const REAL_TEST_TYPES = ['P', 'Q', 'R', 'S', 'T']
 export const GENERAL_SIMULACRO_AREA = 'General'
@@ -22,13 +22,13 @@ export function getCandidateDniIssue(candidate, dniCounts) {
 }
 
 export function getExactAnswerKey(rows, area, tipo, areaList) {
-  const normalizedArea = normalizeArea(area, areaList)
+  const normalizedArea = normalizeAreaStrict(area, areaList)
   const normalizedTipo = (tipo || '').trim().toUpperCase().slice(0, 1)
-  if (!normalizedTipo) return undefined
+  if (!normalizedArea || !normalizedTipo) return undefined
   return rows.find(
     (row) =>
       row.area?.trim() &&
-      normalizeArea(row.area, areaList) === normalizedArea &&
+      normalizeAreaStrict(row.area, areaList) === normalizedArea &&
       (row.tipo || '').trim().toUpperCase().slice(0, 1) === normalizedTipo
   )
 }

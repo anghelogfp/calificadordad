@@ -49,8 +49,8 @@ export const ARCHIVE_COLUMNS = [
 // Alias de claves para mapeo de columnas Excel
 export const ARCHIVE_KEY_ALIASES = {
   dni: ['dni', 'documento', 'numdoc', 'número de documento'],
-  paterno: ['paterno', 'apellido paterno', 'ape_pat'],
-  materno: ['materno', 'apellido materno', 'ape_mat'],
+  paterno: ['paterno', 'apellido paterno', 'apellido_paterno', 'apellidos paterno', 'apellidos_paterno', 'ape_pat', 'ap_paterno'],
+  materno: ['materno', 'apellido materno', 'apellido_materno', 'apellidos materno', 'apellidos_materno', 'ape_mat', 'ap_materno'],
   nombres: ['nombres', 'nombre', 'nombres completos'],
   observaciones: ['observaciones', 'observacione', 'obs'],
   area: ['area', 'área', 'especialidad', 'desarea', 'des_area', 'area_des', 'descripcion area', 'descripción área', 'areades', 'cod_area', 'codarea', 'area de postulacion', 'área de postulación'],

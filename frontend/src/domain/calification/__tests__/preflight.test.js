@@ -111,6 +111,21 @@ describe('buildCalificationPreflight', () => {
     })
   })
 
+  it('advierte áreas desconocidas sin contarlas como la primera área', () => {
+    const preflight = buildCalificationPreflight(makeBaseInput({
+      area: 'Biomédicas',
+      archiveRows: [
+        { dni: '12345678', area: 'Area Desconocida', programa: 'Civil' },
+      ],
+      answerKeyRows: [
+        { area: 'Biomédicas', tipo: 'P', answers: makeAnswers('A') },
+      ],
+    }))
+
+    expect(byKey(preflight).candidates).toMatchObject({ value: 0, status: 'error' })
+    expect(byKey(preflight).unknownArea).toMatchObject({ value: 1, status: 'warn' })
+  })
+
   it('en modo real exige claves P/Q/R/S/T y advierte datos incompletos', () => {
     const preflight = buildCalificationPreflight(makeBaseInput({
       processType: 'real',

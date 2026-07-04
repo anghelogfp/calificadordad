@@ -188,11 +188,11 @@ const hasAnyAnswer = computed(() =>
 )
 
 const answerString = computed(() =>
-  answerCells.map(normalizeCell).join('').slice(0, totalQuestions.value)
+  cellsToPositionString(answerCells, totalQuestions.value)
 )
 
 const correctString = computed(() =>
-  correctCells.map(normalizeCell).join('').slice(0, totalQuestions.value)
+  cellsToPositionString(correctCells, totalQuestions.value)
 )
 
 // ── Mapa de normalización: 1-5 → A-E, A-E → A-E (solo para cálculo/guardado) ─
@@ -200,6 +200,15 @@ const KEY_MAP = { '1':'A','2':'B','3':'C','4':'D','5':'E','A':'A','B':'B','C':'C
 
 function normalizeCell(c) {
   return KEY_MAP[(c || '').toUpperCase()] || ''
+}
+
+function cellsToPositionString(cells, total = totalQuestions.value) {
+  return Array.from({ length: total }, (_, index) => normalizeCell(cells[index]) || ' ').join('')
+}
+
+function ensureCellCapacity(total = totalQuestions.value) {
+  for (let i = correctCells.length; i < total; i++) correctCells[i] = ''
+  for (let i = answerCells.length; i < total; i++) answerCells[i] = ''
 }
 
 function extractAnswerChars(text) {
@@ -300,7 +309,8 @@ function handleCellKeydown(e, index, gridType) {
 
 // ── Acciones ──────────────────────────────────────────────────────────────────
 function limpiar() {
-  for (let i = 0; i < 60; i++) {
+  ensureCellCapacity()
+  for (let i = 0; i < correctCells.length; i++) {
     correctCells[i] = ''
     answerCells[i]  = ''
   }
@@ -325,6 +335,8 @@ async function guardar() {
     return
   }
 
+  ensureCellCapacity()
+  const total = totalQuestions.value
   const payload = {
     plantilla_id:       selectedPlantilla.value.id,
     plantilla_name:     selectedPlantilla.value.name,
@@ -337,8 +349,8 @@ async function guardar() {
     aula:       candidatoAula.value.trim(),
     posicion:   candidatoPosicion.value.trim(),
     tipo_prueba: candidatoTipo.value.trim(),
-    answers:         answerCells.map(normalizeCell).join('').slice(0, 60),
-    correct_answers: correctCells.map(normalizeCell).join('').slice(0, 60),
+    answers:         cellsToPositionString(answerCells, total),
+    correct_answers: cellsToPositionString(correctCells, total),
     correct_value:   Number(correctValue.value),
     incorrect_value: Number(incorrectValue.value),
     blank_value:     Number(blankValue.value),
@@ -362,11 +374,13 @@ async function guardar() {
 
 function cargarSesion(sesion) {
   selectedPlantillaId.value = sesion.plantilla_id
+  ensureCellCapacity()
+  const total = totalQuestions.value
 
   // Rellenar las celdas desde los strings
-  const ans = (sesion.answers || '').padEnd(60, ' ')
-  const cor = (sesion.correct_answers || '').padEnd(60, ' ')
-  for (let i = 0; i < 60; i++) {
+  const ans = (sesion.answers || '').padEnd(total, ' ')
+  const cor = (sesion.correct_answers || '').padEnd(total, ' ')
+  for (let i = 0; i < answerCells.length; i++) {
     answerCells[i]  = /^[A-E]$/.test(ans[i]) ? ans[i] : ''
     correctCells[i] = /^[A-E]$/.test(cor[i]) ? cor[i] : ''
   }

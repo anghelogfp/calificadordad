@@ -8,6 +8,7 @@ import {
   createResponseRow,
   buildResponseObservation,
   parseResponseLine,
+  parseLinkedResponseLine,
   detectResponseAnswersOffset,
 } from '@/utils/parsers'
 import { apiFetch } from '@/utils/apiFetch'
@@ -192,9 +193,14 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
   function applyIdentifierDataToResponseRow(row, lookup = identifierLookup?.value, lithoLookup = identifierLookupByLitho?.value) {
     const key = buildResponseMatchKey(row)
     let match = key && lookup ? lookup.get(key) : undefined
+    let ambiguousLitho = false
     if (!match && lithoLookup) {
-      const fallback = lithoLookup.get(stripDigits(row.litho))
-      match = fallback
+      const litho = stripDigits(row.litho)
+      if (lithoLookup.has(litho)) {
+        const fallback = lithoLookup.get(litho)
+        ambiguousLitho = fallback === null
+        match = fallback || undefined
+      }
     }
 
     if (match) {
@@ -206,7 +212,12 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
       row.tipo = (row.tipo || '').trim().toUpperCase().slice(0, 1)
     }
 
-    const obs = buildResponseObservation(row, effectiveFormatConfig())
+    const baseObs = buildResponseObservation(row, effectiveFormatConfig())
+    const obs = ambiguousLitho
+      ? (baseObs === 'Sin observaciones'
+        ? 'Litho ambiguo en identificadores'
+        : `${baseObs} · Litho ambiguo en identificadores`)
+      : baseObs
     if (row.observaciones !== obs) {
       row.observaciones = obs
     }
@@ -230,11 +241,30 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
         const fileErrors = []
 
         lines.forEach((line, index) => {
-          const result = parseResponseLine(line, index + 1, effectiveFormatConfig())
+          const preliminary = parseResponseLine(line, index + 1, effectiveFormatConfig())
+          let linkedIdentifier = null
+          if (preliminary?.row) {
+            const exactKey = buildResponseMatchKey(preliminary.row)
+            linkedIdentifier = identifierLookup?.value?.get(exactKey) || null
+            if (!linkedIdentifier) {
+              const litho = stripDigits(preliminary.row.litho)
+              const fallback = identifierLookupByLitho?.value?.get(litho)
+              linkedIdentifier = fallback || null
+            }
+          }
+
+          const result = linkedIdentifier
+            ? parseLinkedResponseLine(line, index + 1, effectiveFormatConfig(), linkedIdentifier)
+            : preliminary
           if (!result) return
           if (result.error) {
             fileErrors.push(`${file.name}: ${result.error}`)
           } else {
+            applyIdentifierDataToResponseRow(
+              result.row,
+              identifierLookup?.value,
+              identifierLookupByLitho?.value
+            )
             parsedRows.push({
               ...result.row,
               sourceId,

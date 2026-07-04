@@ -6,9 +6,10 @@ import {
   generateId,
   normalize,
   normalizeArea,
+  normalizeAreaStrict,
   stripDigits,
   buildResponseMatchKey,
-  buildAreaTipoKey,
+  buildUniqueLithoLookup,
 } from '@/utils/helpers'
 import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
 import { parseIdentifierLine, parseAnswerKeyResponseLine, readLinesFromFile, detectResponseAnswersOffset } from '@/utils/parsers'
@@ -66,10 +67,13 @@ export function buildAnswerKeyObservation(row, formatConfig = DEFAULT_DAT_FORMAT
   const answersNormalized = answerWindow.replace(/\s/g, '')
   if (!answersNormalized) {
     issues.push('Sin respuestas registradas')
-  } else if (answersNormalized.length < formatConfig.answersLength) {
-    issues.push(`Cadena incompleta (${answersNormalized.length}/${formatConfig.answersLength})`)
-  } else if (/[^A-E*]/.test(answersNormalized)) {
-    issues.push('Respuestas con marcas no válidas')
+  } else {
+    if (answersNormalized.length < formatConfig.answersLength) {
+      issues.push(`Cadena incompleta (${answersNormalized.length}/${formatConfig.answersLength})`)
+    }
+    if (/[^A-E*]/.test(answersNormalized)) {
+      issues.push('Respuestas con marcas no válidas')
+    }
   }
 
   return issues.length ? issues.join(' · ') : 'Sin observaciones'
@@ -178,9 +182,10 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
   const answerKeyLookupByAreaTipo = computed(() => {
     const map = new Map()
     tableState.rows.value.forEach((row) => {
-      const key = buildAreaTipoKey(row.area, row.tipo, effectiveAreaNames.value)
-      if (!key) return
-      map.set(key, row)
+      const area = normalizeAreaStrict(row.area, effectiveAreaNames.value)
+      const tipo = (row.tipo || '').trim().toUpperCase().slice(0, 1)
+      if (!area || !tipo) return
+      map.set(`${area}|${tipo}`, row)
     })
     return map
   })
@@ -190,7 +195,7 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
     const map = new Map()
     tableState.rows.value.forEach((row) => {
       if (!row.area?.trim()) return
-      const area = normalizeArea(row.area, effectiveAreaNames.value)
+      const area = normalizeAreaStrict(row.area, effectiveAreaNames.value)
       if (!area || map.has(area)) return
       map.set(area, row)
     })
@@ -268,33 +273,52 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
       identificationFileParam,
       (line, lineNumber) => parseIdentifierLine(line, lineNumber, effectiveFormatConfig()),
     )
-    const responseResults = await readLinesFromFile(
-      responsesFileParam,
-      (line, lineNumber) => parseAnswerKeyResponseLine(line, lineNumber, effectiveFormatConfig()),
-    )
 
     const identifierRowsOnly = identifierResults.filter((item) => item && item.row)
-    const responseRowsOnly = responseResults.filter((item) => item && item.row)
     const identifierErrors = identifierResults.filter((item) => item && item.error)
-    const responseErrors = responseResults.filter((item) => item && item.error)
 
     const lookup = new Map(
       identifierRowsOnly.map(({ row }) => [buildResponseMatchKey(row), row])
     )
-    const fallbackByLitho = new Map(
-      identifierRowsOnly
-        .map(({ row }) => [stripDigits(row.litho), row])
-        .filter(([key]) => key)
+    const fallbackByLitho = buildUniqueLithoLookup(identifierRowsOnly.map(({ row }) => row))
+
+    const responseResults = await readLinesFromFile(
+      responsesFileParam,
+      (line, lineNumber) => {
+        const preliminary = parseAnswerKeyResponseLine(line, lineNumber, effectiveFormatConfig())
+        if (!preliminary?.row) return preliminary
+
+        const key = buildResponseMatchKey(preliminary.row)
+        let matched = lookup.get(key)
+        if (!matched) {
+          const litho = stripDigits(preliminary.row.litho)
+          const fallback = fallbackByLitho.get(litho)
+          matched = fallback || undefined
+        }
+
+        return matched
+          ? parseAnswerKeyResponseLine(line, lineNumber, effectiveFormatConfig(), matched)
+          : preliminary
+      },
     )
+
+    const responseRowsOnly = responseResults.filter((item) => item && item.row)
+    const responseErrors = responseResults.filter((item) => item && item.error)
 
     const createdAt = new Date().toISOString()
     const sourceId = generateId()
     const combinedRows = responseRowsOnly.map(({ row }) => {
       const key = buildResponseMatchKey(row)
       let matched = lookup.get(key)
+      let ambiguousLitho = false
 
       if (!matched) {
-        matched = fallbackByLitho.get(stripDigits(row.litho))
+        const litho = stripDigits(row.litho)
+        if (fallbackByLitho.has(litho)) {
+          const fallback = fallbackByLitho.get(litho)
+          ambiguousLitho = fallback === null
+          matched = fallback || undefined
+        }
       }
 
       const tipo = matched ? matched.tipo : ''
@@ -312,6 +336,10 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
       const baseObservation = buildAnswerKeyObservation(answerKeyRow, effectiveFormatConfig())
       if (matched) {
         answerKeyRow.observaciones = baseObservation
+      } else if (ambiguousLitho) {
+        answerKeyRow.observaciones = baseObservation === 'Sin observaciones'
+          ? 'Litho ambiguo en identificación'
+          : `${baseObservation} · Litho ambiguo en identificación`
       } else if (baseObservation === 'Sin observaciones') {
         answerKeyRow.observaciones = 'Sin coincidencia en identificador'
       } else {

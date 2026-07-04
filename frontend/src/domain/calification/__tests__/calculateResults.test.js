@@ -79,6 +79,21 @@ describe('calculateAreaResults', () => {
     expect(validateCalificationResult({ result })).toMatchObject({ valid: true })
   })
 
+  it('no asigna áreas desconocidas a la primera área disponible', () => {
+    expect(() => calculateAreaResults(makeInput({
+      area: 'Biomédicas',
+      archiveRows: [
+        { dni: '12345678', area: 'Area Desconocida', programa: 'Civil', paterno: 'A' },
+      ],
+      answerKeyRows: [
+        { area: 'Biomédicas', tipo: 'P', answers: makeAnswers('A') },
+      ],
+      answerKeyLookupByAreaTipo: new Map([
+        ['Biomédicas|P', { area: 'Biomédicas', tipo: 'P', answers: makeAnswers('A') }],
+      ]),
+    }))).toThrow('No hay postulantes registrados')
+  })
+
   it('rechaza plantillas que no cubren todas las preguntas', () => {
     expect(() => calculateAreaResults(makeInput({
       plantilla: makePlantilla({
@@ -178,6 +193,52 @@ describe('calculateAreaResults', () => {
           score: 2,
           totalWeight: 1,
         },
+      ],
+    })
+    expect(validateCalificationResult({ result })).toMatchObject({ valid: true })
+  })
+
+  it('califica asterisco como marca múltiple con puntaje cero', () => {
+    const result = calculateAreaResults(makeInput({
+      plantilla: makePlantilla({
+        questionTotal: 3,
+        items: [
+          { subject: 'General', questionCount: 3, ponderation: 1 },
+        ],
+      }),
+      answersLength: 3,
+      correctValue: 10,
+      incorrectValue: -1,
+      blankValue: 2,
+      responsesRows: [
+        { dni: '12345678', tipo: 'P', answers: 'A* ', litho: '100001' },
+      ],
+      answerKeyRows: [
+        { area: 'Ingeniería', tipo: 'P', answers: 'ABC' },
+      ],
+      responsesByDni: new Map([
+        ['12345678', [{ dni: '12345678', tipo: 'P', answers: 'A* ', litho: '100001' }]],
+      ]),
+      answerKeyLookupByAreaTipo: new Map([
+        ['Ingeniería|P', { area: 'Ingeniería', tipo: 'P', answers: 'ABC' }],
+      ]),
+    }))
+
+    expect(result.results[0]).toMatchObject({
+      score: 12,
+      questionDetails: [
+        expect.objectContaining({ number: 1, status: 'correct', score: 10 }),
+        expect.objectContaining({ number: 2, answer: '*', status: 'multiple', score: 0 }),
+        expect.objectContaining({ number: 3, status: 'blank', score: 2 }),
+      ],
+      subjectBreakdown: [
+        expect.objectContaining({
+          correct: 1,
+          incorrect: 0,
+          multiple: 1,
+          blank: 1,
+          score: 12,
+        }),
       ],
     })
     expect(validateCalificationResult({ result })).toMatchObject({ valid: true })

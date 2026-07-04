@@ -188,10 +188,13 @@ export function buildResponseObservation(row, formatConfig = DEFAULT_DAT_FORMAT)
   const markedAnswers = answerWindow.replace(/\s/g, '')
   if (!answersRaw.trim()) {
     issues.push('Sin respuestas marcadas')
-  } else if (answersRaw.length < formatConfig.answersLength) {
-    issues.push(`Blancos finales asumidos (${formatConfig.answersLength - answersRaw.length})`)
-  } else if (/[^A-E*]/.test(markedAnswers)) {
-    issues.push('Respuestas con marcas no válidas')
+  } else {
+    if (answersRaw.length < formatConfig.answersLength) {
+      issues.push(`Blancos finales asumidos (${formatConfig.answersLength - answersRaw.length})`)
+    }
+    if (/[^A-E*]/.test(markedAnswers)) {
+      issues.push('Respuestas con marcas no válidas')
+    }
   }
 
   return issues.length ? issues.join(' · ') : 'Sin observaciones'
@@ -207,8 +210,12 @@ export function parseResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_F
   return parseResponseLineInternal(line, lineNumber, formatConfig, false)
 }
 
-export function parseAnswerKeyResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_FORMAT) {
-  return parseResponseLineInternal(line, lineNumber, formatConfig, true)
+export function parseLinkedResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_FORMAT, linkedIdentifier = null) {
+  return parseResponseLineInternal(line, lineNumber, formatConfig, false, linkedIdentifier)
+}
+
+export function parseAnswerKeyResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_FORMAT, linkedIdentifier = null) {
+  return parseResponseLineInternal(line, lineNumber, formatConfig, true, linkedIdentifier)
 }
 
 function scoreAnswersSegment(segment, answersLength) {
@@ -233,7 +240,30 @@ function selectAnswerKeyAnswersOffset(remainder, formatConfig) {
     .sort((a, b) => b.score - a.score || a.offset - b.offset)[0]?.offset ?? configuredOffset
 }
 
-function parseResponseLineInternal(line, lineNumber, formatConfig = DEFAULT_DAT_FORMAT, autoDetectAnswerKeyOffset = false) {
+function selectLinkedAnswersOffset(remainder, formatConfig, linkedIdentifier) {
+  const configuredOffset = formatConfig.responseAnswersOffset
+    ?? (formatConfig.tipoOffset + formatConfig.tipoLength)
+  const noTypeOffset = formatConfig.lithoOffset + formatConfig.lithoLength
+  const linkedTipo = (linkedIdentifier?.tipo || '').trim().toUpperCase().slice(0, 1)
+  if (!linkedTipo) return null
+
+  const responseTipo = remainder
+    .slice(formatConfig.tipoOffset, formatConfig.tipoOffset + formatConfig.tipoLength)
+    .trim()
+    .toUpperCase()
+
+  if (responseTipo === linkedTipo) return configuredOffset
+  if (/^[PQRST]$/.test(responseTipo)) return configuredOffset
+  return noTypeOffset
+}
+
+function parseResponseLineInternal(
+  line,
+  lineNumber,
+  formatConfig = DEFAULT_DAT_FORMAT,
+  autoDetectAnswerKeyOffset = false,
+  linkedIdentifier = null,
+) {
   const raw = line.endsWith('\r') ? line.slice(0, -1) : line
   if (!raw.trim() || raw.trim().length <= 1) {
     return null
@@ -282,12 +312,14 @@ function parseResponseLineInternal(line, lineNumber, formatConfig = DEFAULT_DAT_
   const lithoSegment = remainder.slice(formatConfig.lithoOffset, formatConfig.lithoOffset + formatConfig.lithoLength)
   const responseAnswersOffset = formatConfig.responseAnswersOffset
     ?? (formatConfig.tipoOffset + formatConfig.tipoLength)
-  const answersOffset = autoDetectAnswerKeyOffset
-    ? selectAnswerKeyAnswersOffset(remainder, formatConfig)
-    : responseAnswersOffset
+  const linkedAnswersOffset = selectLinkedAnswersOffset(remainder, formatConfig, linkedIdentifier)
+  const answersOffset = linkedAnswersOffset
+    ?? (autoDetectAnswerKeyOffset
+      ? selectAnswerKeyAnswersOffset(remainder, formatConfig)
+      : responseAnswersOffset)
   const typeOverlapsAnswers = answersOffset <= formatConfig.tipoOffset
   const tipoSegment = typeOverlapsAnswers
-    ? ''
+    ? (linkedIdentifier?.tipo || '')
     : remainder.slice(formatConfig.tipoOffset, formatConfig.tipoOffset + formatConfig.tipoLength)
   const answersSegment = remainder
     .slice(answersOffset, answersOffset + formatConfig.answersLength)
@@ -304,6 +336,11 @@ function parseResponseLineInternal(line, lineNumber, formatConfig = DEFAULT_DAT_
     tipo: tipoSegment.trim().toUpperCase(),
     answers: answersSegment,
   })
+
+  row.detectedAnswersOffset = answersOffset
+  row.tipoSource = typeOverlapsAnswers
+    ? (linkedIdentifier?.tipo ? 'identifier' : 'none')
+    : 'response'
 
   row.observaciones = buildResponseObservation(row, formatConfig)
 

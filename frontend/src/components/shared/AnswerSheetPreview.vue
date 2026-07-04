@@ -5,7 +5,7 @@ const props = defineProps({
   answers: { type: String, default: '' },
   correctAnswers: { type: String, default: '' },
   totalQuestions: { type: Number, default: 60 },
-  mode: { type: String, default: 'answers' },
+  mode: { type: String, default: 'inspect-answers' },
   title: { type: String, default: 'Hoja de respuestas' },
 })
 
@@ -106,7 +106,7 @@ function optionClass(row, option) {
   max-width: 100%;
   padding: var(--space-4);
   border: 1px solid #f43f5e;
-  border-radius: var(--radius-md);
+  border-radius: 18px;
   background: white;
   color: #9f1239;
 }
@@ -143,6 +143,8 @@ function optionClass(row, option) {
 .sheet-preview__column {
   width: fit-content;
   border: 1px solid #fb7185;
+  border-radius: 14px;
+  overflow: hidden;
   background: white;
 }
 
@@ -160,7 +162,7 @@ function optionClass(row, option) {
 }
 
 .sheet-row:nth-child(even) {
-  background: #fff7f8;
+  background: #ffe4eb;
 }
 
 .sheet-row__number {

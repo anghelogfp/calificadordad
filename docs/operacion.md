@@ -77,6 +77,22 @@ Frontend:
 
 En las tablas de Respuestas y Claves tambien existe una vista de cartilla en modal para revisar la cadena cargada antes de seguir con el proceso.
 
+## Padron Excel
+
+El Paso 1 lee la primera hoja del `.xlsx` y usa la primera fila como encabezados. Las columnas pueden venir en distinto orden.
+
+Columnas reconocidas:
+
+- DNI: `dni`, `documento`, `numdoc`, `número de documento`.
+- Apellido paterno: `paterno`, `apellido paterno`, `apellido_paterno`, `apellidos paterno`, `apellidos_paterno`, `ape_pat`, `ap_paterno`.
+- Apellido materno: `materno`, `apellido materno`, `apellido_materno`, `apellidos materno`, `apellidos_materno`, `ape_mat`, `ap_materno`.
+- Nombres: `nombres`, `nombre`, `nombres completos`.
+- Observaciones: `observaciones`, `observacione`, `obs`.
+- Area: `area`, `área`, `especialidad`, `desarea`, `des_area`, `area_des`, `descripcion area`, `descripción área`, `areades`, `cod_area`, `codarea`, `area de postulacion`, `área de postulación`.
+- Programa: `programa`, `desprograma`, `des_programa`, `carrera`, `escuela`, `programa de estudios`, `prog`.
+
+Columnas extra como `nro` o `sede` no bloquean la importacion; se ignoran mientras no exista un campo operativo para ellas.
+
 ## Puntos De UI Que Ya Deben Verse Claros
 
 - El stepper superior debe mostrar cinco pasos operativos con estado `Listo`, `Revisar` o `Pendiente`.

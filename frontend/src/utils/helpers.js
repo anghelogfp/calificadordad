@@ -67,6 +67,30 @@ export function normalizeArea(value, areaList = ANSWER_KEY_AREAS) {
 }
 
 /**
+ * Normaliza un área solo si existe una coincidencia real.
+ * Útil para reglas de negocio donde no se debe asumir la primera área.
+ */
+export function normalizeAreaStrict(value, areaList = ANSWER_KEY_AREAS) {
+  const raw = String(value ?? '')
+  const trimmedOriginal = raw.trim()
+  if (!trimmedOriginal) return ''
+
+  const exactMatch = areaList.find((area) => area === trimmedOriginal)
+  if (exactMatch) return exactMatch
+
+  const normalized = removeDiacritics(trimmedOriginal).toLowerCase()
+  const aliasMatch = ANSWER_KEY_AREA_ALIASES[normalized]
+  if (aliasMatch) {
+    const aliasInList = areaList.find((area) => area === aliasMatch)
+    if (aliasInList) return aliasInList
+  }
+
+  return areaList.find(
+    (area) => removeDiacritics(area).trim().toLowerCase() === normalized,
+  ) ?? ''
+}
+
+/**
  * Genera un ID único
  */
 export function generateId() {
@@ -106,6 +130,20 @@ export function buildResponseMatchKey(row) {
   return `${litho}|${indicator}|${folio}`
 }
 
+export function buildUniqueLithoLookup(rows = []) {
+  const map = new Map()
+  rows.forEach((row) => {
+    const litho = stripDigits(row?.litho)
+    if (!litho) return
+    if (map.has(litho)) {
+      map.set(litho, null)
+      return
+    }
+    map.set(litho, row)
+  })
+  return map
+}
+
 /**
  * Construye una clave para lookup por área y tipo
  */
@@ -138,7 +176,7 @@ export function classifyAnswerChar(answerChar) {
   }
 
   if (value === '*') {
-    return 'blank'
+    return 'multiple'
   }
 
   if (/^[A-E]$/.test(value)) {

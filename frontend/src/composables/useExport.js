@@ -20,6 +20,7 @@ export function useExport() {
     const keys = String(row.correctAnswersRaw || '').toUpperCase()
     let correct = 0
     let incorrect = 0
+    let multiple = 0
     let blank = 0
     const length = Math.max(answers.length, keys.length)
 
@@ -30,10 +31,26 @@ export function useExport() {
       const keyValid = /^[A-E]$/.test(key)
       if (markedValid && keyValid && marked === key) correct += 1
       else if (markedValid) incorrect += 1
+      else if (marked === '*') multiple += 1
       else blank += 1
     }
 
-    return { correct, incorrect, blank }
+    return { correct, incorrect, multiple, blank }
+  }
+
+  function aggregateAnswerStats(rows = []) {
+    return rows.reduce((acc, row) => {
+      const stats = answerStats(row)
+      acc.correct += stats.correct
+      acc.incorrect += stats.incorrect
+      acc.multiple += stats.multiple
+      acc.blank += stats.blank
+      return acc
+    }, { correct: 0, incorrect: 0, multiple: 0, blank: 0 })
+  }
+
+  function visibleAnswerArray(value) {
+    return String(value || '').replaceAll(' ', '·')
   }
 
   function styleHeaderRow(row, fill = 'FF1E3A5F') {
@@ -57,6 +74,7 @@ export function useExport() {
   function addSummarySheet(workbook, rows, area, areaSummary, areaStats, convocatoriaName) {
     const sheet = workbook.addWorksheet('Resumen')
     const first = rows[0] || {}
+    const answerTotals = aggregateAnswerStats(rows)
     const calculationDate = areaSummary?.timestamp
       ? new Date(areaSummary.timestamp).toLocaleString('es-PE')
       : new Date().toLocaleString('es-PE')
@@ -75,10 +93,15 @@ export function useExport() {
       ['Puntos por correcta', areaSummary?.correctValue ?? ''],
       ['Puntos por incorrecta', areaSummary?.incorrectValue ?? ''],
       ['Puntos por blanco', areaSummary?.blankValue ?? ''],
+      ['Puntos por múltiple/anulada', 0],
       ['Total de preguntas', areaSummary?.answersLength ?? ''],
       ['Peso total', areaSummary?.totalWeight ?? ''],
       ['Postulantes del área', areaSummary?.totalCandidates ?? rows.length],
       ['Postulantes calificados', rows.length],
+      ['Total correctas', answerTotals.correct],
+      ['Total incorrectas', answerTotals.incorrect],
+      ['Total múltiples/anuladas', answerTotals.multiple],
+      ['Total en blanco', answerTotals.blank],
       ['Sin respuesta', areaSummary?.missingResponses ?? 0],
       ['Sin clave', areaSummary?.missingKeys ?? 0],
       ['Respuestas duplicadas', areaSummary?.duplicateResponses ?? 0],
@@ -103,12 +126,14 @@ export function useExport() {
     })
   }
 
-  function addObservationsSheet(workbook, areaSummary) {
+  function addObservationsSheet(workbook, areaSummary, rows = []) {
     const sheet = workbook.addWorksheet('Observaciones')
     const header = sheet.addRow(['Tipo de observación', 'Cantidad', 'Detalle'])
     styleHeaderRow(header)
+    const answerTotals = aggregateAnswerStats(rows)
 
-    const rows = [
+    const observationRows = [
+      ['Marcas múltiples/anuladas (*)', answerTotals.multiple, 'Preguntas con más de una alternativa marcada. Puntúan 0, no cuentan como blanco.'],
       ['Sin respuesta', areaSummary?.missingResponses ?? 0, 'Postulantes del padrón sin respuesta .dat.'],
       ['Sin clave', areaSummary?.missingKeys ?? 0, 'Respuestas que no pudieron cruzarse con una clave del área.'],
       ['Respuestas duplicadas', areaSummary?.duplicateResponses ?? 0, 'Postulantes con más de una hoja de respuestas vinculada al mismo DNI.'],
@@ -118,7 +143,7 @@ export function useExport() {
       ['Respuestas sin DNI', areaSummary?.unlinkedResponses ?? 0, 'Respuestas no vinculadas a un DNI.'],
     ]
 
-    rows.forEach((item) => sheet.addRow(item))
+    observationRows.forEach((item) => sheet.addRow(item))
     sheet.columns = [{ width: 22 }, { width: 12 }, { width: 70 }]
     sheet.getColumn(2).alignment = { horizontal: 'center' }
   }
@@ -164,7 +189,7 @@ export function useExport() {
   function addSimulacroResultsSheet(workbook, rows, area) {
     const sheet = workbook.addWorksheet(safeSheetName(`Resultados ${area || ''}`))
 
-    sheet.mergeCells('A1:O1')
+    sheet.mergeCells('A1:R1')
     sheet.getCell('A1').value = `Resultados de Simulacro - Área: ${area || ''}`
     sheet.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF0F2F57' } }
     sheet.getCell('A1').alignment = { horizontal: 'center' }
@@ -184,8 +209,11 @@ export function useExport() {
       'Puntaje',
       'Correctas',
       'Incorrectas',
+      'Múltiples',
       'En blanco',
-      'Respuestas marcadas',
+      'Longitud',
+      'Respuestas DAT',
+      'Respuestas visibles',
     ])
     styleHeaderRow(header)
 
@@ -205,20 +233,27 @@ export function useExport() {
         row.score,
         stats.correct,
         stats.incorrect,
+        stats.multiple,
         stats.blank,
+        String(row.answersRaw || '').length,
         row.answersRaw || '',
+        visibleAnswerArray(row.answersRaw),
       ])
       dataRow.getCell(11).font = { bold: true }
-      dataRow.getCell(15).font = { name: 'Courier New', size: 9 }
+      dataRow.getCell(17).font = { name: 'Courier New', size: 9 }
+      dataRow.getCell(17).numFmt = '@'
+      dataRow.getCell(18).font = { name: 'Courier New', size: 9 }
+      dataRow.getCell(18).numFmt = '@'
     })
 
     sheet.columns = [
       { width: 10 }, { width: 12 }, { width: 18 }, { width: 18 }, { width: 25 },
       { width: 15 }, { width: 28 }, { width: 8 }, { width: 8 }, { width: 12 },
-      { width: 12 }, { width: 10 }, { width: 12 }, { width: 10 }, { width: 68 },
+      { width: 12 }, { width: 10 }, { width: 12 }, { width: 10 }, { width: 10 },
+      { width: 10 }, { width: 68 }, { width: 68 },
     ]
     sheet.views = [{ state: 'frozen', ySplit: 3 }]
-    sheet.autoFilter = 'A3:O3'
+    sheet.autoFilter = 'A3:R3'
   }
 
   async function exportScoresToExcel(rankedResults, convocatoriaName = '', options = {}) {
@@ -232,7 +267,7 @@ export function useExport() {
       const area = options.area || rankedResults[0]?.area || 'Área'
       addSummarySheet(workbook, rankedResults, area, options.areaSummary, options.areaStats, convocatoriaName)
       addSimulacroResultsSheet(workbook, rankedResults, area)
-      addObservationsSheet(workbook, options.areaSummary)
+      addObservationsSheet(workbook, options.areaSummary, rankedResults)
       addNoCalificadosSheet(workbook, options.areaSummary?.noCalificados || [])
 
       const buffer = await workbook.xlsx.writeBuffer()

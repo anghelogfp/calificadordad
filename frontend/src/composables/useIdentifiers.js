@@ -2,7 +2,7 @@ import { computed, ref } from 'vue'
 import { watchDebounced } from '@vueuse/core'
 import { useTableState } from './useTableState'
 import { DEFAULT_DAT_FORMAT } from '@/constants'
-import { generateId, normalize, stripDigits, buildResponseMatchKey } from '@/utils/helpers'
+import { generateId, normalize, buildResponseMatchKey, buildUniqueLithoLookup } from '@/utils/helpers'
 import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
 import {
   createIdentifierRow,
@@ -79,14 +79,7 @@ export function useIdentifiers(formatConfig) {
 
   // Lookup por litho
   const identifierLookupByLitho = computed(() => {
-    const map = new Map()
-    tableState.rows.value.forEach((row) => {
-      const litho = stripDigits(row.litho)
-      if (litho && !map.has(litho)) {
-        map.set(litho, row)
-      }
-    })
-    return map
+    return buildUniqueLithoLookup(tableState.rows.value)
   })
 
   async function initializeIdentifiers() {

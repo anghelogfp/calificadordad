@@ -28,6 +28,19 @@ function makeAnswers(char = 'A', length = 60) {
   return char.repeat(length)
 }
 
+const HEADER = '123456789012345678901'
+
+function buildDatLine({ examCode = '2024', folio = '77', indicator = 'A', payload = '' } = {}) {
+  return `${HEADER}${examCode}#${folio}${indicator}${payload}`
+}
+
+function makeFile(name, text) {
+  return {
+    name,
+    text: async () => text,
+  }
+}
+
 function makeSubject({ identifiers = [] } = {}) {
   const identifierRows = ref(identifiers)
   const identifierLookup = computed(() => {
@@ -44,7 +57,9 @@ function makeSubject({ identifiers = [] } = {}) {
     const map = new Map()
     identifierRows.value.forEach((row) => {
       const litho = String(row.litho || '').replace(/\D/g, '')
-      if (litho && !map.has(litho)) map.set(litho, row)
+      if (!litho) return
+      if (map.has(litho)) map.set(litho, null)
+      else map.set(litho, row)
     })
     return map
   })
@@ -163,6 +178,30 @@ describe('useResponses.applyIdentifierDataToResponseRow', () => {
     })
   })
 
+  it('no usa fallback por litho cuando el litho es ambiguo', () => {
+    const responses = makeSubject({
+      identifiers: [
+        { litho: '654321', indicator: 'B', folio: '88', dni: '87654321', tipo: 'Q', aula: '202' },
+        { litho: '654321', indicator: 'C', folio: '99', dni: '99999999', tipo: 'R', aula: '303' },
+      ],
+    })
+    const row = {
+      litho: '654321',
+      indicator: 'A',
+      folio: '77',
+      dni: '',
+      tipo: '',
+      aula: '',
+      answers: makeAnswers('B'),
+    }
+
+    responses.applyIdentifierDataToResponseRow(row)
+
+    expect(row.dni).toBe('')
+    expect(row.tipo).toBe('')
+    expect(row.observaciones).toContain('Litho ambiguo en identificadores')
+  })
+
   it('normaliza DNI y tipo cuando no encuentra identificador', () => {
     const responses = makeSubject({ identifiers: [] })
     const row = {
@@ -220,6 +259,40 @@ describe('useResponses.responsesByDni', () => {
 
     expect(responses.responsesByDni.value.get('12345678')).toHaveLength(2)
     expect(responses.responsesByDni.value.has('')).toBe(false)
+  })
+})
+
+describe('useResponses.readResponseFiles', () => {
+  it('importa respuestas sin tipo usando el tipo del identificador y offset 6', async () => {
+    const answers = 'ABCDE'.repeat(12)
+    const responses = makeSubject({
+      identifiers: [
+        {
+          litho: '076279',
+          indicator: 'A',
+          folio: '77',
+          dni: '72583820',
+          tipo: 'P',
+          aula: '101',
+        },
+      ],
+    })
+    const file = makeFile('resp101.dat', buildDatLine({
+      payload: `076279${answers}`,
+    }))
+
+    await responses.readResponseFiles([file])
+
+    expect(responses.rows.value).toHaveLength(1)
+    expect(responses.rows.value[0]).toMatchObject({
+      dni: '72583820',
+      tipo: 'P',
+      litho: '076279',
+      answers,
+      detectedAnswersOffset: 6,
+      tipoSource: 'identifier',
+      observaciones: 'Sin observaciones',
+    })
   })
 })
 

@@ -5,7 +5,9 @@ import {
   removeWhitespace,
   normalize,
   normalizeArea,
+  normalizeAreaStrict,
   buildResponseMatchKey,
+  buildUniqueLithoLookup,
   buildAreaTipoKey,
   buildPonderationKey,
   classifyAnswerChar,
@@ -80,6 +82,21 @@ describe('normalizeArea', () => {
   })
 })
 
+describe('normalizeAreaStrict', () => {
+  const areas = ['Biomédicas', 'Sociales', 'Ingeniería']
+
+  it('normaliza solo áreas conocidas', () => {
+    expect(normalizeAreaStrict('Biomedicas', areas)).toBe('Biomédicas')
+    expect(normalizeAreaStrict('Ingenieria', areas)).toBe('Ingeniería')
+  })
+
+  it('no asume la primera área si no hay match', () => {
+    expect(normalizeAreaStrict('Desconocida', areas)).toBe('')
+    expect(normalizeAreaStrict('', areas)).toBe('')
+    expect(normalizeAreaStrict(null, areas)).toBe('')
+  })
+})
+
 describe('buildResponseMatchKey', () => {
   it('construye clave con litho, indicator y folio', () => {
     expect(buildResponseMatchKey({ litho: '123', indicator: 'A', folio: '1' })).toBe('123|A|1')
@@ -92,6 +109,26 @@ describe('buildResponseMatchKey', () => {
 
   it('maneja valores faltantes', () => {
     expect(buildResponseMatchKey({ litho: '', indicator: '', folio: '' })).toBe('||')
+  })
+})
+
+describe('buildUniqueLithoLookup', () => {
+  it('devuelve la fila solo cuando el litho es único', () => {
+    const row = { litho: 'ABC123' }
+    const lookup = buildUniqueLithoLookup([row, { litho: '456' }])
+
+    expect(lookup.get('123')).toBe(row)
+    expect(lookup.get('456')).toEqual({ litho: '456' })
+  })
+
+  it('marca lithos duplicados como ambiguos', () => {
+    const lookup = buildUniqueLithoLookup([
+      { litho: '123456', dni: '11111111' },
+      { litho: '123456', dni: '22222222' },
+    ])
+
+    expect(lookup.has('123456')).toBe(true)
+    expect(lookup.get('123456')).toBeNull()
   })
 })
 
@@ -127,10 +164,13 @@ describe('classifyAnswerChar', () => {
 
   it('clasifica otros caracteres como blank', () => {
     expect(classifyAnswerChar(' ')).toBe('blank')
-    expect(classifyAnswerChar('*')).toBe('blank')
     expect(classifyAnswerChar('X')).toBe('blank')
     expect(classifyAnswerChar('')).toBe('blank')
     expect(classifyAnswerChar(null)).toBe('blank')
+  })
+
+  it('clasifica asterisco como marca múltiple', () => {
+    expect(classifyAnswerChar('*')).toBe('multiple')
   })
 
   it('clasifica espacios en blanco y tabs como blank', () => {

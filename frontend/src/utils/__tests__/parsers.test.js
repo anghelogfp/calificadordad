@@ -6,6 +6,7 @@ import {
   createResponseRow,
   buildResponseObservation,
   parseResponseLine,
+  parseLinkedResponseLine,
   parseAnswerKeyResponseLine,
   detectResponseAnswersOffset,
   readLinesFromFile,
@@ -234,6 +235,19 @@ describe('buildResponseObservation', () => {
     expect(obs).toContain('Blancos finales asumidos (56)')
   })
 
+  it('acumula respuestas cortas e inválidas', () => {
+    const row = {
+      answers: 'ABCX',
+      dni: '12345678',
+      tipo: 'P',
+      litho: '123456',
+    }
+    const obs = buildResponseObservation(row, DEFAULT_DAT_FORMAT)
+
+    expect(obs).toContain('Blancos finales asumidos (56)')
+    expect(obs).toContain('Respuestas con marcas no válidas')
+  })
+
   it('detecta respuestas vacías', () => {
     const row = {
       answers: '',
@@ -283,6 +297,48 @@ describe('parseResponseLine', () => {
     expect(result.row.litho).toBe('654321')
     expect(result.row.tipo).toBe('P')
     expect(result.row.answers).toBe(answers)
+  })
+
+  it('detecta respuestas sin tipo usando el identificador vinculado', () => {
+    const answers = 'ABCDE'.repeat(12)
+    const line = buildDatLine({
+      payload: `076279${answers}`,
+    })
+
+    const result = parseLinkedResponseLine(line, 1, DEFAULT_DAT_FORMAT, {
+      litho: '076279',
+      indicator: 'A',
+      folio: '77',
+      tipo: 'P',
+      dni: '72583820',
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.row).toMatchObject({
+      litho: '076279',
+      tipo: 'P',
+      answers,
+      detectedAnswersOffset: 6,
+      tipoSource: 'identifier',
+    })
+    expect(result.row.answers).toHaveLength(60)
+  })
+
+  it('mantiene offset con tipo explícito aunque no coincida con el identificador', () => {
+    const answers = 'C'.repeat(60)
+    const line = buildDatLine({
+      payload: `222222P${answers}`,
+    })
+
+    const result = parseLinkedResponseLine(line, 1, DEFAULT_DAT_FORMAT, {
+      litho: '222222',
+      indicator: 'A',
+      folio: '77',
+      tipo: 'Q',
+    })
+
+    expect(result.row.answers).toBe(answers)
+    expect(result.row.detectedAnswersOffset).toBe(7)
   })
 
   it('reporta errores estructurales', () => {

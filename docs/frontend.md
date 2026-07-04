@@ -79,6 +79,14 @@ El estado del stepper se calcula desde datos reales del proceso:
 
 Las respuestas con cadena mas corta que el formato esperado ya no se tratan como error generico de cadena incompleta. Se registran como `Blancos finales asumidos` y el detalle por pregunta marca esos blancos finales con `blankSource: assumed-final`.
 
+## Importacion De Padron
+
+El Paso 1 importa la primera hoja del `.xlsx`, toma la primera fila como encabezados y mapea cada fila con `mapArchiveRowToSchema`.
+
+Los alias de encabezados viven en `src/constants/index.js` como `ARCHIVE_KEY_ALIASES`. Actualmente se aceptan variantes con espacios y guiones bajos para apellidos, por ejemplo `apellido paterno`, `apellido_paterno`, `apellidos_paterno`, `ape_pat` y `ap_paterno`; lo mismo aplica para materno.
+
+El importador ignora columnas externas no mapeadas, por ejemplo `nro` o `sede`. Si `sede` pasa a ser requerida para reportes o segmentacion, debe agregarse como campo real del padron y no solo como alias.
+
 ## Camino Del Proceso
 
 El camino se define al crear el proceso y queda bloqueado para el resto del flujo:

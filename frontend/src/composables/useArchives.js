@@ -44,7 +44,7 @@ export function createEmptyArchiveRow() {
 /**
  * Mapea una fila de Excel al esquema de archivo
  */
-function mapArchiveRowToSchema(row) {
+export function mapArchiveRowToSchema(row) {
   const normalizedEntries = Object.entries(row).map(([key, value]) => [
     normalize(key),
     String(value ?? '').trim(),

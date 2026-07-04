@@ -1,4 +1,4 @@
-import { normalizeArea, stripDigits } from '@/utils/helpers'
+import { normalizeArea, normalizeAreaStrict, stripDigits } from '@/utils/helpers'
 import {
   buildDniCounts,
   getCandidateDniIssue,
@@ -25,7 +25,11 @@ export function buildCalificationPreflight({
 
   const candidates = isGeneralSimulacro
     ? archiveRows
-    : archiveRows.filter(r => normalizeArea(r.area, areaList) === normalizedArea)
+    : archiveRows.filter(r => normalizeAreaStrict(r.area, areaList) === normalizedArea)
+
+  const unknownAreaCandidates = isGeneralSimulacro
+    ? []
+    : archiveRows.filter(r => r.area?.trim() && !normalizeAreaStrict(r.area, areaList))
 
   const unassignedCandidates = archiveRows.filter(r => !r.area?.trim())
   const usingFallback = !isRealProcess && candidates.length === 0 && unassignedCandidates.length > 0
@@ -95,6 +99,16 @@ export function buildCalificationPreflight({
       value: unassignedCandidates.length,
       status: 'warn',
       detail: 'Estos postulantes no entrarán al cálculo del área hasta corregir el padrón.',
+    })
+  }
+
+  if (unknownAreaCandidates.length > 0) {
+    items.push({
+      key: 'unknownArea',
+      label: 'Postulantes con área desconocida',
+      value: unknownAreaCandidates.length,
+      status: 'warn',
+      detail: `${unknownAreaCandidates.length} postulante(s) tienen un área que no coincide con la configuración y no entrarán al cálculo hasta corregir el padrón.`,
     })
   }
 

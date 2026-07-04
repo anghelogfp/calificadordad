@@ -524,6 +524,8 @@ export function useCalification(
 
     if (!validation.valid) {
       console.warn('[calification] Resultado calculado con invariantes inválidas:', validation)
+      const firstError = validation.errors?.[0]
+      throw new Error(firstError?.message || 'El resultado calculado no pasó la auditoría interna.')
     }
 
     return validation

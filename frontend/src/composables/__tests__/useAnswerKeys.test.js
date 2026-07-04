@@ -148,6 +148,18 @@ describe('answer key row helpers', () => {
       answers: `${makeAnswers('A', 59)} `,
     })).toContain('Cadena incompleta (59/60)')
   })
+
+  it('acumula claves incompletas e inválidas', () => {
+    const observation = buildAnswerKeyObservation({
+      area: '',
+      scope: 'general',
+      litho: '654321',
+      answers: 'ABCX',
+    })
+
+    expect(observation).toContain('Cadena incompleta (4/60)')
+    expect(observation).toContain('Respuestas con marcas no válidas')
+  })
 })
 
 describe('useAnswerKeys imports', () => {
@@ -236,6 +248,34 @@ describe('useAnswerKeys imports', () => {
     })
   })
 
+  it('importa claves por área cuando el archivo de respuestas no trae tipo', async () => {
+    const answerKeys = makeSubject()
+    const answers = 'BDBDCEDACCCBDDAADCDEACEBBEDDDBEEAADCECAADBADBABCDDCAEEEEBCBA'
+    const identificationFile = makeFile('clavebioid.dat', makeIdentifierLine({
+      litho: '074151',
+      tipo: 'P',
+      folio: '77',
+      indicator: 'A',
+    }))
+    const responsesFile = makeFile('clavebioresp.dat', buildDatLine({
+      folio: '77',
+      indicator: 'A',
+      payload: `074151${answers}`,
+    }))
+
+    await answerKeys.readAnswerKeyFiles('Biomédicas', identificationFile, responsesFile)
+
+    expect(answerKeys.rows.value).toHaveLength(1)
+    expect(answerKeys.rows.value[0]).toMatchObject({
+      area: 'Biomédicas',
+      tipo: 'P',
+      litho: '074151',
+      answers,
+      observaciones: 'Sin observaciones',
+    })
+    expect(answerKeys.rows.value[0].answers).toHaveLength(60)
+  })
+
   it('usa fallback por litho cuando no coincide indicador o folio', async () => {
     const answerKeys = makeSubject()
     const identificationFile = makeFile('ids.dat', makeIdentifierLine({
@@ -261,6 +301,31 @@ describe('useAnswerKeys imports', () => {
       answers: makeAnswers('D'),
       observaciones: 'Sin observaciones',
     })
+  })
+
+  it('no usa fallback por litho si hay identificadores ambiguos', async () => {
+    const answerKeys = makeSubject()
+    const identificationFile = makeFile('ids.dat', [
+      makeIdentifierLine({ litho: '333333', tipo: 'R', folio: '11', indicator: 'A' }),
+      makeIdentifierLine({ litho: '333333', tipo: 'S', folio: '12', indicator: 'B', dni: '87654321' }),
+    ].join('\n'))
+    const responsesFile = makeFile('claves.dat', makeResponseLine({
+      litho: '333333',
+      tipo: 'P',
+      folio: '99',
+      indicator: 'Z',
+      answers: makeAnswers('D'),
+    }))
+
+    await answerKeys.readAnswerKeyFiles('Sociales', identificationFile, responsesFile)
+
+    expect(answerKeys.rows.value[0]).toMatchObject({
+      area: 'Sociales',
+      tipo: '',
+      litho: '333333',
+      answers: makeAnswers('D'),
+    })
+    expect(answerKeys.rows.value[0].observaciones).toContain('Litho ambiguo en identificación')
   })
 
   it('agrega observación cuando una clave por área no tiene coincidencia en identificador', async () => {
