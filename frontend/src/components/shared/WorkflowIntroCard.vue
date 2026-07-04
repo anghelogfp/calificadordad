@@ -31,9 +31,14 @@ defineProps({
           <p>{{ description }}</p>
         </div>
       </div>
-      <div class="workflow-card__status" :class="{ 'workflow-card__status--ready': ready }">
-        <strong>{{ count }}</strong>
-        <span>{{ ready ? countLabel : 'sin registros' }}</span>
+      <div class="workflow-card__side">
+        <div v-if="$slots.actions" class="workflow-card__actions">
+          <slot name="actions" />
+        </div>
+        <div class="workflow-card__status" :class="{ 'workflow-card__status--ready': ready }">
+          <strong>{{ count }}</strong>
+          <span>{{ ready ? countLabel : 'sin registros' }}</span>
+        </div>
       </div>
     </header>
     <div v-if="$slots.default" class="workflow-card__body"><slot /></div>
@@ -70,6 +75,20 @@ defineProps({
   flex-wrap: wrap;
 }
 .workflow-card__identity p { margin: 3px 0 0; color: var(--slate-500); font-size: 0.82rem; }
+.workflow-card__side {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+.workflow-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 .workflow-card__status {
   display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0;
   padding: var(--space-2) var(--space-3); border-radius: var(--radius-lg);
@@ -85,7 +104,8 @@ defineProps({
 .workflow-card__body :deep(.uploader__icon) { width: 54px; height: 54px; }
 @media (max-width: 640px) {
   .workflow-card { padding: var(--space-4); }
-  .workflow-card__header, .workflow-card__identity { align-items: flex-start; }
+  .workflow-card__header, .workflow-card__identity, .workflow-card__side { align-items: flex-start; }
+  .workflow-card__side { flex-direction: column-reverse; }
   .workflow-card__status span { display: none; }
 }
 </style>

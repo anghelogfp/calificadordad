@@ -68,7 +68,8 @@ function mountAnswerKeysTab(reconciliation, props = {}) {
     },
     global: {
       stubs: {
-        WorkflowIntroCard: true,
+        WorkflowIntroCard: false,
+        ProcessPathBadge: true,
         Toolbar: true,
         SubTabs: true,
         DataTable: true,
@@ -152,6 +153,7 @@ describe('AnswerKeysTab', () => {
     }, {
       processType: 'simulacro',
       simulacroScope: 'areas',
+      answerKeys: makeAnswerKeys({ answerKeyHasData: false, totalRows: 0 }),
     })
 
     const buttons = wrapper.findAll('.key-mode-btn')
@@ -161,7 +163,7 @@ describe('AnswerKeysTab', () => {
     expect(wrapper.text()).toContain('Este modo viene del camino definido al crear el proceso.')
   })
 
-  it('bloquea carga por área cuando el proceso es simulacro general', () => {
+  it('bloquea carga por área cuando el proceso es simulacro general', async () => {
     const wrapper = mountAnswerKeysTab({
       status: 'ok',
       keysTotal: 1,
@@ -176,6 +178,8 @@ describe('AnswerKeysTab', () => {
       processType: 'simulacro',
       simulacroScope: 'general',
     })
+
+    await wrapper.find('.workflow-card__actions .btn').trigger('click')
 
     const buttons = wrapper.findAll('.key-mode-btn')
     expect(buttons[0].attributes('disabled')).toBeUndefined()

@@ -176,19 +176,21 @@ function visiblePages(current, total) {
             </td>
             <td v-for="column in columns" :key="column.key" :class="column.class" :style="getColumnStyle(column)">
               <textarea
-                v-if="column.type === 'textarea'"
+                v-if="column.type === 'textarea' && isEditing(row.id)"
                 v-model="row[column.key]"
                 class="cell-textarea"
                 :rows="column.rows || 2"
-                :readonly="!isEditing(row.id)"
-                :class="{ 'cell-input--locked': !isEditing(row.id) }"
               ></textarea>
+              <span
+                v-else-if="column.type === 'textarea'"
+                class="cell-text-readonly cell-textarea-readonly"
+              >{{ row[column.key] || '—' }}</span>
               <template v-else-if="column.type === 'select' && isEditing(row.id)">
                 <select class="cell-input" v-model="row[column.key]">
                   <option v-for="option in column.options" :key="option" :value="option">{{ option }}</option>
                 </select>
               </template>
-              <span v-else-if="column.type === 'select' && !isEditing(row.id)">
+              <span v-else-if="column.type === 'select' && !isEditing(row.id)" class="cell-text-readonly">
                 {{ row[column.key] || '—' }}
               </span>
               <span
@@ -450,19 +452,40 @@ function visiblePages(current, total) {
 }
 .column--answers .cell-textarea {
   min-width: 440px; font-family: var(--font-mono); letter-spacing: 0.04em;
-  white-space: pre; resize: horizontal;
+  white-space: pre; resize: none; overflow-x: auto; overflow-y: hidden;
+}
+.column--answers .cell-textarea-readonly {
+  min-width: 440px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  white-space: pre;
 }
 .column--observations { min-width: 220px; }
 
 .cell-textarea {
   width: 100%; padding: var(--space-2); border: 1px solid transparent;
   border-radius: var(--radius-sm); background: transparent;
-  resize: vertical; min-height: 48px; font-family: inherit;
-  font-size: 0.9rem; transition: all var(--transition-fast);
+  resize: none; min-height: 38px; font-family: inherit;
+  font-size: 0.9rem; line-height: 1.35; transition: all var(--transition-fast);
+  display: block;
 }
 .cell-textarea:focus {
   outline: none; border-color: var(--unap-blue-400); background: white;
   box-shadow: 0 0 0 2px rgba(0, 82, 163, 0.1);
+}
+.cell-textarea-readonly {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.cell-text-readonly {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 38px;
+  padding: var(--space-2);
+  color: var(--slate-700);
+  font-size: 0.9rem;
+  line-height: 1.35;
 }
 
 /* Badge */

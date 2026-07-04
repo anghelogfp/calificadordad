@@ -57,11 +57,26 @@ El frontend conserva la logica de calculo en modulos puros. Esto permite:
 
 ## Estado De UI Y UX
 
-La pantalla de resultados y el modal de calificacion se reordenaron para priorizar contexto, estado y accion:
+La pantalla de resultados, el modal de calificacion y el flujo de pasos se reordenaron para priorizar contexto, estado y accion:
 
 - Resultados muestra primero el estado operativo, no calificados e incidencias, y deja los detalles tecnicos al final.
 - El modal de calificacion agrupa configuracion, salida y validacion en una sola experiencia con separadores suaves.
 - Los bloqueos de preflight ya no quedan silenciosos: el flujo muestra error visible y toast cuando falta informacion para calificar.
+- El stepper de los pasos 1 al 5 muestra estado, descripcion y accion contextual por etapa.
+- Los pasos de padron, identificadores, respuestas, claves y resultados usan paneles de verificacion para resumir carga, cruces, observaciones y faltantes.
+- El camino del proceso se muestra con una insignia compartida para mantener consistencia visual entre las etapas.
+
+## Verificacion Por Pasos
+
+El estado del stepper se calcula desde datos reales del proceso:
+
+- Padron: `completed` cuando hay postulantes cargados.
+- Identificadores: `pending` sin datos, `warning` si hay observaciones de conciliacion, `completed` si los cruces estan limpios.
+- Respuestas: `pending` sin datos, `warning` si hay respuestas sin vincular u observaciones, `completed` si estan listas.
+- Claves: `pending` sin claves, `warning` si faltan pares area/tipo, hay claves incompletas o duplicadas, `completed` si cubren el camino.
+- Resultados: `completed` cuando existen resultados; antes de calcular muestra faltantes u observaciones segun el preflight.
+
+Las respuestas con cadena mas corta que el formato esperado ya no se tratan como error generico de cadena incompleta. Se registran como `Blancos finales asumidos` y el detalle por pregunta marca esos blancos finales con `blankSource: assumed-final`.
 
 ## Camino Del Proceso
 

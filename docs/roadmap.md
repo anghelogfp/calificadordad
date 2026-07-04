@@ -50,6 +50,8 @@ Riesgo conocido:
 - Mantener el motor de calificacion como dominio puro.
 - Ya se mejoraron resultados y modal de calificacion para reducir ruido visual y reforzar estados operativos.
 - Ya se alineo el camino del proceso desde la creacion hasta claves, ponderaciones, calificacion, resultados, historial y dashboard.
+- Ya se implemento el stepper con estados, descripciones y acciones para los pasos 1 al 5.
+- Ya se agregaron paneles de verificacion para padron, identificadores, respuestas, claves y resultados.
 - Pendiente inmediato: seguir afinando el modal si la densidad visual sigue alta en uso real.
 
 ## Prioridad 6 - Modelo De Convocatoria
@@ -69,10 +71,12 @@ Trabajo actual:
 
 - Camino del proceso definido al inicio: `Simulacro general`, `Simulacro por areas` o `Convocatoria real`.
 - Claves, ponderaciones, modal de calificacion, resultados, historial y dashboard ya respetan ese camino.
-- Tests unitarios agregados para el modal inicial, claves, historial y dashboard.
+- Stepper de pasos 1 al 5 ya muestra estados `Listo`, `Revisar` y `Pendiente`, con accion contextual.
+- Paneles de verificacion ya resumen estado, observaciones y faltantes en padron, identificadores, respuestas, claves y resultados.
+- Tests unitarios agregados para stepper, paneles compartidos, insignia de camino, claves, respuestas, parsers y calculo.
 
 Siguiente paso recomendado:
 
 1. Revisar visualmente el flujo completo con datos reales o fixtures representativas.
 2. Ajustar textos y jerarquia si el negocio quiere menos densidad.
-3. Pasar a stepper y estados de los pasos 1 al 5 si el flujo ya queda estable.
+3. Crear fixtures representativas y avanzar con pruebas E2E del flujo completo.

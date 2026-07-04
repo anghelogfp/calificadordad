@@ -75,12 +75,16 @@ Frontend:
 
 ## Puntos De UI Que Ya Deben Verse Claros
 
+- El stepper superior debe mostrar cinco pasos operativos con estado `Listo`, `Revisar` o `Pendiente`.
+- Cada paso debe mostrar una descripcion breve y la accion esperada, por ejemplo cargar padron, revisar cruces, corregir faltantes o calcular puntajes.
+- Padron, identificadores, respuestas, claves y resultados deben mostrar un panel de verificacion con resumen, chips y observaciones relevantes.
 - En resultados, el bloque principal debe mostrar estado, no calificados e incidencias antes del detalle tecnico.
 - El modal de calificacion debe mostrar contexto superior, configuracion, salida y validacion sin parecer cuatro tarjetas aisladas.
 - Si falta informacion para calificar, el click debe dar feedback visible y no quedarse silencioso.
 - El boton `Calcular Puntajes` debe seguir abriendo el modal aun cuando haya datos incompletos; el bloqueo real se explica dentro del flujo.
 - El camino elegido al crear el proceso debe verse igual en claves, ponderaciones, calculo, resultados, historial y dashboard.
 - `Simulacro por areas` debe cargar claves por area; no queda cubierto por una clave general.
+- Las respuestas con menos marcas al final deben aparecer como `Blancos finales asumidos`, no como error critico de cadena incompleta.
 
 ## Cuidados
 

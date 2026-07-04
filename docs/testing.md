@@ -35,16 +35,18 @@ El repo contiene pruebas para:
 - Calculo puro.
 - Validacion posterior de resultados.
 - Componentes principales de tablas/resultados.
+- Stepper, paneles de verificacion y badge del camino del proceso.
+- Tratamiento de blancos finales asumidos en parser, resumen de observaciones y detalle de calificacion.
 - Backend: autenticacion, usuarios, aislamiento por usuario, bulk replace, procesos, verificador, ponderaciones, areas y formato DAT.
 
 ## Ultima Verificacion Local
 
-Fecha: 2026-07-03.
+Fecha: 2026-07-04.
 
-- Frontend: pruebas focalizadas de `ScoresTab` pasando despues de los ajustes de UI/UX.
-- Frontend build: OK despues de reorganizar resultados y modal de calificacion.
-- Backend: `manage.py check` sin issues.
-- Backend: `48` tests pasando en la ultima verificacion completa registrada.
+- Frontend: ultima iteracion registrada en commit `6b61871 fix: pasos 1 al 5`.
+- Frontend: se agregaron pruebas para `StepNav`, `StepVerificationPanel`, `ProcessPathBadge`, respuestas, parsers y calculo.
+- Backend: no cambio en la iteracion `fix: pasos 1 al 5`.
+- Backend: `48` tests pasando en la ultima verificacion completa registrada anterior.
 
 Notas del entorno:
 
@@ -53,6 +55,7 @@ Notas del entorno:
 - `npm ci` fallaba porque `package-lock.json` no estaba sincronizado; `npm install` actualizo el lockfile.
 - Vite/Vitest requirieron ejecucion fuera del sandbox local por `spawn EPERM`.
 - En esta iteracion se corrigio un error de render del modal al tratar `processAreas` como arreglo directo en vez de `ref/computed`.
+- La documentacion fue actualizada despues del commit `6b61871`; no se ejecuto una nueva corrida completa de tests durante esta actualizacion documental.
 
 ## Brechas Importantes
 

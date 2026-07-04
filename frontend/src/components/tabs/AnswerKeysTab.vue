@@ -37,6 +37,7 @@ const emit = defineEmits(['update:subTab'])
 const answerKeys = reactive(props.answerKeys)
 const showOnlyObserved = ref(false)
 const importMode = ref('general')
+const showUploadForm = ref(false)
 
 const expectedKeyMode = computed(() => {
   if (props.processType === 'real') return 'area'
@@ -46,6 +47,14 @@ const expectedKeyMode = computed(() => {
 watch(expectedKeyMode, (mode) => {
   setImportMode(mode)
 }, { immediate: true })
+
+watch(
+  () => answerKeys.answerKeyHasData,
+  (hasData) => {
+    showUploadForm.value = !hasData
+  },
+  { immediate: true }
+)
 
 const displayedRows = computed(() => (
   showOnlyObserved.value ? answerKeys.observations : answerKeys.pagedRows
@@ -95,6 +104,10 @@ const detectStatus = computed(() => {
 
 function handleDetectFormat() {
   detectFileInput.value?.click()
+}
+
+function toggleUploadForm() {
+  showUploadForm.value = !showUploadForm.value
 }
 
 async function onDetectFileChange(event) {
@@ -188,83 +201,27 @@ const stepState = computed(() => {
       :process-type="processType"
       :simulacro-scope="simulacroScope"
     >
+      <template v-if="answerKeys.answerKeyHasData" #actions>
+        <button type="button" class="btn btn--ghost" @click="toggleUploadForm">
+          {{ showUploadForm ? 'Ocultar carga' : 'Cargar claves' }}
+        </button>
+      </template>
       <template #icon>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
         </svg>
       </template>
-    </WorkflowIntroCard>
-
-    <StepVerificationPanel
-      v-if="areaCoverage.length || (reconciliation && reconciliation.keysTotal)"
-      eyebrow="Verificación de claves"
-      :title="stepState.title"
-      :summary="areaCoverage.length && !reconciliation?.generalKeyCoversSimulacro
-        ? `${coveredCount} / ${areaCoverage.length} áreas con clave`
-        : reconciliation?.generalKeyCoversSimulacro
-          ? 'Clave general activa'
-          : ''"
-    >
-      <template v-if="answerKeys.observationCount" #actions>
-        <button type="button" class="btn btn--ghost" @click="showOnlyObserved = !showOnlyObserved">
-          {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
-        </button>
-        <button type="button" class="btn btn--primary" @click="answerKeys.exportAnswerKeyObservationsToExcel">
-          Exportar observados
-        </button>
-      </template>
-      <template #chips>
-        <template v-if="reconciliation && reconciliation.keysTotal">
-          <span class="verification-chip verification-chip--ok"><strong>{{ reconciliation.coveredPairs }}</strong> {{ coverageUnit }} cubiertos</span>
-          <span class="verification-chip" :class="reconciliation.missingPairs.length ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.missingPairs.length }}</strong> {{ coverageUnit }} faltantes</span>
-          <span class="verification-chip verification-chip--info"><strong>{{ reconciliation.generalKeys }}</strong> claves generales</span>
-          <span class="verification-chip" :class="reconciliation.duplicatePairs ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.duplicatePairs }}</strong> duplicadas</span>
-          <span class="verification-chip" :class="reconciliation.incompleteKeys ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.incompleteKeys }}</strong> observadas</span>
-        </template>
-        <template v-if="!reconciliation?.generalKeyCoversSimulacro">
-          <span
-            v-for="area in areaCoverage"
-            :key="area.name"
-            class="verification-chip"
-            :class="area.hasKey ? 'verification-chip--ok' : 'verification-chip--warn'"
-          >
-            <strong>{{ area.hasKey ? 'OK' : 'Falta' }}</strong> {{ area.name }}
+      <section v-if="showUploadForm" class="upload-form-card">
+        <header class="upload-form-card__header">
+          <span class="upload-form-card__icon">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
           </span>
-        </template>
-      </template>
-      <template v-if="answerKeys.observationCount" #detail>
-        <span v-for="item in answerKeys.observationSummary" :key="item.label" class="verification-chip verification-chip--warn">
-          <strong>{{ item.count }}</strong> {{ item.label }}
-        </span>
-      </template>
-      <template v-if="reconciliation?.missingPairs?.length" #hint>
-        Faltan:
-        <strong
-          v-for="(pair, index) in reconciliation.missingPairs.slice(0, 8)"
-          :key="`${pair.area}-${pair.type}`"
-        >
-          {{ pair.type ? `${pair.area} ${pair.type}` : pair.area }}<span v-if="index < Math.min(reconciliation.missingPairs.length, 8) - 1">, </span>
-        </strong>
-        <span v-if="reconciliation.missingPairs.length > 8"> y {{ reconciliation.missingPairs.length - 8 }} más.</span>
-      </template>
-      <template v-else #hint>
-        {{ reconciliation?.generalKeyCoversSimulacro
-          ? 'En simulacro, la clave general cubre el ranking completo sin exigir claves por área.'
-          : 'Este cruce compara las claves cargadas con las áreas y tipos detectados en las respuestas.' }}
-      </template>
-    </StepVerificationPanel>
-
-    <details class="upload-form-card" :open="!answerKeys.answerKeyHasData">
-      <summary class="upload-form-card__header">
-        <span class="upload-form-card__icon">
-          <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-        </span>
-        <span class="upload-form-card__title">
-          <strong>Cargar claves</strong>
-          <small>{{ importMode === 'general' ? 'Clave general de simulacro' : 'Área + identificación + respuestas oficiales' }}</small>
-        </span>
-      </summary>
-      <form class="upload-form-grid" @submit.prevent="answerKeys.importAnswerKeyFiles">
+          <span class="upload-form-card__title">
+            <strong>Cargar claves</strong>
+            <small>{{ importMode === 'general' ? 'Clave general de simulacro' : 'Área + identificación + respuestas oficiales' }}</small>
+          </span>
+        </header>
+        <form class="upload-form-grid" @submit.prevent="answerKeys.importAnswerKeyFiles">
         <div class="form-field form-field--wide">
           <label class="form-field__label">Tipo de clave</label>
           <div class="key-mode-toggle key-mode-toggle--locked">
@@ -362,8 +319,81 @@ const stepState = computed(() => {
             Importar claves
           </button>
         </div>
-      </form>
-    </details>
+        </form>
+      </section>
+    </WorkflowIntroCard>
+
+    <StepVerificationPanel
+      v-if="areaCoverage.length || (reconciliation && reconciliation.keysTotal)"
+      eyebrow="Verificación de claves"
+      :title="stepState.title"
+      :summary="areaCoverage.length && !reconciliation?.generalKeyCoversSimulacro
+        ? `${coveredCount} / ${areaCoverage.length} áreas con clave`
+        : reconciliation?.generalKeyCoversSimulacro
+          ? 'Clave general activa'
+          : ''"
+    >
+      <template #actions>
+        <button v-if="importMode === 'general'" type="button" class="btn btn--ghost" :disabled="detecting" @click="handleDetectFormat">
+          <svg v-if="detecting" class="btn__icon spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12a9 9 0 11-6.219-8.56"/>
+          </svg>
+          <svg v-else class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          {{ detecting ? 'Analizando...' : 'Detectar formato' }}
+        </button>
+        <button type="button" class="btn btn--ghost" @click="showOnlyObserved = !showOnlyObserved">
+          {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
+        </button>
+        <button type="button" class="btn btn--primary" :disabled="!answerKeys.observationCount" @click="answerKeys.exportAnswerKeyObservationsToExcel">
+          Exportar observados
+        </button>
+      </template>
+      <template #chips>
+        <template v-if="reconciliation && reconciliation.keysTotal">
+          <span class="verification-chip verification-chip--ok"><strong>{{ reconciliation.coveredPairs }}</strong> {{ coverageUnit }} cubiertos</span>
+          <span class="verification-chip" :class="reconciliation.missingPairs.length ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.missingPairs.length }}</strong> {{ coverageUnit }} faltantes</span>
+          <span class="verification-chip verification-chip--info"><strong>{{ reconciliation.generalKeys }}</strong> claves generales</span>
+          <span class="verification-chip" :class="reconciliation.duplicatePairs ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.duplicatePairs }}</strong> duplicadas</span>
+          <span class="verification-chip" :class="reconciliation.incompleteKeys ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.incompleteKeys }}</strong> observadas</span>
+        </template>
+        <span v-if="importMode === 'general'" class="verification-chip verification-chip--info"><strong>{{ configuredOffset }}</strong> offset respuestas</span>
+        <span v-if="detectStatus" class="detect-badge" :class="`detect-badge--${detectStatus.variant}`">
+          {{ detectStatus.label }}
+        </span>
+        <template v-if="!reconciliation?.generalKeyCoversSimulacro">
+          <span
+            v-for="area in areaCoverage"
+            :key="area.name"
+            class="verification-chip"
+            :class="area.hasKey ? 'verification-chip--ok' : 'verification-chip--warn'"
+          >
+            <strong>{{ area.hasKey ? 'OK' : 'Falta' }}</strong> {{ area.name }}
+          </span>
+        </template>
+      </template>
+      <template v-if="answerKeys.observationCount" #detail>
+        <span v-for="item in answerKeys.observationSummary" :key="item.label" class="verification-chip verification-chip--warn">
+          <strong>{{ item.count }}</strong> {{ item.label }}
+        </span>
+      </template>
+      <template v-if="reconciliation?.missingPairs?.length" #hint>
+        Faltan:
+        <strong
+          v-for="(pair, index) in reconciliation.missingPairs.slice(0, 8)"
+          :key="`${pair.area}-${pair.type}`"
+        >
+          {{ pair.type ? `${pair.area} ${pair.type}` : pair.area }}<span v-if="index < Math.min(reconciliation.missingPairs.length, 8) - 1">, </span>
+        </strong>
+        <span v-if="reconciliation.missingPairs.length > 8"> y {{ reconciliation.missingPairs.length - 8 }} más.</span>
+      </template>
+      <template v-else #hint>
+        {{ reconciliation?.generalKeyCoversSimulacro
+          ? 'En simulacro, la clave general cubre el ranking completo sin exigir claves por área.'
+          : 'Este cruce compara las claves cargadas con las áreas y tipos detectados en las respuestas.' }}
+      </template>
+    </StepVerificationPanel>
 
     <div v-if="answerKeys.importError" class="alert alert--error">
       {{ answerKeys.importError }}
@@ -376,27 +406,6 @@ const stepState = computed(() => {
       style="display:none"
       @change="onDetectFileChange"
     >
-
-    <section v-if="importMode === 'general'" class="detect-section">
-      <div class="detect-section__info">
-        <span class="detect-section__eyebrow">Formato de archivo</span>
-        <p>Offset configurado: <strong>{{ configuredOffset }}</strong> (respuestas inician en posición {{ configuredOffset }})</p>
-      </div>
-      <div class="detect-section__actions">
-        <button type="button" class="btn btn--ghost" :disabled="detecting" @click="handleDetectFormat">
-          <svg v-if="detecting" class="btn__icon spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12a9 9 0 11-6.219-8.56"/>
-          </svg>
-          <svg v-else class="btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-          </svg>
-          {{ detecting ? 'Analizando...' : 'Detectar formato' }}
-        </button>
-        <span v-if="detectStatus" class="detect-badge" :class="`detect-badge--${detectStatus.variant}`">
-          {{ detectStatus.label }}
-        </span>
-      </div>
-    </section>
 
     <Toolbar
       v-model:search-value="answerKeys.search"
@@ -603,16 +612,9 @@ const stepState = computed(() => {
 
 .upload-form-card__header {
   display: flex; align-items: center; gap: var(--space-3);
-  cursor: pointer;
-  list-style: none;
-}
-.upload-form-card__header::-webkit-details-marker { display: none; }
-.upload-form-card__header::after { content: '＋'; margin-left: auto; color: var(--unap-blue-600); font-size: 1.1rem; }
-.upload-form-card[open] .upload-form-card__header {
   margin-bottom: var(--space-4); padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--slate-100);
 }
-.upload-form-card[open] .upload-form-card__header::after { content: '−'; }
 .upload-form-card__icon {
   width: 34px; height: 34px; flex-shrink: 0; display: flex;
   align-items: center; justify-content: center; border-radius: var(--radius-md);
@@ -1263,40 +1265,6 @@ const stepState = computed(() => {
   .observed-panel__actions {
     justify-content: flex-start;
   }
-}
-
-.detect-section {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  background: var(--slate-50);
-  border: 1px solid var(--slate-200);
-  border-radius: var(--radius-lg);
-}
-
-.detect-section__eyebrow {
-  display: block;
-  margin-bottom: 2px;
-  color: var(--slate-500);
-  font-size: 0.68rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.detect-section__info p {
-  margin: 0;
-  color: var(--slate-700);
-  font-size: 0.82rem;
-}
-
-.detect-section__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-shrink: 0;
 }
 
 .detect-badge {

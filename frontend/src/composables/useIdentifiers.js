@@ -67,10 +67,6 @@ export function useIdentifiers(formatConfig) {
     observations.value.forEach(row => map.set(row.id, row))
     return map
   })
-  const expectedAnswersLength = computed(() =>
-    effectiveFormatConfig().answersLength ?? DEFAULT_DAT_FORMAT.answersLength
-  )
-
   // Lookup por clave de match
   const identifierLookup = computed(() => {
     const map = new Map()
@@ -383,7 +379,6 @@ export function useIdentifiers(formatConfig) {
     observationCount,
     observationSummary,
     observationByRowId,
-    expectedAnswersLength,
     identifierLookup,
     identifierLookupByLitho,
 
