@@ -255,7 +255,7 @@ const answerKeyReconciliation = computed(() => {
     expectedAreaKeys.forEach(area => requiredPairs.push({ area, type: '' }))
   }
 
-  const missingPairs = !processIsReal && generalKeys > 0
+  const missingPairs = isGeneralSimulacro && generalKeys > 0
     ? []
     : isGeneralSimulacro
       ? (requiredPairs.length && answerKeys.rows.value.length === 0 ? requiredPairs : [])
@@ -288,7 +288,7 @@ const answerKeyReconciliation = computed(() => {
     incompleteKeys,
     issues,
     mode: processIsReal ? 'real' : isGeneralSimulacro ? 'simulacro-general' : 'simulacro-areas',
-    generalKeyCoversSimulacro: !processIsReal && generalKeys > 0,
+    generalKeyCoversSimulacro: isGeneralSimulacro && generalKeys > 0,
     status: issues === 0 && answerKeys.rows.value.length > 0 ? 'ok' : issues > 0 ? 'warn' : 'empty',
   }
 })
@@ -339,12 +339,12 @@ function startNewProcess() {
   showNuevoProcesoModal.value = true
 }
 
-function confirmNewProcess({ name, type }) {
+function confirmNewProcess({ name, type, simulacroScope }) {
   archives.clearAll()
   identifiers.clearAllIdentifiers()
   responses.clearAllResponses()
   answerKeys.clearAllAnswerKeys()
-  calification.startNewProcess({ name, type })
+  calification.startNewProcess({ name, type, simulacroScope })
   showNuevoProcesoModal.value = false
   activeTab.value = TAB_KEYS.ARCHIVES
 }
@@ -592,6 +592,8 @@ watch(
             :answer-keys="answerKeys"
             :sub-tab="answerKeySubTab"
             :reconciliation="answerKeyReconciliation"
+            :process-type="calification.processType.value"
+            :simulacro-scope="calification.simulacroScope.value"
             @update:sub-tab="answerKeySubTab = $event"
           />
 
@@ -599,6 +601,8 @@ watch(
             v-else-if="activeTab === TAB_KEYS.PONDERATIONS"
             :ponderations="ponderations"
             :answers-length="datFormat.formatConfig.value?.answersLength ?? 60"
+            :process-type="calification.processType.value"
+            :simulacro-scope="calification.simulacroScope.value"
           />
 
           <ScoresTab

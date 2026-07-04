@@ -177,6 +177,19 @@ function clearFilters() {
 // ── Modo Real: vista agrupada por carrera ────────────────────────────────────
 
 const isRealMode = computed(() => calification.activeProcess?.type === 'real')
+const isGeneralSimulacro = computed(() =>
+  !isRealMode.value && calification.activeProcess?.simulacroScope === 'general'
+)
+const processModeLabel = computed(() => {
+  if (isRealMode.value) return 'Convocatoria real'
+  return isGeneralSimulacro.value ? 'Simulacro general' : 'Simulacro por áreas'
+})
+const processModeDescription = computed(() => {
+  if (isRealMode.value) return 'Ranking por programa, vacantes e ingresantes.'
+  return isGeneralSimulacro.value
+    ? 'Ranking general con clave única para todos los postulantes.'
+    : 'Ranking separado por área de evaluación.'
+})
 
 const groupedResults = computed(() => {
   if (!isRealMode.value) return []
@@ -285,7 +298,7 @@ function handleExportIngresantesPdf() {
     <StepInfoCard
       v-if="!calification.calificationHasResults"
       title="Calificación Final"
-      description="Genera los puntajes aplicando las ponderaciones a las respuestas de los postulantes."
+      :description="`Genera los puntajes para ${processModeLabel.toLowerCase()}. ${processModeDescription}`"
       variant="gold"
       :stats="calification.calificationHasResults
         ? calification.processAreas.map(area => ({
@@ -310,7 +323,7 @@ function handleExportIngresantesPdf() {
       :filtered-count="calification.calificationFilteredResults.length"
     >
       <template #actions>
-        <button type="button" class="btn btn--gold" @click="openModal" :disabled="!calification.canCalify">
+        <button type="button" class="btn btn--gold" @click="openModal">
           <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
             <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
             <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
@@ -336,14 +349,17 @@ function handleExportIngresantesPdf() {
           <div class="results-header__context">
             <span>{{ calification.calificationDisplayArea }}</span>
             <span>·</span>
-            <span>{{ isRealMode ? 'Convocatoria real' : 'Simulacro' }}</span>
+            <span>{{ processModeLabel }}</span>
             <span>·</span>
             <span>{{ formatTimestamp(calification.calificationSummary?.timestamp) }}</span>
           </div>
         </div>
 
         <div class="results-header__actions">
-          <button type="button" class="btn btn--ghost" @click="openModal" :disabled="!calification.canCalify">
+          <span class="result-save-status" :class="onSaveToHistory ? 'result-save-status--pending' : 'result-save-status--neutral'">
+            {{ onSaveToHistory ? 'Pendiente de guardar' : 'Resultado cargado' }}
+          </span>
+          <button type="button" class="btn btn--ghost" @click="openModal">
             Recalcular
           </button>
           <button
@@ -417,28 +433,38 @@ function handleExportIngresantesPdf() {
           <strong class="mono">{{ currentAreaStats.avg.toFixed(3) }}</strong>
           <span>Promedio</span>
         </div>
+        <div class="summary-item" :class="{ 'summary-item--danger': noCalificados.length > 0 }">
+          <strong>{{ noCalificados.length }}</strong>
+          <span>No calificados</span>
+        </div>
         <div class="summary-item" :class="{ 'summary-item--warning': issueCount > 0 }">
           <strong>{{ issueCount }}</strong>
           <span>Observaciones</span>
         </div>
       </div>
 
-      <details class="calculation-details">
-        <summary>Detalles del cálculo</summary>
-        <div class="calculation-details__grid">
-          <span><strong>Puntaje máximo:</strong> {{ currentAreaStats?.max?.toFixed(3) ?? '—' }}</span>
-          <span><strong>Puntaje mínimo:</strong> {{ currentAreaStats?.min?.toFixed(3) ?? '—' }}</span>
-          <span><strong>Peso total:</strong> {{ calification.calificationSummary?.totalWeight?.toFixed(3) }}</span>
-          <span><strong>Preguntas:</strong> {{ calification.calificationSummary?.answersLength }}</span>
-          <span v-if="calification.calificationSummary?.missingResponses" class="meta-warn">Sin respuesta: {{ calification.calificationSummary.missingResponses }}</span>
-          <span v-if="calification.calificationSummary?.missingKeys" class="meta-warn">Sin clave: {{ calification.calificationSummary.missingKeys }}</span>
-          <span v-if="calification.calificationSummary?.duplicateResponses" class="meta-warn">Duplicados: {{ calification.calificationSummary.duplicateResponses }}</span>
-          <span v-if="calification.calificationSummary?.invalidCandidates" class="meta-warn">DNI observado: {{ calification.calificationSummary.invalidCandidates }}</span>
-          <span v-if="calification.calificationSummary?.missingPrograms" class="meta-warn">Sin programa: {{ calification.calificationSummary.missingPrograms }}</span>
-          <span v-if="calification.calificationSummary?.invalidResponseTypes" class="meta-warn">Tipo inválido: {{ calification.calificationSummary.invalidResponseTypes }}</span>
-          <span v-if="calification.calificationSummary?.unlinkedResponses" class="meta-warn">Sin DNI vinculado: {{ calification.calificationSummary.unlinkedResponses }}</span>
+      <div class="review-board" :class="{ 'review-board--clear': issueCount === 0 && !noCalificados.length }">
+        <div class="review-board__main">
+          <span class="review-board__eyebrow">Revisión operativa</span>
+          <h3 v-if="noCalificados.length || issueCount">
+            Revisa las incidencias antes de publicar o exportar resultados oficiales.
+          </h3>
+          <h3 v-else>
+            El cálculo no reporta incidencias pendientes.
+          </h3>
         </div>
-      </details>
+        <div class="review-board__chips">
+          <span class="review-chip" :class="{ 'review-chip--danger': noCalificados.length }">
+            <strong>{{ noCalificados.length }}</strong> no calificados
+          </span>
+          <span class="review-chip" :class="{ 'review-chip--warn': issueCount }">
+            <strong>{{ issueCount }}</strong> observaciones
+          </span>
+          <span class="review-chip">
+            <strong>{{ localFilteredResults.length }}</strong> visibles
+          </span>
+        </div>
+      </div>
 
       <section v-if="noCalificados.length" class="not-qualified-panel">
         <div class="not-qualified-panel__header">
@@ -503,16 +529,24 @@ function handleExportIngresantesPdf() {
         <span class="results-count"><strong>{{ localFilteredResults.length }}</strong> de {{ calification.calificationResults.length }}</span>
         <button v-if="hasActiveFilters" type="button" class="btn-clear-filters" @click="clearFilters">Limpiar</button>
       </div>
-    </section>
 
-    <!-- Nombre del proceso activo -->
-    <div v-if="false" class="process-name-bar">
-      <svg viewBox="0 0 20 20" fill="currentColor">
-        <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v6a1 1 0 102 0V8z" clip-rule="evenodd"/>
-      </svg>
-      <span class="process-name-bar__label">Proceso:</span>
-      <span class="process-name-bar__name">{{ calification.processName || 'Sin nombre' }}</span>
-    </div>
+      <details class="calculation-details">
+        <summary>Detalles técnicos del cálculo</summary>
+        <div class="calculation-details__grid">
+          <span><strong>Puntaje máximo:</strong> {{ currentAreaStats?.max?.toFixed(3) ?? '—' }}</span>
+          <span><strong>Puntaje mínimo:</strong> {{ currentAreaStats?.min?.toFixed(3) ?? '—' }}</span>
+          <span><strong>Peso total:</strong> {{ calification.calificationSummary?.totalWeight?.toFixed(3) }}</span>
+          <span><strong>Preguntas:</strong> {{ calification.calificationSummary?.answersLength }}</span>
+          <span v-if="calification.calificationSummary?.missingResponses" class="meta-warn">Sin respuesta: {{ calification.calificationSummary.missingResponses }}</span>
+          <span v-if="calification.calificationSummary?.missingKeys" class="meta-warn">Sin clave: {{ calification.calificationSummary.missingKeys }}</span>
+          <span v-if="calification.calificationSummary?.duplicateResponses" class="meta-warn">Duplicados: {{ calification.calificationSummary.duplicateResponses }}</span>
+          <span v-if="calification.calificationSummary?.invalidCandidates" class="meta-warn">DNI observado: {{ calification.calificationSummary.invalidCandidates }}</span>
+          <span v-if="calification.calificationSummary?.missingPrograms" class="meta-warn">Sin programa: {{ calification.calificationSummary.missingPrograms }}</span>
+          <span v-if="calification.calificationSummary?.invalidResponseTypes" class="meta-warn">Tipo inválido: {{ calification.calificationSummary.invalidResponseTypes }}</span>
+          <span v-if="calification.calificationSummary?.unlinkedResponses" class="meta-warn">Sin DNI vinculado: {{ calification.calificationSummary.unlinkedResponses }}</span>
+        </div>
+      </details>
+    </section>
 
     <!-- Banner de confirmación inline -->
     <div v-if="pendingAction" class="confirm-banner">
@@ -524,131 +558,6 @@ function handleExportIngresantesPdf() {
         <button type="button" class="btn btn--ghost btn--sm" @click="cancelPendingAction">Cancelar</button>
         <button type="button" class="btn btn--danger btn--sm" @click="confirmPendingAction">Confirmar</button>
       </div>
-    </div>
-
-    <!-- Tabs de áreas calculadas -->
-    <div v-if="false" class="area-tabs">
-      <button
-        v-for="area in calification.processAreas"
-        :key="area"
-        type="button"
-        class="area-tab"
-        :class="{ 'area-tab--active': calification.calificationDisplayArea === area }"
-        @click="calification.switchDisplayArea(area)"
-      >
-        {{ area }}
-        <span class="area-tab__count">
-          {{ calification.activeProcess?.areas?.[area]?.results?.length ?? 0 }}
-        </span>
-      </button>
-    </div>
-
-    <!-- Panel de estadísticas del área actual -->
-    <div v-if="false" class="stats-panel">
-      <!-- Fila 1: stats numéricas -->
-      <div class="stats-grid">
-        <div class="stat-card">
-          <span class="stat-card__value">{{ calification.calificationSummary.totalCandidates }}</span>
-          <span class="stat-card__label">Postulantes</span>
-        </div>
-        <div class="stat-card stat-card--green" v-if="currentAreaStats">
-          <span class="stat-card__value">{{ currentAreaStats.ingresantes }}</span>
-          <span class="stat-card__label">Ingresantes</span>
-        </div>
-        <div class="stat-card stat-card--red" v-if="currentAreaStats">
-          <span class="stat-card__value">{{ currentAreaStats.count - currentAreaStats.ingresantes }}</span>
-          <span class="stat-card__label">No ingresantes</span>
-        </div>
-        <div class="stat-card" v-if="currentAreaStats">
-          <span class="stat-card__value mono">{{ currentAreaStats.max.toFixed(3) }}</span>
-          <span class="stat-card__label">Puntaje máx.</span>
-        </div>
-        <div class="stat-card" v-if="currentAreaStats">
-          <span class="stat-card__value mono">{{ currentAreaStats.avg.toFixed(3) }}</span>
-          <span class="stat-card__label">Promedio</span>
-        </div>
-        <div class="stat-card" v-if="currentAreaStats">
-          <span class="stat-card__value mono">{{ currentAreaStats.min.toFixed(3) }}</span>
-          <span class="stat-card__label">Puntaje mín.</span>
-        </div>
-      </div>
-
-      <!-- Fila 2: meta del proceso -->
-      <div class="stats-meta">
-        <span>
-          <strong>Área:</strong> {{ calification.calificationSummary.area }}
-        </span>
-        <span>
-          <strong>Cálculo:</strong> {{ formatTimestamp(calification.calificationSummary.timestamp) }}
-        </span>
-        <span>
-          <strong>Ponderación:</strong>
-          {{ calification.calificationSummary.totalWeight.toFixed(3) }} peso ·
-          {{ calification.calificationSummary.answersLength }} preguntas
-        </span>
-        <span v-if="calification.calificationSummary.missingResponses" class="meta-warn">
-          Sin respuesta: {{ calification.calificationSummary.missingResponses }}
-        </span>
-        <span v-if="calification.calificationSummary.missingKeys" class="meta-warn">
-          Sin clave: {{ calification.calificationSummary.missingKeys }}
-        </span>
-        <span v-if="calification.calificationSummary.invalidCandidates" class="meta-warn">
-          DNI observado: {{ calification.calificationSummary.invalidCandidates }}
-        </span>
-        <span v-if="calification.calificationSummary.missingPrograms" class="meta-warn">
-          Sin programa: {{ calification.calificationSummary.missingPrograms }}
-        </span>
-        <span v-if="calification.calificationSummary.invalidResponseTypes" class="meta-warn">
-          Tipo inválido: {{ calification.calificationSummary.invalidResponseTypes }}
-        </span>
-      </div>
-
-      <div v-if="calification.calificationSummary.unlinkedResponses > 0" class="alert alert--warning">
-        <strong>Atención:</strong> {{ calification.calificationSummary.unlinkedResponses }} respuestas sin DNI vinculado.
-        <small> Carga el Paso 2 (Identificadores) para vincularlas.</small>
-      </div>
-    </div>
-
-    <!-- Filtros -->
-    <div v-if="false" class="filter-bar">
-      <div class="filter-bar__left">
-        <!-- Filtro programa -->
-        <div class="filter-group">
-          <label class="filter-label">Programa</label>
-          <select v-model="filterPrograma" class="filter-select">
-            <option value="">Todos los programas</option>
-            <option v-for="prog in programasEnArea" :key="prog" :value="prog">{{ prog }}</option>
-          </select>
-        </div>
-
-        <!-- Filtro estado -->
-        <div v-if="hasIngresanteData" class="filter-group">
-          <label class="filter-label">Estado</label>
-          <div class="filter-toggle">
-            <button type="button" class="filter-toggle__btn" :class="{ active: filterEstado === 'todos' }" @click="filterEstado = 'todos'">Todos</button>
-            <button type="button" class="filter-toggle__btn filter-toggle__btn--green" :class="{ active: filterEstado === 'ingresante' }" @click="filterEstado = 'ingresante'">Ingresantes</button>
-            <button type="button" class="filter-toggle__btn filter-toggle__btn--red" :class="{ active: filterEstado === 'no-ingresante' }" @click="filterEstado = 'no-ingresante'">No ingresantes</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="filter-bar__right">
-        <span class="filter-count">
-          <strong>{{ localFilteredResults.length }}</strong> de {{ calification.calificationResults.length }}
-        </span>
-        <button v-if="hasActiveFilters" type="button" class="btn-clear-filters" @click="clearFilters">
-          <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-          Limpiar filtros
-        </button>
-      </div>
-    </div>
-
-    <!-- Badge modo real -->
-    <div v-if="false" class="mode-badge">
-      <svg viewBox="0 0 20 20" fill="currentColor">
-        <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v6a1 1 0 102 0V8z" clip-rule="evenodd"/>
-      </svg>
-      Convocatoria Real — resultados agrupados por carrera
     </div>
 
     <!-- ── Tabla PLANA (Simulacro) ──────────────────────────────────────────── -->
@@ -874,6 +783,30 @@ function handleExportIngresantesPdf() {
 .results-header__actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
 .btn--icon { min-width: 40px; justify-content: center; letter-spacing: 0.08em; }
 
+.result-save-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-full);
+  background: var(--slate-50);
+  color: var(--slate-600);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.result-save-status--pending {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+.result-save-status--neutral {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: var(--unap-blue-700);
+}
+
 .action-menu { position: relative; }
 .action-menu summary { list-style: none; cursor: pointer; user-select: none; }
 .action-menu summary::-webkit-details-marker { display: none; }
@@ -904,7 +837,7 @@ function handleExportIngresantesPdf() {
 .area-tabs--compact .area-tab { flex: 1; justify-content: center; }
 
 .summary-strip {
-  display: grid; grid-template-columns: repeat(4, minmax(110px, 1fr));
+  display: grid; grid-template-columns: repeat(5, minmax(110px, 1fr));
   border: 1px solid var(--slate-200); border-radius: var(--radius-lg); overflow: hidden;
 }
 .summary-item {
@@ -917,6 +850,84 @@ function handleExportIngresantesPdf() {
 .summary-item--success strong { color: #15803d; }
 .summary-item--warning { background: #fffbeb; }
 .summary-item--warning strong, .summary-item--warning span { color: #b45309; }
+.summary-item--danger { background: #fef2f2; }
+.summary-item--danger strong, .summary-item--danger span { color: #b91c1c; }
+
+.review-board {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid #fed7aa;
+  border-left: 4px solid #f59e0b;
+  border-radius: var(--radius-lg);
+  background: #fffbeb;
+}
+.review-board--clear {
+  border-color: #bbf7d0;
+  border-left-color: #16a34a;
+  background: #f0fdf4;
+}
+.review-board__main {
+  min-width: 0;
+}
+.review-board__eyebrow {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: #92400e;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.review-board--clear .review-board__eyebrow {
+  color: #15803d;
+}
+.review-board h3 {
+  margin: 0;
+  color: #78350f;
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+.review-board--clear h3 {
+  color: #14532d;
+}
+.review-board__chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.review-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid rgba(120, 53, 15, 0.16);
+  border-radius: var(--radius-full);
+  background: white;
+  color: var(--slate-600);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.review-chip strong {
+  color: var(--slate-900);
+  font-family: var(--font-mono);
+}
+.review-chip--warn {
+  color: #92400e;
+}
+.review-chip--warn strong {
+  color: #b45309;
+}
+.review-chip--danger {
+  color: #991b1b;
+}
+.review-chip--danger strong {
+  color: #b91c1c;
+}
 
 .calculation-details { border-top: 1px solid var(--slate-100); padding-top: var(--space-3); }
 .calculation-details summary {
@@ -1349,11 +1360,15 @@ tbody tr.row--ingresante:hover { background: #dcfce7; }
   .results-shell { padding: var(--space-4); }
   .results-header { flex-direction: column; }
   .results-header__actions { width: 100%; }
+  .result-save-status { width: 100%; justify-content: center; }
   .results-header__actions > .btn { flex: 1; }
+  .review-board { flex-direction: column; }
+  .review-board__chips { justify-content: flex-start; }
   .not-qualified-panel__header { flex-direction: column; }
   .summary-strip { grid-template-columns: repeat(2, 1fr); }
-  .summary-item:nth-child(2) { border-right: 0; }
-  .summary-item:nth-child(-n+2) { border-bottom: 1px solid var(--slate-200); }
+  .summary-item { border-bottom: 1px solid var(--slate-200); }
+  .summary-item:nth-child(even) { border-right: 0; }
+  .summary-item:last-child { grid-column: 1 / -1; border-bottom: 0; }
   .results-search { flex-basis: 100%; }
   .results-filters .filter-select { flex: 1; max-width: none; }
   .results-count { margin-left: 0; }

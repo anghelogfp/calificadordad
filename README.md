@@ -10,6 +10,7 @@ Sistema web para calificar examenes de admision de la Direccion de Admision. Pro
 - Base de datos local: SQLite.
 - Datos principales: API/DB como fuente principal, con `localStorage` como cache/fallback temporal.
 - Motor critico de calificacion: separado en funciones de dominio testeables.
+- UI/UX en curso: pantalla de resultados y modal de calificacion ya reorganizados para reducir ruido visual y reforzar estados operativos.
 - CI: frontend tests/build y backend tests en GitHub Actions.
 
 ## Documentacion Vigente
@@ -62,4 +63,4 @@ python manage.py test
 python manage.py check
 ```
 
-Nota: en esta maquina local, al momento de la reorganizacion documental, los tests no pudieron ejecutarse porque faltaban dependencias instaladas en el entorno activo (`vitest` y `django`).
+Nota: en esta maquina local, el frontend ya fue verificado con tests y build despues de los ajustes de UI/UX; el backend no cambio en esta iteracion.

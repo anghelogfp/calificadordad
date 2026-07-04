@@ -20,15 +20,43 @@ useFocusTrap(modalRef, computed(() => props.show))
 
 const name = ref('')
 const type = ref('simulacro')
+const simulacroScope = ref('')
 const submitted = ref(false)
 const shaking = ref(false)
 
 const nameError = computed(() => submitted.value && !name.value.trim() ? 'El nombre es obligatorio' : '')
+const scopeError = computed(() =>
+  submitted.value && type.value === 'simulacro' && !simulacroScope.value
+    ? 'Selecciona el alcance del simulacro'
+    : ''
+)
+
+const processPathLabel = computed(() => {
+  if (type.value === 'real') return 'Convocatoria real'
+  if (simulacroScope.value === 'general') return 'Simulacro general'
+  if (simulacroScope.value === 'areas') return 'Simulacro por áreas'
+  return 'Simulacro pendiente de alcance'
+})
+
+const processPathDescription = computed(() => {
+  if (type.value === 'real') return 'Ranking por carrera, vacantes e ingresantes.'
+  if (simulacroScope.value === 'general') return 'Un solo ranking para todos los postulantes y una clave general.'
+  if (simulacroScope.value === 'areas') return 'Ranking separado por área y claves oficiales por área.'
+  return 'Selecciona si el simulacro usará ranking general o rankings por área.'
+})
+
+const processPathBadge = computed(() => {
+  if (type.value === 'real') return 'Área + tipo'
+  if (simulacroScope.value === 'general') return 'Clave general'
+  if (simulacroScope.value === 'areas') return 'Por áreas'
+  return 'Por definir'
+})
 
 watch(() => props.show, (val) => {
   if (val) {
     name.value = ''
     type.value = 'simulacro'
+    simulacroScope.value = ''
     submitted.value = false
     shaking.value = false
   }
@@ -36,12 +64,16 @@ watch(() => props.show, (val) => {
 
 function confirm() {
   submitted.value = true
-  if (!name.value.trim()) {
+  if (!name.value.trim() || scopeError.value) {
     shaking.value = true
     setTimeout(() => { shaking.value = false }, 400)
     return
   }
-  emit('confirm', { name: name.value.trim(), type: type.value })
+  emit('confirm', {
+    name: name.value.trim(),
+    type: type.value,
+    simulacroScope: type.value === 'simulacro' ? simulacroScope.value : '',
+  })
 }
 </script>
 
@@ -60,7 +92,7 @@ function confirm() {
             </div>
             <div>
               <h2>Nuevo proceso de calificación</h2>
-              <p>Asigna un nombre e indica el tipo de proceso</p>
+              <p>Define el camino del proceso antes de calcular</p>
             </div>
             <button type="button" class="modal-close" @click="emit('close')">
               <svg viewBox="0 0 20 20" fill="currentColor">
@@ -173,6 +205,53 @@ function confirm() {
                 </button>
               </div>
             </div>
+
+            <div v-if="type === 'simulacro'" class="field" :class="{ 'field--error': scopeError }">
+              <label class="field-label">
+                Alcance del simulacro
+                <span class="field-required">*</span>
+              </label>
+              <div class="type-options">
+                <button
+                  type="button"
+                  class="type-option"
+                  :class="{ 'type-option--active': simulacroScope === 'general' }"
+                  @click="simulacroScope = 'general'"
+                >
+                  <span class="type-option__radio">
+                    <span v-if="simulacroScope === 'general'" class="type-option__dot" />
+                  </span>
+                  <div class="type-option__info">
+                    <span class="type-option__name">General</span>
+                    <span class="type-option__desc">Un solo ranking para todos los postulantes</span>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  class="type-option"
+                  :class="{ 'type-option--active': simulacroScope === 'areas' }"
+                  @click="simulacroScope = 'areas'"
+                >
+                  <span class="type-option__radio">
+                    <span v-if="simulacroScope === 'areas'" class="type-option__dot" />
+                  </span>
+                  <div class="type-option__info">
+                    <span class="type-option__name">Por áreas</span>
+                    <span class="type-option__desc">Un ranking separado por área de evaluación</span>
+                  </div>
+                </button>
+              </div>
+              <span v-if="scopeError" class="field-error">{{ scopeError }}</span>
+            </div>
+
+            <section class="process-path" :class="type === 'real' ? 'process-path--real' : 'process-path--simulacro'">
+              <div>
+                <span class="process-path__eyebrow">Camino del proceso</span>
+                <h3>{{ processPathLabel }}</h3>
+                <p>{{ processPathDescription }}</p>
+              </div>
+              <span class="process-path__badge">{{ processPathBadge }}</span>
+            </section>
 
             <!-- Advertencia si hay datos -->
             <div v-if="hasData" class="warning-row">
@@ -338,6 +417,76 @@ function confirm() {
 .type-option__info { display: flex; flex-direction: column; gap: 2px; }
 .type-option__name { font-size: 0.88rem; font-weight: 600; color: var(--slate-800); }
 .type-option__desc { font-size: 0.75rem; color: var(--slate-500); }
+
+.process-path {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid #dbe7f5;
+  border-left: 4px solid var(--unap-blue-500);
+  border-radius: var(--radius-lg);
+  background: #f9fbfe;
+}
+
+.process-path--real {
+  border-color: #f3e1b2;
+  border-left-color: var(--unap-gold-500);
+  background: #fffdf7;
+}
+
+.process-path__eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--slate-500);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.process-path h3 {
+  margin: 0;
+  color: var(--slate-900);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.process-path p {
+  margin: 4px 0 0;
+  color: var(--slate-500);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.process-path__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px var(--space-3);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-full);
+  background: white;
+  color: var(--unap-blue-700);
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.process-path--real .process-path__badge {
+  color: #78350f;
+}
+
+@media (max-width: 520px) {
+  .process-path {
+    flex-direction: column;
+  }
+
+  .process-path__badge {
+    white-space: normal;
+  }
+}
 
 /* Pre-flight */
 .preflight {

@@ -41,10 +41,10 @@ El repo contiene pruebas para:
 
 Fecha: 2026-07-03.
 
-- Frontend: `117` tests pasando.
-- Frontend build: OK.
+- Frontend: pruebas focalizadas de `ScoresTab` pasando despues de los ajustes de UI/UX.
+- Frontend build: OK despues de reorganizar resultados y modal de calificacion.
 - Backend: `manage.py check` sin issues.
-- Backend: `48` tests pasando.
+- Backend: `48` tests pasando en la ultima verificacion completa registrada.
 
 Notas del entorno:
 
@@ -52,6 +52,7 @@ Notas del entorno:
 - Se creo `.venv` local y se instalaron dependencias Python desde `requirements.txt`.
 - `npm ci` fallaba porque `package-lock.json` no estaba sincronizado; `npm install` actualizo el lockfile.
 - Vite/Vitest requirieron ejecucion fuera del sandbox local por `spawn EPERM`.
+- En esta iteracion se corrigio un error de render del modal al tratar `processAreas` como arreglo directo en vez de `ref/computed`.
 
 ## Brechas Importantes
 

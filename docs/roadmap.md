@@ -48,6 +48,8 @@ Riesgo conocido:
 - Extraer reconciliaciones desde `App.vue`.
 - Reducir responsabilidad del orquestador principal.
 - Mantener el motor de calificacion como dominio puro.
+- Ya se mejoraron resultados y modal de calificacion para reducir ruido visual y reforzar estados operativos.
+- Pendiente inmediato: seguir afinando el modal si la densidad visual sigue alta en uso real.
 
 ## Prioridad 6 - Modelo De Convocatoria
 
@@ -59,3 +61,17 @@ Decision actual:
 Pendiente futuro:
 
 - Reintroducir convocatoria solo si el negocio necesita aislar areas, formato DAT, plantillas, vacantes y procesos por convocatoria formal.
+
+## Punto De Pausa Actual
+
+Trabajo actual:
+
+- UI/UX de resultados y modal de calificacion reorganizada.
+- Configuracion de calificacion revisada para que vuelva a leerse como una sola unidad.
+- Bloqueos de preflight con feedback visible.
+
+Siguiente paso recomendado:
+
+1. Revisar visualmente el modal en uso real con datos cargados.
+2. Ajustar textos y jerarquia si el negocio quiere menos densidad.
+3. Pasar a stepper y estados de los pasos 1 al 5 si el modal ya queda estable.

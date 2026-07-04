@@ -99,7 +99,7 @@ export function useCalification(
     archiveRows.value.some(row => row.area?.trim()) ? 'areas' : 'general'
   )
   const simulacroScope = computed({
-    get: () => _processMeta.value.simulacroScope || inferredSimulacroScope.value,
+    get: () => processType.value === 'real' ? '' : (_processMeta.value.simulacroScope || inferredSimulacroScope.value),
     set: (val) => { _processMeta.value = { ..._processMeta.value, simulacroScope: val } },
   })
   const isGeneralSimulacro = computed(() =>
@@ -365,6 +365,10 @@ export function useCalification(
   })
 
   watch([processType, simulacroScope, inferredSimulacroScope], () => {
+    if (processType.value === 'real' && _processMeta.value.simulacroScope) {
+      simulacroScope.value = ''
+      return
+    }
     if (processType.value !== 'real' && !simulacroScope.value) {
       simulacroScope.value = inferredSimulacroScope.value
     }
@@ -386,6 +390,7 @@ export function useCalification(
   function openCalificationModal() {
     if (!canCalify.value) {
       calificationError.value = 'Necesitas cargar respuestas y claves antes de calificar.'
+      showToast(calificationError.value, 'error', 5000)
       return
     }
 
@@ -405,6 +410,7 @@ export function useCalification(
 
     if (!available.length) {
       calificationError.value = `No hay plantillas configuradas para el área ${area}.`
+      showToast(calificationError.value, 'error', 5000)
       return
     }
 
@@ -438,12 +444,15 @@ export function useCalification(
   // MÉTODOS — PROCESO
   // ═══════════════════════════════════════════════════════════════════════════
 
-  function startNewProcess({ name = '', type = 'simulacro' } = {}) {
-    activeProcess.value = { id: null, name, type, simulacroScope: inferredSimulacroScope.value, areas: {} }
+  function startNewProcess({ name = '', type = 'simulacro', simulacroScope: scope = '' } = {}) {
+    const normalizedScope = type === 'simulacro'
+      ? scope || inferredSimulacroScope.value
+      : ''
+    activeProcess.value = { id: null, name, type, simulacroScope: normalizedScope, areas: {} }
     calificationDisplayArea.value = null
     processName.value = name
     processType.value = type
-    simulacroScope.value = inferredSimulacroScope.value
+    simulacroScope.value = normalizedScope
     calificationSearch.value = ''
   }
 
@@ -461,7 +470,9 @@ export function useCalification(
     activeProcess.value = { ...process }
     processName.value = process.name || ''
     processType.value = process.type || 'simulacro'
-    simulacroScope.value = process.simulacroScope || inferredSimulacroScope.value
+    simulacroScope.value = process.type === 'real'
+      ? ''
+      : (process.simulacroScope || inferredSimulacroScope.value)
     const areas = Object.keys(process.areas || {})
     calificationDisplayArea.value = areas[0] || null
     calificationSearch.value = ''

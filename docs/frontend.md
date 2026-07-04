@@ -55,9 +55,18 @@ El frontend conserva la logica de calculo en modulos puros. Esto permite:
 - Trazabilidad por pregunta.
 - Reuso desde UI y verificador.
 
+## Estado De UI Y UX
+
+La pantalla de resultados y el modal de calificacion se reordenaron para priorizar contexto, estado y accion:
+
+- Resultados muestra primero el estado operativo, no calificados e incidencias, y deja los detalles tecnicos al final.
+- El modal de calificacion agrupa configuracion, salida y validacion en una sola experiencia con separadores suaves.
+- Los bloqueos de preflight ya no quedan silenciosos: el flujo muestra error visible y toast cuando falta informacion para calificar.
+
 ## Pendientes Tecnicos
 
 - Extraer reconciliaciones de `App.vue` a composables dedicados.
 - Agregar tests E2E del flujo completo.
 - Validar rendimiento con 5000 postulantes.
 - Decidir si la trazabilidad se persiste tambien en backend.
+- Seguir puliendo jerarquia visual del modal de calificacion si el negocio pide menos densidad.

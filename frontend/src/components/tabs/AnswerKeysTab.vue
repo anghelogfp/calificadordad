@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { ANSWER_KEY_SUBTABS } from '@/constants'
 import WorkflowIntroCard from '@/components/shared/WorkflowIntroCard.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
@@ -21,6 +21,14 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  processType: {
+    type: String,
+    default: 'simulacro',
+  },
+  simulacroScope: {
+    type: String,
+    default: '',
+  },
 })
 
 const emit = defineEmits(['update:subTab'])
@@ -28,6 +36,26 @@ const emit = defineEmits(['update:subTab'])
 const answerKeys = reactive(props.answerKeys)
 const showOnlyObserved = ref(false)
 const importMode = ref('general')
+
+const expectedKeyMode = computed(() => {
+  if (props.processType === 'real') return 'area'
+  return props.simulacroScope === 'general' ? 'general' : 'area'
+})
+
+const keyModeLabel = computed(() => {
+  if (props.processType === 'real') return 'Convocatoria real'
+  return props.simulacroScope === 'general' ? 'Simulacro general' : 'Simulacro por áreas'
+})
+
+const keyModeDescription = computed(() => {
+  if (props.processType === 'real') return 'Este proceso exige claves por área y tipo de prueba P/Q/R/S/T.'
+  if (props.simulacroScope === 'general') return 'Este proceso usa una única clave general para todo el ranking.'
+  return 'Este proceso exige claves oficiales por cada área de evaluación.'
+})
+
+watch(expectedKeyMode, (mode) => {
+  setImportMode(mode)
+}, { immediate: true })
 
 const displayedRows = computed(() => (
   showOnlyObserved.value ? answerKeys.observations : answerKeys.pagedRows
@@ -47,6 +75,8 @@ const displayedRowsWithCounts = computed(() =>
 )
 
 function setImportMode(mode) {
+  const nextMode = expectedKeyMode.value === 'general' ? 'general' : 'area'
+  mode = mode === nextMode ? mode : nextMode
   importMode.value = mode
   if (mode === 'general') {
     answerKeys.identificationFile = null
@@ -226,6 +256,17 @@ const stepState = computed(() => {
       </p>
     </section>
 
+    <section class="key-mode-context">
+      <div>
+        <span class="key-mode-context__eyebrow">Modo de claves definido por el camino</span>
+        <h3>{{ keyModeLabel }}</h3>
+        <p>{{ keyModeDescription }}</p>
+      </div>
+      <span class="key-mode-context__badge">
+        {{ expectedKeyMode === 'general' ? 'Clave general' : processType === 'real' ? 'Área + tipo' : 'Por áreas' }}
+      </span>
+    </section>
+
     <details class="upload-form-card" :open="!answerKeys.answerKeyHasData">
       <summary class="upload-form-card__header">
         <span class="upload-form-card__icon">
@@ -239,11 +280,12 @@ const stepState = computed(() => {
       <form class="upload-form-grid" @submit.prevent="answerKeys.importAnswerKeyFiles">
         <div class="form-field form-field--wide">
           <label class="form-field__label">Tipo de clave</label>
-          <div class="key-mode-toggle">
+          <div class="key-mode-toggle key-mode-toggle--locked">
             <button
               type="button"
               class="key-mode-btn"
               :class="{ 'key-mode-btn--active': importMode === 'general' }"
+              :disabled="expectedKeyMode !== 'general'"
               @click="setImportMode('general')"
             >
               Clave general
@@ -252,11 +294,13 @@ const stepState = computed(() => {
               type="button"
               class="key-mode-btn"
               :class="{ 'key-mode-btn--active': importMode === 'area' }"
+              :disabled="expectedKeyMode !== 'area'"
               @click="setImportMode('area')"
             >
-              Por área/tipo
+              {{ processType === 'real' ? 'Por área/tipo' : 'Por área' }}
             </button>
           </div>
+          <p class="form-field__hint">Este modo viene del camino definido al crear el proceso.</p>
         </div>
 
         <div v-if="importMode === 'area'" class="form-field">
@@ -587,6 +631,57 @@ const stepState = computed(() => {
   color: #b91c1c;
 }
 
+.key-mode-context {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid #dbe7f5;
+  border-left: 4px solid var(--unap-blue-500);
+  border-radius: var(--radius-lg);
+  background: #f9fbfe;
+  box-shadow: var(--shadow-sm);
+}
+
+.key-mode-context__eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--slate-500);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.key-mode-context h3 {
+  margin: 0;
+  color: var(--slate-900);
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.key-mode-context p {
+  margin: 4px 0 0;
+  color: var(--slate-500);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.key-mode-context__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px var(--space-3);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-full);
+  background: white;
+  color: var(--unap-blue-700);
+  font-size: 0.74rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .upload-form-card {
   background: white;
   border: 1px solid var(--slate-200);
@@ -642,6 +737,12 @@ const stepState = computed(() => {
   letter-spacing: 0.03em;
 }
 
+.form-field__hint {
+  margin: 0;
+  color: var(--slate-400);
+  font-size: 0.74rem;
+}
+
 .form-field__select {
   width: 100%;
   height: 40px; padding: var(--space-2) var(--space-3);
@@ -678,9 +779,14 @@ const stepState = computed(() => {
   transition: all var(--transition-fast);
 }
 
-.key-mode-btn:hover {
+.key-mode-btn:hover:not(:disabled) {
   border-color: var(--unap-blue-300);
   color: var(--unap-blue-700);
+}
+
+.key-mode-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
 }
 
 .key-mode-btn--active {
@@ -758,6 +864,14 @@ const stepState = computed(() => {
   .form-field--action { grid-column: 2; }
 }
 @media (max-width: 700px) {
+  .key-mode-context {
+    flex-direction: column;
+  }
+
+  .key-mode-context__badge {
+    white-space: normal;
+  }
+
   .upload-form-grid { grid-template-columns: 1fr; }
   .form-field--action { grid-column: 1; }
   .form-field--action .btn { width: 100%; }

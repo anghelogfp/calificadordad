@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref, watch, computed } from 'vue'
+import { reactive, ref, watch, computed, unref } from 'vue'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 
 const props = defineProps({
@@ -23,6 +23,16 @@ const runningAll = ref(false)
 const allResult = ref(null)
 const isRealMode = computed(() => props.calification.processType === 'real')
 const isGeneralSimulacro = computed(() => props.calification.isGeneralSimulacro)
+const processAreas = computed(() => unref(props.calification.processAreas) ?? [])
+const calificationAreaOptions = computed(() => unref(props.calification.calificationAreaOptions) ?? [])
+const programasForCurrentArea = computed(() => unref(props.calification.programasForCurrentArea) ?? [])
+const calculatedAreasCount = computed(() => processAreas.value.length)
+const totalAreaOptionsCount = computed(() => calificationAreaOptions.value.length)
+const pendingAreasCount = computed(() => Math.max(totalAreaOptionsCount.value - calculatedAreasCount.value, 0))
+const selectedAreaAlreadyCalculated = computed(() =>
+  processAreas.value.includes(props.calification.calificationArea)
+)
+const currentProgramCount = computed(() => programasForCurrentArea.value.length)
 
 function close() { emit('close') }
 function runCalification() {
@@ -79,6 +89,26 @@ function setVacantes(programa, val) {
           </button>
         </header>
 
+        <div class="calculation-strip calculation-strip--compact">
+          <span class="calculation-strip__item calculation-strip__item--meta">
+            <strong>Modo</strong>
+            {{ isRealMode ? 'Convocatoria real' : isGeneralSimulacro ? 'Simulacro general' : 'Simulacro por áreas' }}
+          </span>
+          <span class="calculation-strip__item calculation-strip__item--meta">
+            <strong>{{ isGeneralSimulacro ? 'Ranking' : 'Área' }}</strong>
+            {{ isGeneralSimulacro ? 'General' : calification.calificationArea || 'Sin seleccionar' }}
+          </span>
+          <span
+            class="calculation-strip__item"
+            :class="calification.preflightCheck.hasBlockers ? 'calculation-strip__item--error'
+              : calification.preflightCheck.hasWarnings ? 'calculation-strip__item--warn' : 'calculation-strip__item--ok'"
+          >
+            <strong>Estado</strong>
+            {{ calification.preflightCheck.hasBlockers ? 'Bloqueado'
+              : calification.preflightCheck.hasWarnings ? 'Con alertas' : 'Listo' }}
+          </span>
+        </div>
+
         <form class="modal__body" @submit.prevent="runCalification" novalidate>
 
           <!-- Error de calificación (top) -->
@@ -89,12 +119,26 @@ function setVacantes(programa, val) {
             {{ calification.calificationError }}
           </div>
 
+          <div class="config-shell">
+          <div class="config-shell__header">
+            <div>
+              <span class="config-shell__eyebrow">Configuración de cálculo</span>
+              <h3>Reglas operativas del cálculo</h3>
+            </div>
+            <span class="config-shell__badge">Proceso configurado</span>
+          </div>
+
+          <div class="section section--composed">
+            <div class="section__intro">
+              <p class="section__eyebrow">Qué vas a calcular</p>
+              <h3 class="section__title">Selecciona qué vas a calcular dentro del proceso activo</h3>
+            </div>
+
+          <div class="modal-grid modal-grid--decision">
+          <div class="section-block">
           <!-- ── SECCIÓN 1: Proceso ─────────────────────────────────────── -->
-          <div class="section">
+          <div class="section section--process">
             <p class="section__label">
-              <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
-                <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v8a2 2 0 002 2h4a2 2 0 002-2V6.414A2 2 0 0011.414 5L9 2.586A2 2 0 007.586 2H6zm-1 9a1 1 0 011-1h2a1 1 0 110 2H6a1 1 0 01-1-1zm1-4a1 1 0 000 2h2a1 1 0 100-2H6z" clip-rule="evenodd"/>
-              </svg>
               Proceso
             </p>
 
@@ -111,121 +155,36 @@ function setVacantes(programa, val) {
               />
             </div>
 
-            <div class="field">
-              <label>
-                Tipo de proceso
-                <span v-if="calification.processAreas.length > 0" class="locked-chip">
-                  <svg viewBox="0 0 16 16" fill="currentColor" width="10" height="10"><path fill-rule="evenodd" d="M5 7V5a3 3 0 016 0v2h1a1 1 0 011 1v5a1 1 0 01-1 1H4a1 1 0 01-1-1V8a1 1 0 011-1h1zm4-2v2H7V5a1 1 0 112 0z" clip-rule="evenodd"/></svg>
-                  Bloqueado — ya hay áreas calculadas
-                </span>
-              </label>
-              <div class="type-toggle" :class="{ 'type-toggle--locked': calification.processAreas.length > 0 }">
-                <button
-                  type="button"
-                  class="type-opt"
-                  :class="{ 'type-opt--active': calification.processType === 'simulacro' }"
-                  :disabled="calification.processAreas.length > 0"
-                  @click="calification.processType = 'simulacro'"
-                >
-                  <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
-                    <path d="M9 4.804A7.968 7.968 0 005.5 4c-1.255 0-2.443.29-3.5.804v8A7.969 7.969 0 015.5 12c1.335 0 2.584.41 3.616 1.108A6.963 6.963 0 0112.5 12c.855 0 1.671.15 2.43.425A7.96 7.96 0 0114 11.5V5.5a7.968 7.968 0 00-2.5-.696V10a1 1 0 11-2 0V4.804z"/>
-                  </svg>
-                  <span class="type-opt__text">
-                    Simulacro
-                    <small>Ranking global · tabla plana</small>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  class="type-opt type-opt--real"
-                  :class="{ 'type-opt--active': calification.processType === 'real' }"
-                  :disabled="calification.processAreas.length > 0"
-                  @click="calification.processType = 'real'"
-                >
-                  <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
-                    <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v8a2 2 0 002 2h4a2 2 0 002-2V5.414A2 2 0 0011.414 4L9 1.586A2 2 0 007.586 1H6zM5 6a1 1 0 011-1h2a1 1 0 010 2H6a1 1 0 01-1-1zm1 3a1 1 0 000 2h2a1 1 0 100-2H6zm3-3a1 1 0 000 2h.01a1 1 0 100-2H9z" clip-rule="evenodd"/>
-                  </svg>
-                  <span class="type-opt__text">
-                    Convocatoria Real
-                    <small>Por carrera · vacantes · ingresantes</small>
-                  </span>
-                </button>
+            <div class="process-context" :class="isRealMode ? 'process-context--real' : 'process-context--simulacro'">
+              <div class="process-context__header">
+                <span class="process-context__eyebrow">Camino definido al crear proceso</span>
+                <span class="process-context__locked">No editable aquí</span>
               </div>
-              <p v-if="calification.processAreas.length > 0" class="field-note">
-                Para cambiar el tipo, recalcula todas las áreas del proceso.
+              <strong>
+                {{ isRealMode ? 'Convocatoria real' : isGeneralSimulacro ? 'Simulacro general' : 'Simulacro por áreas' }}
+              </strong>
+              <p>
+                {{ isRealMode
+                  ? 'Ranking por programa, vacantes e ingresantes.'
+                  : isGeneralSimulacro
+                    ? 'Un solo ranking para todos los postulantes.'
+                    : 'Ranking separado por área de evaluación.' }}
               </p>
-
-              <div v-if="!isRealMode" class="field">
-                <label>
-                  Alcance del simulacro
-                  <span class="locked-chip">
-                    Detectado: {{ calification.inferredSimulacroScope === 'general' ? 'General' : 'Por áreas' }}
-                  </span>
-                </label>
-                <div class="type-toggle" :class="{ 'type-toggle--locked': calification.processAreas.length > 0 }">
-                  <button
-                    type="button"
-                    class="type-opt"
-                    :class="{ 'type-opt--active': calification.simulacroScope === 'general' }"
-                    :disabled="calification.processAreas.length > 0"
-                    @click="calification.simulacroScope = 'general'"
-                  >
-                    <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
-                      <path d="M8 8a3 3 0 100-6 3 3 0 000 6zM2 14s1-4 6-4 6 4 6 4H2z"/>
-                    </svg>
-                    <span class="type-opt__text">
-                      General
-                      <small>Un ranking para todos</small>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    class="type-opt"
-                    :class="{ 'type-opt--active': calification.simulacroScope === 'areas' }"
-                    :disabled="calification.processAreas.length > 0"
-                    @click="calification.simulacroScope = 'areas'"
-                  >
-                    <svg viewBox="0 0 16 16" fill="currentColor" width="14" height="14">
-                      <path d="M2 3.5A1.5 1.5 0 013.5 2h9A1.5 1.5 0 0114 3.5V5H2V3.5zM2 6h5v8H3.5A1.5 1.5 0 012 12.5V6zm6 0h6v6.5a1.5 1.5 0 01-1.5 1.5H8V6z"/>
-                    </svg>
-                    <span class="type-opt__text">
-                      Por áreas
-                      <small>Ranking separado por área</small>
-                    </span>
-                  </button>
-                </div>
-              </div>
-
               <div class="mode-summary" :class="isRealMode ? 'mode-summary--real' : 'mode-summary--simulacro'">
-                <span class="mode-chip">
-                  <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
-                    <path fill-rule="evenodd" d="M8 16A8 8 0 108 0a8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882L7.45 9.703 5.28 7.533a.75.75 0 00-1.06 1.061l2.79 2.79a.75.75 0 001.137-.089l3.71-5.104z" clip-rule="evenodd"/>
-                  </svg>
-                  {{ isRealMode ? 'Tipo P/Q/R/S/T obligatorio' : 'Tipo no requerido' }}
-                </span>
-                <span class="mode-chip">
-                  <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
-                    <path d="M2 3.75A1.75 1.75 0 013.75 2h8.5A1.75 1.75 0 0114 3.75v8.5A1.75 1.75 0 0112.25 14h-8.5A1.75 1.75 0 012 12.25v-8.5zM4 5v1.5h8V5H4zm0 3v1.5h8V8H4zm0 3v1h5v-1H4z"/>
-                  </svg>
-                  {{ isRealMode ? 'Área y programa requeridos' : isGeneralSimulacro ? 'Padrón sin área permitido' : 'Áreas del padrón' }}
-                </span>
-                <span class="mode-chip">
-                  <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
-                    <path fill-rule="evenodd" d="M2 13.5A1.5 1.5 0 003.5 15h9a1.5 1.5 0 001.5-1.5v-7A1.5 1.5 0 0012.5 5h-9A1.5 1.5 0 002 6.5v7zM3.5 6h9a.5.5 0 01.5.5V8H3V6.5a.5.5 0 01.5-.5zM3 9h10v4.5a.5.5 0 01-.5.5h-9a.5.5 0 01-.5-.5V9z" clip-rule="evenodd"/>
-                    <path d="M5 1a1 1 0 00-1 1v1h2V2a1 1 0 00-1-1zm6 0a1 1 0 00-1 1v1h2V2a1 1 0 00-1-1z"/>
-                  </svg>
-                  {{ isRealMode ? 'Vacantes por programa' : isGeneralSimulacro ? 'Ranking general' : 'Ranking por área' }}
-                </span>
+                <span class="mode-chip">{{ isRealMode ? 'Tipo P/Q/R/S/T obligatorio' : 'Tipo no requerido' }}</span>
+                <span class="mode-chip">{{ isRealMode ? 'Área y programa requeridos' : isGeneralSimulacro ? 'Padrón sin área permitido' : 'Áreas del padrón' }}</span>
+                <span class="mode-chip">{{ isRealMode ? 'Vacantes por programa' : isGeneralSimulacro ? 'Ranking general' : 'Ranking por área' }}</span>
               </div>
             </div>
           </div>
 
           <!-- ── SECCIÓN 2: Área ────────────────────────────────────────── -->
-          <div class="section">
+          </div>
+          </div>
+
+          <div class="section-block section-block--aside">
+          <div class="section section--area">
             <p class="section__label">
-              <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
-                <path d="M8.354 1.146a.5.5 0 00-.708 0l-6 6A.5.5 0 002 8v5a1 1 0 001 1h3a1 1 0 001-1v-3h2v3a1 1 0 001 1h3a1 1 0 001-1V8a.5.5 0 00-.146-.354l-6-6z"/>
-              </svg>
               {{ isGeneralSimulacro ? 'Ranking a calificar' : 'Área a calificar' }}
               <span v-if="!isGeneralSimulacro && calification.calificationAreaOptions.length > 1" class="section__counter">
                 {{ calification.processAreas.length }} / {{ calification.calificationAreaOptions.length }} calculadas
@@ -257,15 +216,37 @@ function setVacantes(programa, val) {
               </svg>
               Esta área ya fue calculada. Si continúas, sus resultados actuales se reemplazarán.
             </div>
+
+            <div class="selection-meta">
+              <span class="selection-meta__item">
+                <strong>Calculadas</strong>
+                {{ calculatedAreasCount }} / {{ totalAreaOptionsCount || 1 }}
+              </span>
+              <span v-if="!isGeneralSimulacro" class="selection-meta__item">
+                <strong>Pendientes</strong>
+                {{ pendingAreasCount }}
+              </span>
+              <span class="selection-meta__item">
+                <strong>Acción</strong>
+                {{ selectedAreaAlreadyCalculated ? 'Recalcular' : 'Nuevo cálculo' }}
+              </span>
+            </div>
+          </div>
+          </div>
+          </div>
           </div>
 
+          <div class="section section--composed section--composed-accent">
+            <div class="section__intro">
+              <p class="section__eyebrow">Cómo se calculará</p>
+              <h3 class="section__title">Configura la plantilla, los puntajes y la salida del cálculo</h3>
+            </div>
+
+          <div class="modal-grid modal-grid--setup">
+          <div class="section-block">
           <!-- ── SECCIÓN 3: Plantilla y valores ────────────────────────── -->
-          <div class="section">
+          <div class="section section--scoring">
             <p class="section__label">
-              <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
-                <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
-                <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
-              </svg>
               Plantilla y valores de calificación
             </p>
 
@@ -362,11 +343,12 @@ function setVacantes(programa, val) {
           </div>
 
           <!-- ── SECCIÓN 4: Vacantes (condicional) ──────────────────────── -->
-          <div v-if="isRealMode && calification.programasForCurrentArea.length > 0" class="section">
+          </div>
+          </div>
+
+          <div class="section-block section-block--aside">
+          <div v-if="isRealMode && calification.programasForCurrentArea.length > 0" class="section section--vacantes">
             <p class="section__label">
-              <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
-                <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7zm4-6a3 3 0 100-6 3 3 0 000 6zM5.978 8.372A5.976 5.976 0 005 9H1s-1 0-1 1 1 3 1 3h3.5c.34-.81.84-1.583 1.478-2.372z"/>
-              </svg>
               Vacantes por programa
               <span class="section__hint">0 = sin límite de cupos</span>
             </p>
@@ -389,33 +371,77 @@ function setVacantes(programa, val) {
                 </div>
               </div>
             </div>
+            <div class="selection-meta selection-meta--output">
+              <span class="selection-meta__item">
+                <strong>Programas</strong>
+                {{ currentProgramCount }}
+              </span>
+              <span class="selection-meta__item">
+                <strong>Salida</strong>
+                Ranking por programa
+              </span>
+              <span class="selection-meta__item">
+                <strong>Ingresantes</strong>
+                Según vacantes
+              </span>
+            </div>
           </div>
           <div v-else-if="!isRealMode" class="section mode-note">
             <p class="section__label">
-              <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
-                <path fill-rule="evenodd" d="M8 16A8 8 0 108 0 8 8 0 008 16zm.75-11.25a.75.75 0 00-1.5 0v4.5c0 .414.336.75.75.75h3a.75.75 0 000-1.5H8.75V4.75z" clip-rule="evenodd"/>
-              </svg>
               Salida de simulacro
             </p>
             <div class="mode-note__body">
               <span>Se generará una tabla plana por puntaje total.</span>
               <span>Las vacantes e ingresantes no se aplican en este modo.</span>
             </div>
+            <div class="selection-meta selection-meta--output">
+              <span class="selection-meta__item">
+                <strong>Salida</strong>
+                {{ isGeneralSimulacro ? 'Ranking general' : 'Ranking por área' }}
+              </span>
+              <span class="selection-meta__item">
+                <strong>Tabla</strong>
+                Plana
+              </span>
+              <span class="selection-meta__item">
+                <strong>Ingresantes</strong>
+                No aplica
+              </span>
+            </div>
+          </div>
+          </div>
           </div>
 
           <!-- ── SECCIÓN 5: Diagnóstico del área ───────────────────────── -->
           <div
-            class="section section--preflight"
+            class="section section--composed section--preflight"
             :class="{
               'preflight--error':   calification.preflightCheck.hasBlockers,
               'preflight--warning': !calification.preflightCheck.hasBlockers && calification.preflightCheck.hasWarnings,
               'preflight--ok':      !calification.preflightCheck.hasBlockers && !calification.preflightCheck.hasWarnings,
             }"
           >
+            <div class="preflight-summary">
+              <div>
+                <span class="preflight-summary__eyebrow">Validación antes de calcular</span>
+                <h3>
+                  {{ calification.preflightCheck.hasBlockers
+                    ? 'No se puede calcular todavía'
+                    : calification.preflightCheck.hasWarnings
+                      ? 'Puedes calcular, pero conviene revisar'
+                      : 'Todo está listo para calcular' }}
+                </h3>
+              </div>
+              <span
+                class="status-badge status-badge--large"
+                :class="calification.preflightCheck.hasBlockers ? 'badge--error'
+                  : calification.preflightCheck.hasWarnings ? 'badge--warn' : 'badge--ok'"
+              >
+                {{ calification.preflightCheck.hasBlockers ? 'Bloqueado'
+                  : calification.preflightCheck.hasWarnings ? 'Advertencias' : 'Listo' }}
+              </span>
+            </div>
             <p class="section__label">
-              <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12">
-                <path fill-rule="evenodd" d="M8 16A8 8 0 108 0a8 8 0 000 16zm.93-9.412l-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM8 5.5a1 1 0 110-2 1 1 0 010 2z" clip-rule="evenodd"/>
-              </svg>
               {{ isGeneralSimulacro ? 'Diagnóstico del ranking general' : 'Diagnóstico del área' }}
               <span
                 class="status-badge"
@@ -460,6 +486,10 @@ function setVacantes(programa, val) {
 
         <!-- ── Footer ─────────────────────────────────────────────────────── -->
         <footer class="modal__footer">
+          <div class="footer-status">
+            <strong>{{ calification.preflightCheck.hasBlockers ? 'Corrige los errores para continuar' : 'Acción de cálculo' }}</strong>
+            <span>{{ isGeneralSimulacro ? 'Ranking general' : calification.calificationArea || 'Área seleccionada' }}</span>
+          </div>
           <button type="button" class="btn btn--ghost" @click="close">Cancelar</button>
 
           <div class="footer__actions">
@@ -484,7 +514,6 @@ function setVacantes(programa, val) {
             <button
               type="button"
               class="btn btn--gold"
-              :disabled="calification.preflightCheck.hasBlockers"
               @click="runCalification"
             >
               <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
@@ -518,7 +547,8 @@ function setVacantes(programa, val) {
 .modal {
   background: var(--slate-50);
   border-radius: var(--radius-xl);
-  width: min(580px, 100%);
+  width: min(860px, 100%);
+  max-height: calc(100vh - 48px);
   margin: auto;
   display: flex; flex-direction: column;
   box-shadow: 0 25px 60px rgba(5, 20, 45, 0.35);
@@ -561,38 +591,225 @@ function setVacantes(programa, val) {
 .modal__close svg { width: 16px; height: 16px; }
 .modal__close:hover { background: rgba(255,255,255,0.18); color: white; }
 
+.calculation-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: white;
+  border-bottom: 1px solid var(--slate-200);
+}
+
+.calculation-strip--compact {
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+  background: #f8fafc;
+}
+
+.calculation-strip__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  background: var(--slate-50);
+  color: var(--slate-700);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.calculation-strip__item--meta {
+  background: white;
+}
+
+.calculation-strip__item strong {
+  color: var(--slate-400);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.calculation-strip__item--ok {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.calculation-strip__item--warn {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.calculation-strip__item--error {
+  border-color: var(--error-200);
+  background: var(--error-50);
+  color: var(--error-700);
+}
+
 /* ── Body ────────────────────────────────────────────────────────────────── */
 .modal__body {
   flex: 1; min-width: 0; overflow-y: auto; overflow-x: hidden;
   padding: var(--space-4);
   display: flex; flex-direction: column; gap: var(--space-3);
+  background: white;
+}
+
+.config-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.config-shell__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 var(--space-1) var(--space-1);
+}
+
+.config-shell__eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--slate-500);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.config-shell__header h3 {
+  margin: 0;
+  color: var(--slate-900);
+  font-size: 1.08rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.config-shell__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px var(--space-3);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-full);
+  background: #fbfcfd;
+  color: var(--slate-500);
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.section--composed {
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-lg);
+  background: white;
+}
+
+.section--composed-accent {
+  background: linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
+}
+
+.section__intro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--slate-100);
+}
+
+.section__eyebrow {
+  margin: 0;
+  color: var(--slate-500);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.section__title {
+  margin: 0;
+  color: var(--slate-900);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.modal-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  background: transparent;
+  overflow: visible;
+}
+
+.modal-grid > .section,
+.modal-grid > .section-block {
+  min-width: 0;
+}
+
+.section-block {
+  min-width: 0;
+}
+
+.section-block--aside {
+  display: flex;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--slate-100);
+}
+
+.section-block--aside > .section {
+  width: 100%;
 }
 
 /* ── Secciones ───────────────────────────────────────────────────────────── */
 .section {
-  background: white;
-  border: 1px solid var(--slate-200);
-  border-radius: var(--radius-lg);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   padding: var(--space-4);
   display: flex; flex-direction: column; gap: var(--space-3);
 }
 
+.section--composed > .modal-grid > .section-block > .section,
+.section--composed > .modal-grid > .section-block--aside > .section {
+  padding: 0;
+}
+
+.section--process,
+.section--scoring {
+  border-top: 0;
+}
+
+.section--area,
+.section--vacantes,
+.mode-note {
+  border-top: 0;
+}
+
 .section__label {
   display: flex; align-items: center; gap: var(--space-2);
-  font-size: 0.68rem; font-weight: 700;
+  font-size: 0.7rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.08em;
   color: var(--slate-400);
   margin: 0; padding-bottom: var(--space-2);
   border-bottom: 1px solid var(--slate-100);
 }
-.section__label svg { flex-shrink: 0; color: var(--unap-blue-400); }
 
 .section__counter {
   margin-left: auto;
-  font-size: 0.7rem; font-weight: 600;
-  color: var(--unap-blue-600);
+  font-size: 0.66rem; font-weight: 700;
+  color: var(--slate-600);
   text-transform: none; letter-spacing: 0;
-  background: var(--unap-blue-50);
+  background: var(--slate-100);
   padding: 1px var(--space-2);
   border-radius: var(--radius-full);
 }
@@ -615,8 +832,8 @@ function setVacantes(programa, val) {
 .locked-chip {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 0.68rem; font-weight: 600;
-  color: #92400e; background: #fef3c7;
-  border: 1px solid #fde68a;
+  color: #7c5a14; background: #fff8e6;
+  border: 1px solid #f2dfad;
   padding: 1px var(--space-2); border-radius: var(--radius-full);
   text-transform: none; letter-spacing: 0;
 }
@@ -642,6 +859,72 @@ function setVacantes(programa, val) {
   outline: none;
   border-color: var(--unap-blue-400);
   box-shadow: 0 0 0 3px rgba(0, 82, 163, 0.1);
+}
+
+.process-context {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--slate-200);
+  border-left-width: 4px;
+  border-radius: var(--radius-lg);
+  background: #fbfcfd;
+}
+
+.process-context--real {
+  border-color: #f3e1b2;
+  border-left-color: var(--unap-gold-500);
+  background: #fffdf7;
+}
+
+.process-context--simulacro {
+  border-color: #dbe7f5;
+  border-left-color: var(--unap-blue-500);
+  background: #f9fbfe;
+}
+
+.process-context__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.process-context__eyebrow {
+  color: var(--slate-400);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.process-context__locked {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: var(--slate-500);
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.process-context strong {
+  color: var(--slate-900);
+  font-size: 1rem;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.process-context p {
+  margin: 0;
+  color: var(--slate-500);
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 
 /* ── Tipo de proceso ─────────────────────────────────────────────────────── */
@@ -691,18 +974,18 @@ function setVacantes(programa, val) {
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
-  border: 1px solid var(--slate-200);
-  background: var(--slate-50);
+  border: 1px solid var(--slate-150, var(--slate-200));
+  background: #fcfcfd;
 }
 
 .mode-summary--simulacro {
-  border-color: var(--unap-blue-100);
-  background: var(--unap-blue-50);
+  border-color: #dbe7f5;
+  background: #f9fbfe;
 }
 
 .mode-summary--real {
-  border-color: #fde68a;
-  background: #fffbeb;
+  border-color: #f3e1b2;
+  background: #fffdf7;
 }
 
 .mode-chip {
@@ -712,7 +995,7 @@ function setVacantes(programa, val) {
   min-width: 0;
   color: var(--slate-600);
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .mode-chip svg {
@@ -765,6 +1048,75 @@ function setVacantes(programa, val) {
 }
 .recalc-banner svg { color: #d97706; margin-top: 1px; }
 
+.selection-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.selection-meta--output {
+  margin-top: auto;
+}
+
+.selection-meta__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px var(--space-2);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--slate-200);
+  background: #fbfcfd;
+  color: var(--slate-600);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.selection-meta__item strong {
+  color: var(--slate-400);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.operation-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-md);
+  background: var(--slate-50);
+}
+
+.operation-summary--output {
+  margin-top: auto;
+}
+
+.operation-summary__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--slate-500);
+  font-size: 0.76rem;
+}
+
+.operation-summary__row + .operation-summary__row {
+  border-top: 1px solid var(--slate-200);
+  border-radius: 0;
+}
+
+.operation-summary__row strong {
+  color: var(--slate-800);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: right;
+}
+
 /* ── Plantilla preview ───────────────────────────────────────────────────── */
 .plantilla-preview {
   display: flex; flex-wrap: wrap; gap: var(--space-2);
@@ -775,7 +1127,7 @@ function setVacantes(programa, val) {
   padding: 2px var(--space-2);
   border-radius: var(--radius-full);
   font-size: 0.72rem; font-weight: 600;
-  background: var(--slate-100); color: var(--slate-600);
+  background: #fbfcfd; color: var(--slate-600);
   border: 1px solid var(--slate-200);
 }
 
@@ -866,8 +1218,9 @@ function setVacantes(programa, val) {
 }
 
 .mode-note {
-  border-color: var(--unap-blue-100);
-  background: var(--unap-blue-50);
+  border-color: transparent;
+  background: transparent;
+  padding-top: var(--space-4);
 }
 
 .mode-note__body {
@@ -882,11 +1235,41 @@ function setVacantes(programa, val) {
 
 /* ── Preflight / Diagnóstico ─────────────────────────────────────────────── */
 .section--preflight {
-  border-left-width: 3px;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-lg);
+  border-top-width: 3px;
+  gap: var(--space-3);
+  background: linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
 }
-.preflight--error   { border-left-color: var(--error-500);   background: var(--error-50); }
-.preflight--warning { border-left-color: #f59e0b;            background: #fffbeb; }
-.preflight--ok      { border-left-color: #16a34a;            background: #f0fdf4; }
+.preflight--error   { border-top-color: var(--error-500);   background: var(--error-50); }
+.preflight--warning { border-top-color: #f59e0b;            background: #fffbeb; }
+.preflight--ok      { border-top-color: #16a34a;            background: #f0fdf4; }
+
+.preflight-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.preflight-summary__eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--slate-500);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.preflight-summary h3 {
+  margin: 0;
+  color: var(--slate-900);
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
 
 .status-badge {
   margin-left: auto;
@@ -898,6 +1281,12 @@ function setVacantes(programa, val) {
 .badge--ok    { background: #dcfce7; color: #166534; }
 .badge--warn  { background: #fef9c3; color: #854d0e; }
 .badge--error { background: var(--error-100); color: var(--error-700); }
+.status-badge--large {
+  margin-left: 0;
+  padding: var(--space-1) var(--space-3);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
 
 .preflight-items {
   display: flex; flex-direction: column; gap: var(--space-1);
@@ -951,13 +1340,31 @@ function setVacantes(programa, val) {
 
 /* ── Footer ──────────────────────────────────────────────────────────────── */
 .modal__footer {
-  display: flex; align-items: center; justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
   gap: var(--space-3); padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--slate-200);
   background: white; flex-shrink: 0;
 }
 
 .footer__actions { display: flex; align-items: center; gap: var(--space-2); }
+.footer-status {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: var(--slate-500);
+  font-size: 0.75rem;
+}
+.footer-status strong {
+  color: var(--slate-800);
+  font-size: 0.82rem;
+}
+.footer-status span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
 .btn {
@@ -996,4 +1403,59 @@ function setVacantes(programa, val) {
 
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .spin { animation: spin 0.8s linear infinite; }
+
+@media (max-width: 760px) {
+  .modal-overlay {
+    padding: var(--space-3);
+  }
+
+  .modal {
+    width: 100%;
+  }
+
+  .calculation-strip,
+  .modal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .section--composed {
+    padding: var(--space-3);
+  }
+
+  .config-shell__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .config-shell__badge {
+    white-space: normal;
+  }
+
+  .section-block--aside {
+    padding-top: var(--space-3);
+  }
+
+  .scores-row {
+    grid-template-columns: 1fr;
+  }
+
+  .modal__footer {
+    grid-template-columns: 1fr;
+  }
+
+  .footer__actions,
+  .modal__footer > .btn {
+    width: 100%;
+  }
+
+  .footer__actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .footer__actions .btn,
+  .modal__footer > .btn {
+    width: 100%;
+  }
+}
 </style>

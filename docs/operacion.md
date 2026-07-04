@@ -72,6 +72,13 @@ Frontend:
 11. Guardar historial.
 12. Exportar reportes.
 
+## Puntos De UI Que Ya Deben Verse Claros
+
+- En resultados, el bloque principal debe mostrar estado, no calificados e incidencias antes del detalle tecnico.
+- El modal de calificacion debe mostrar contexto superior, configuracion, salida y validacion sin parecer cuatro tarjetas aisladas.
+- Si falta informacion para calificar, el click debe dar feedback visible y no quedarse silencioso.
+- El boton `Calcular Puntajes` debe seguir abriendo el modal aun cuando haya datos incompletos; el bloqueo real se explica dentro del flujo.
+
 ## Cuidados
 
 - No usar restauracion de backup en datos reales sin copia previa de la base.
