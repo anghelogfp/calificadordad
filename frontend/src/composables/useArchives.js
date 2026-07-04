@@ -2,7 +2,6 @@ import { reactive, computed, ref } from 'vue'
 import { watchDebounced } from '@vueuse/core'
 import { useTableState } from './useTableState'
 import {
-  STORAGE_KEYS,
   ARCHIVE_COLUMNS,
   ARCHIVE_KEY_ALIASES,
 } from '@/constants'
@@ -95,7 +94,6 @@ function buildArchiveIssues(rows) {
  */
 export function useArchives() {
   const tableState = useTableState({
-    storageKey: STORAGE_KEYS.ARCHIVE,
     pageSize: 10,
     createRow: createArchiveRow,
     filterFn: (row, searchValue) => {
@@ -164,11 +162,12 @@ export function useArchives() {
       if (data.length > 0) {
         skipNextApiSync = true
         tableState.setRows(data)
-      } else if (tableState.rows.value.length > 0) {
-        await syncArchivesToApi()
+      } else {
+        skipNextApiSync = true
+        tableState.setRows([])
       }
     } catch (error) {
-      console.warn('[archives] API no disponible, usando localStorage:', error)
+      console.warn('[archives] API no disponible, manteniendo estado local en memoria:', error)
       apiReady.value = false
     } finally {
       apiLoading.value = false

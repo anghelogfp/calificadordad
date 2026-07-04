@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
-import { useStorage, watchDebounced } from '@vueuse/core'
+import { watchDebounced } from '@vueuse/core'
 import { useTableState } from './useTableState'
-import { STORAGE_KEYS, ANSWER_KEY_COLUMNS, ANSWER_KEY_AREAS, DEFAULT_DAT_FORMAT } from '@/constants'
+import { ANSWER_KEY_COLUMNS, ANSWER_KEY_AREAS, DEFAULT_DAT_FORMAT } from '@/constants'
 import {
   generateId,
   normalize,
@@ -89,7 +89,6 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
   }
 
   const tableState = useTableState({
-    storageKey: STORAGE_KEYS.ANSWER_KEYS,
     pageSize: 10,
     createRow: createConfiguredAnswerKeyRow,
     filterFn: (row, searchValue) => {
@@ -105,10 +104,7 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
   })
 
   // Sources (archivos importados)
-  const sources = useStorage(STORAGE_KEYS.ANSWER_KEY_SOURCES, [])
-  if (!Array.isArray(sources.value)) {
-    sources.value = []
-  }
+  const sources = ref([])
   const apiLoading = ref(false)
   const apiSyncing = ref(false)
   const apiReady = ref(false)
@@ -220,11 +216,13 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
         skipNextApiSync = true
         tableState.setRows(rowsData)
         sources.value = sourcesData
-      } else if (tableState.rows.value.length > 0 || sources.value.length > 0) {
-        await syncAnswerKeysToApi()
+      } else {
+        skipNextApiSync = true
+        tableState.setRows([])
+        sources.value = []
       }
     } catch (error) {
-      console.warn('[answerKeys] API no disponible, usando localStorage:', error)
+      console.warn('[answerKeys] API no disponible, manteniendo estado local en memoria:', error)
       apiReady.value = false
     } finally {
       apiLoading.value = false

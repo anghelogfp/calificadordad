@@ -1,3 +1,7 @@
+# Documento Historico
+
+Este documento se conserva como referencia historica. Puede estar desactualizado y no debe tomarse como fuente normativa del estado actual. Ver la documentacion vigente en `README.md` y `docs/`.
+
 # Vue 3 + Vite
 
 This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.

@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
-import { useStorage, watchDebounced } from '@vueuse/core'
+import { watchDebounced } from '@vueuse/core'
 import { useTableState } from './useTableState'
-import { STORAGE_KEYS, DEFAULT_DAT_FORMAT } from '@/constants'
+import { DEFAULT_DAT_FORMAT } from '@/constants'
 import { generateId, normalize, stripDigits, buildResponseMatchKey } from '@/utils/helpers'
 import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
 import {
@@ -30,7 +30,6 @@ function summarizeObservations(rows) {
 export function useIdentifiers(formatConfig) {
   const effectiveFormatConfig = () => formatConfig?.value || DEFAULT_DAT_FORMAT
   const tableState = useTableState({
-    storageKey: STORAGE_KEYS.IDENTIFIER,
     pageSize: 10,
     createRow: createIdentifierRow,
     filterFn: (row, searchValue) => {
@@ -46,10 +45,7 @@ export function useIdentifiers(formatConfig) {
   })
 
   // Sources (archivos importados)
-  const sources = useStorage(STORAGE_KEYS.IDENTIFIER_SOURCES, [])
-  if (!Array.isArray(sources.value)) {
-    sources.value = []
-  }
+  const sources = ref([])
   const apiLoading = ref(false)
   const apiSyncing = ref(false)
   const apiReady = ref(false)
@@ -116,11 +112,13 @@ export function useIdentifiers(formatConfig) {
         skipNextApiSync = true
         tableState.setRows(rowsData)
         sources.value = sourcesData
-      } else if (tableState.rows.value.length > 0 || sources.value.length > 0) {
-        await syncIdentifiersToApi()
+      } else {
+        skipNextApiSync = true
+        tableState.setRows([])
+        sources.value = []
       }
     } catch (error) {
-      console.warn('[identifiers] API no disponible, usando localStorage:', error)
+      console.warn('[identifiers] API no disponible, manteniendo estado local en memoria:', error)
       apiReady.value = false
     } finally {
       apiLoading.value = false

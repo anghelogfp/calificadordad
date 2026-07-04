@@ -12,6 +12,24 @@ const LOCAL_UI_KEYS = [
   STORAGE_KEYS.ACTIVE_PROCESS,
 ]
 
+const LEGACY_BUSINESS_KEYS = [
+  STORAGE_KEYS.ARCHIVE,
+  STORAGE_KEYS.IDENTIFIER,
+  STORAGE_KEYS.RESPONSES,
+  STORAGE_KEYS.ANSWER_KEYS,
+  STORAGE_KEYS.PONDERATION,
+  STORAGE_KEYS.SCORE_RESULTS,
+  STORAGE_KEYS.IDENTIFIER_SOURCES,
+  STORAGE_KEYS.RESPONSES_SOURCES,
+  STORAGE_KEYS.ANSWER_KEY_SOURCES,
+  STORAGE_KEYS.DAT_FORMAT,
+  STORAGE_KEYS.VACANTES,
+  STORAGE_KEYS.VACANTES_PROGRAMA,
+  STORAGE_KEYS.HISTORY,
+  STORAGE_KEYS.PLANTILLAS,
+  STORAGE_KEYS.CALIFICATION_CONFIG,
+]
+
 async function readJson(path) {
   const res = await apiFetch(path)
   if (!res.ok) throw new Error(`No se pudo leer ${path}.`)
@@ -27,28 +45,9 @@ async function writeJson(path, body, method = 'POST') {
   return res
 }
 
-async function deleteResource(path) {
-  const res = await apiFetch(path, { method: 'DELETE' })
-  if (!res.ok && res.status !== 404) throw new Error(`No se pudo eliminar ${path}.`)
-}
-
 function readLocalUiData() {
   const data = {}
   LOCAL_UI_KEYS.forEach((key) => {
-    try {
-      const raw = localStorage.getItem(key)
-      if (raw !== null) data[key] = JSON.parse(raw)
-    } catch {
-      const raw = localStorage.getItem(key)
-      if (raw !== null) data[key] = raw
-    }
-  })
-  return data
-}
-
-function readLegacyLocalData() {
-  const data = {}
-  Object.values(STORAGE_KEYS).forEach((key) => {
     try {
       const raw = localStorage.getItem(key)
       if (raw !== null) data[key] = JSON.parse(raw)
@@ -87,43 +86,6 @@ async function exportServerData() {
     datFormatConfig: await readJson('/dat-format-configs/'),
     plantillas: await readJson('/plantillas/'),
     procesos: await readProcesosFull(),
-  }
-}
-
-async function replacePlantillas(plantillas = []) {
-  const current = await readJson('/plantillas/')
-  for (const plantilla of current) {
-    await deleteResource(`/plantillas/${plantilla.id}/`)
-  }
-
-  for (const plantilla of plantillas) {
-    await writeJson('/plantillas/', {
-      name: plantilla.name,
-      area: plantilla.area || null,
-      items: (plantilla.items || []).map((item, index) => ({
-        subject: item.subject,
-        question_count: item.question_count ?? item.questionCount,
-        ponderation: String(item.ponderation ?? 1),
-        order: item.order ?? index + 1,
-      })),
-    })
-  }
-}
-
-async function replaceProcesos(procesos = []) {
-  const current = await readJson('/procesos/')
-  for (const proceso of current) {
-    await deleteResource(`/procesos/${proceso.id}/`)
-  }
-
-  for (const proceso of procesos) {
-    await writeJson('/procesos/', {
-      local_id: proceso.id || proceso.local_id,
-      name: proceso.name,
-      type: proceso.type || proceso.process_type || 'simulacro',
-      simulacroScope: proceso.simulacroScope || proceso.simulacro_scope || '',
-      areas: proceso.areas || {},
-    })
   }
 }
 
@@ -170,19 +132,7 @@ export function useBackup() {
       const date = new Date().toISOString().slice(0, 10)
       saveAs(blob, `backup-calificador-${date}.json`)
     } catch (error) {
-      exportError.value = 'No se pudo exportar desde el servidor. Se descargó un respaldo local de emergencia.'
-      const { saveAs } = await import('file-saver')
-
-      const backup = {
-        version: 2,
-        exportedAt: new Date().toISOString(),
-        source: 'localStorage-fallback',
-        data: readLegacyLocalData(),
-        error: error.message,
-      }
-      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
-      const date = new Date().toISOString().slice(0, 10)
-      saveAs(blob, `backup-local-calificador-${date}.json`)
+      exportError.value = `No se pudo exportar desde el servidor: ${error.message}`
     } finally {
       exportLoading.value = false
     }
@@ -211,7 +161,8 @@ export function useBackup() {
         await restoreServerData(backup.server)
         restoreLocalData(backup.localUi || {})
       } else if (backup.data) {
-        restoreLocalData(backup.data)
+        importError.value = 'Este backup antiguo solo contiene localStorage. Ya no se restaura automáticamente porque la base de datos es la fuente oficial.'
+        return
       } else {
         importError.value = 'El archivo no contiene datos restaurables.'
         return
@@ -229,7 +180,8 @@ export function useBackup() {
   }
 
   function clearAllData() {
-    Object.values(STORAGE_KEYS).forEach((key) => {
+    const keysToClear = [...LOCAL_UI_KEYS, ...LEGACY_BUSINESS_KEYS]
+    keysToClear.forEach((key) => {
       localStorage.removeItem(key)
     })
     window.location.reload()

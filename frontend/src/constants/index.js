@@ -115,7 +115,6 @@ export const STORAGE_KEYS = Object.freeze({
   RESPONSES_SOURCES: 'calificador-respuestas-sources',
   ANSWER_KEY_SOURCES: 'calificador-claves-sources',
   // Nuevas claves
-  CONVOCATORIA: 'calificador-convocatoria',
   DAT_FORMAT: 'calificador-dat-format',
   VACANTES: 'calificador-vacantes',
   VACANTES_PROGRAMA: 'calificador-vacantes-programa',

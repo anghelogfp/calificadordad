@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
-import { useStorage, watchDebounced } from '@vueuse/core'
+import { watchDebounced } from '@vueuse/core'
 import { useTableState } from './useTableState'
-import { STORAGE_KEYS, DEFAULT_DAT_FORMAT } from '@/constants'
+import { DEFAULT_DAT_FORMAT } from '@/constants'
 import { generateId, normalize, stripDigits, buildResponseMatchKey } from '@/utils/helpers'
 import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
 import {
@@ -31,7 +31,6 @@ function summarizeObservations(rows) {
 export function useResponses(identifierLookup, identifierLookupByLitho, formatConfig) {
   const effectiveFormatConfig = () => formatConfig?.value || DEFAULT_DAT_FORMAT
   const tableState = useTableState({
-    storageKey: STORAGE_KEYS.RESPONSES,
     pageSize: 10,
     createRow: createResponseRow,
     filterFn: (row, searchValue) => {
@@ -48,10 +47,7 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
   })
 
   // Sources (archivos importados)
-  const sources = useStorage(STORAGE_KEYS.RESPONSES_SOURCES, [])
-  if (!Array.isArray(sources.value)) {
-    sources.value = []
-  }
+  const sources = ref([])
   const apiLoading = ref(false)
   const apiSyncing = ref(false)
   const apiReady = ref(false)
@@ -130,11 +126,13 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
         skipNextApiSync = true
         tableState.setRows(rowsData)
         sources.value = sourcesData
-      } else if (tableState.rows.value.length > 0 || sources.value.length > 0) {
-        await syncResponsesToApi()
+      } else {
+        skipNextApiSync = true
+        tableState.setRows([])
+        sources.value = []
       }
     } catch (error) {
-      console.warn('[responses] API no disponible, usando localStorage:', error)
+      console.warn('[responses] API no disponible, manteniendo estado local en memoria:', error)
       apiReady.value = false
     } finally {
       apiLoading.value = false

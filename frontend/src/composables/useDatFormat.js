@@ -1,10 +1,9 @@
 import { ref, onMounted } from 'vue'
-import { useStorage } from '@vueuse/core'
-import { STORAGE_KEYS, DEFAULT_DAT_FORMAT } from '@/constants'
+import { DEFAULT_DAT_FORMAT } from '@/constants'
 import { apiFetch } from '@/utils/apiFetch'
 
 export function useDatFormat() {
-  const formatConfig = useStorage(STORAGE_KEYS.DAT_FORMAT, { ...DEFAULT_DAT_FORMAT })
+  const formatConfig = ref({ ...DEFAULT_DAT_FORMAT })
   const loading = ref(false)
   const error = ref('')
   const apiId = ref(null)
@@ -63,7 +62,7 @@ export function useDatFormat() {
         body: JSON.stringify(payload),
       })
     } catch {
-      // Ya guardado en localStorage
+      // Si falla la API, se conserva el estado en memoria.
     }
   }
 

@@ -1,14 +1,13 @@
 import { ref } from 'vue'
-import { useStorage, watchDebounced } from '@vueuse/core'
-import { STORAGE_KEYS } from '@/constants'
+import { watchDebounced } from '@vueuse/core'
 import { apiFetch } from '@/utils/apiFetch'
 
 /**
  * Composable para gestionar vacantes por programa de estudios.
- * Usa API como fuente principal y localStorage como respaldo local.
+ * Usa API como fuente principal; conserva cambios en memoria mientras la app está abierta.
  */
 export function useVacantesPrograma() {
-  const vacantesPrograma = useStorage(STORAGE_KEYS.VACANTES_PROGRAMA, {})
+  const vacantesPrograma = ref({})
   const apiLoading = ref(false)
   const apiSyncing = ref(false)
   const apiReady = ref(false)
@@ -27,11 +26,12 @@ export function useVacantesPrograma() {
         vacantesPrograma.value = Object.fromEntries(
           data.map((row) => [row.programa, Number(row.vacantes) || 0])
         )
-      } else if (Object.keys(vacantesPrograma.value || {}).length > 0) {
-        await syncVacantesProgramaToApi()
+      } else {
+        skipNextApiSync = true
+        vacantesPrograma.value = {}
       }
     } catch (error) {
-      console.warn('[vacantesPrograma] API no disponible, usando localStorage:', error)
+      console.warn('[vacantesPrograma] API no disponible, manteniendo estado local en memoria:', error)
       apiReady.value = false
     } finally {
       apiLoading.value = false

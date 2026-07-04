@@ -1,3 +1,7 @@
+# Documento Historico
+
+Este documento se conserva como referencia historica. Puede estar desactualizado y no debe tomarse como fuente normativa del estado actual. Ver la documentacion vigente en `README.md` y `docs/`.
+
 # Testing - Calificador DAD
 
 ## Estado: ✅ Implementado

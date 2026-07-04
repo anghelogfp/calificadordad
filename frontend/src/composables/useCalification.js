@@ -1,6 +1,6 @@
 import { ref, shallowRef, computed, watch } from 'vue'
 import { useStorage, watchDebounced } from '@vueuse/core'
-import { STORAGE_KEYS, ANSWER_KEY_AREAS, API_BASE_URL, DEFAULT_DAT_FORMAT } from '@/constants'
+import { STORAGE_KEYS, ANSWER_KEY_AREAS, DEFAULT_DAT_FORMAT } from '@/constants'
 import { apiFetch } from '@/utils/apiFetch'
 import { useToast } from '@/composables/useToast'
 import {
@@ -122,7 +122,7 @@ export function useCalification(
   const calificationError = ref('')
   const calificationSearch = ref('')
 
-  const calificationConfigStorage = useStorage(STORAGE_KEYS.CALIFICATION_CONFIG, {})
+  const calificationConfigStorage = ref({})
   const calificationConfigApiLoading = ref(false)
   const calificationConfigApiSyncing = ref(false)
   const calificationConfigApiReady = ref(false)
@@ -164,11 +164,12 @@ export function useCalification(
             },
           ]),
         )
-      } else if (Object.keys(calificationConfigStorage.value || {}).length > 0) {
-        await syncCalificationConfigToApi()
+      } else {
+        skipNextCalificationConfigSync = true
+        calificationConfigStorage.value = {}
       }
     } catch (error) {
-      console.warn('[calification] API no disponible para configuración, usando localStorage:', error)
+      console.warn('[calification] API no disponible para configuración, manteniendo estado local en memoria:', error)
       calificationConfigApiReady.value = false
     } finally {
       calificationConfigApiLoading.value = false

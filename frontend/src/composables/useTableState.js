@@ -1,41 +1,9 @@
 import { ref, computed, watch } from 'vue'
-import { useStorage, watchDebounced } from '@vueuse/core'
-
-/**
- * Lee el valor inicial de localStorage sin suscribirse reactivamente.
- * Devuelve un ref normal y escribe de vuelta con debounce (400 ms).
- * Esto evita serializar 10k filas en cada keystroke.
- */
-function makeStoredRef(storageKey, defaultValue) {
-  if (!storageKey) return ref(defaultValue)
-
-  let initial = defaultValue
-  try {
-    const raw = localStorage.getItem(storageKey)
-    if (raw !== null) initial = JSON.parse(raw)
-  } catch {}
-
-  const state = ref(initial)
-
-  watchDebounced(
-    state,
-    (val) => {
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(val))
-      } catch (e) {
-        console.warn('[useTableState] localStorage write failed:', e)
-      }
-    },
-    { debounce: 400, deep: true },
-  )
-
-  return state
-}
 
 /**
  * Composable genérico para manejo de estado de tabla con CRUD
  * @param {Object} options - Opciones de configuración
- * @param {string} options.storageKey - Clave para persistencia en localStorage
+ * @param {string} options.storageKey - Clave legacy; no persiste filas localmente.
  * @param {Function} options.createRow - Función para crear una fila nueva
  * @param {Function} options.filterFn - Función para filtrar filas (row, searchValue) => boolean
  * @param {Array} options.defaultValue - Valor por defecto para las filas
@@ -43,24 +11,23 @@ function makeStoredRef(storageKey, defaultValue) {
  */
 export function useTableState(options = {}) {
   const {
-    storageKey,
     createRow = (data) => data,
     filterFn = () => true,
     defaultValue = [],
     pageSize: pageSizeOpt = 100,
   } = options
 
-  // Estado principal — ref con escritura debounced a localStorage
-  const rows = makeStoredRef(storageKey, defaultValue)
+  // Estado principal en memoria. La fuente oficial de datos de negocio es la API/DB.
+  const rows = ref(defaultValue)
 
   // Inicializar filas existentes con createRow
   if (rows.value && rows.value.length > 0) {
     rows.value = rows.value.map((row) => createRow(row))
   }
 
-  // Estados de UI — pequeños (solo IDs), se pueden quedar en useStorage
+  // Estados de UI de la tabla. Son volátiles para evitar IDs obsoletos entre sesiones.
   const selection = (() => {
-    const stored = storageKey ? useStorage(`${storageKey}_selection`, []) : ref([])
+    const stored = ref([])
     return computed({
       get: () => new Set(stored.value),
       set: (newSet) => { stored.value = Array.from(newSet) },
@@ -68,7 +35,7 @@ export function useTableState(options = {}) {
   })()
 
   const editing = (() => {
-    const stored = storageKey ? useStorage(`${storageKey}_editing`, []) : ref([])
+    const stored = ref([])
     return computed({
       get: () => new Set(stored.value),
       set: (newSet) => { stored.value = Array.from(newSet) },

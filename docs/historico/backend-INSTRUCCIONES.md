@@ -1,3 +1,7 @@
+# Documento Historico
+
+Este documento se conserva como referencia historica. Puede estar desactualizado y no debe tomarse como fuente normativa del estado actual. Ver la documentacion vigente en `README.md` y `docs/`.
+
 # Instrucciones para configurar el backend
 
 ## Pasos para activar el sistema de ponderaciones en la base de datos
@@ -71,4 +75,3 @@ El servidor estará disponible en `http://localhost:8000`
 - El frontend está configurado para conectarse a `http://localhost:8000/api`
 - Si el backend no está disponible, el frontend usará localStorage como fallback
 - Las ponderaciones se guardan automáticamente en la base de datos cuando se crean, actualizan o eliminan
-
