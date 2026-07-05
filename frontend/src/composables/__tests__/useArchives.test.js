@@ -46,6 +46,24 @@ describe('mapArchiveRowToSchema', () => {
     })
   })
 
+  it('infiere área desde idexamen cuando el padrón no trae área', () => {
+    const row = mapArchiveRowToSchema({
+      dni: '75471201',
+      paterno: 'TIPULA',
+      materno: 'CHUQUIMAMANI',
+      nombres: 'ANGIE DANIELA',
+      desprograma: 'PSICOLOGÍA',
+      area: '',
+      idexamen: '2',
+    })
+
+    expect(row).toMatchObject({
+      dni: '75471201',
+      area: 'SOCIALES',
+      programa: 'PSICOLOGÍA',
+    })
+  })
+
   it('retorna null si no hay contenido mapeable', () => {
     expect(mapArchiveRowToSchema({ Columna: '' })).toBeNull()
   })

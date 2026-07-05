@@ -174,4 +174,18 @@ describe('buildCalificationPreflight', () => {
     expect(preflight.hasBlockers).toBe(false)
     expect(byKey(preflight).answerKeys.status).toBe('ok')
   })
+
+  it('no acepta clave general como clave de simulacro por áreas', () => {
+    const preflight = buildCalificationPreflight(makeBaseInput({
+      answerKeyRows: [
+        { area: '', tipo: '', answers: makeAnswers('A') },
+      ],
+    }))
+
+    expect(preflight.hasBlockers).toBe(true)
+    expect(byKey(preflight).answerKeys).toMatchObject({
+      status: 'error',
+      value: 'No encontradas',
+    })
+  })
 })

@@ -9,6 +9,12 @@ import { generateId, normalize, normalizeAreaStrict, stripDigits } from '@/utils
 import { apiFetch } from '@/utils/apiFetch'
 import { loadExcelDeps, loadExcelExportDeps } from '@/utils/exportLoaders'
 
+const AREA_BY_EXAM_ID = Object.freeze({
+  1: 'BIOMÉDICAS',
+  2: 'SOCIALES',
+  3: 'INGENIERÍAS',
+})
+
 /**
  * Crea una fila de archivo (padrón)
  */
@@ -41,6 +47,25 @@ export function createEmptyArchiveRow() {
   }, {})
 }
 
+function getLookupValue(lookup, aliases) {
+  const match = aliases.find((alias) => lookup.has(normalize(alias)))
+  return match ? lookup.get(normalize(match)) : ''
+}
+
+function inferAreaFromExamId(lookup) {
+  const examId = getLookupValue(lookup, [
+    'idexamen',
+    'id examen',
+    'id_examen',
+    'codexamen',
+    'cod examen',
+    'codigo examen',
+    'código examen',
+  ])
+  const normalizedExamId = String(examId || '').trim().replace(/^0+/, '') || '0'
+  return AREA_BY_EXAM_ID[normalizedExamId] || ''
+}
+
 /**
  * Mapea una fila de Excel al esquema de archivo
  */
@@ -54,10 +79,13 @@ export function mapArchiveRowToSchema(row) {
 
   const mappedRow = ARCHIVE_COLUMNS.reduce((acc, { key }) => {
     const aliases = ARCHIVE_KEY_ALIASES[key] || []
-    const match = aliases.find((alias) => lookup.has(normalize(alias)))
-    acc[key] = match ? lookup.get(normalize(match)) : ''
+    acc[key] = getLookupValue(lookup, aliases)
     return acc
   }, {})
+
+  if (!mappedRow.area) {
+    mappedRow.area = inferAreaFromExamId(lookup)
+  }
 
   const hasContent = Object.values(mappedRow).some(Boolean)
   return hasContent ? createArchiveRow(mappedRow) : null

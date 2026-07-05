@@ -163,18 +163,17 @@ export function calculateAreaResults({
         const lookupAnswer = key
           ? (answerKeyLookupByAreaTipo?.get(key) || answerKeyLookupByAreaTipo?.get(legacyKey))
           : undefined
+        const areaOnlyAnswer = answerKeyFallbackByArea?.get(calculationArea)
         const exactAnswer = isRealProcess
           ? getExactAnswerKey(answerKeyRows, calculationArea, tipo, areaList)
           : generalSimulacro
             ? answerKeyRows.find(k => !k.area?.trim()) || answerKeyRows[0]
-            : lookupAnswer
+            : areaOnlyAnswer ?? lookupAnswer
         const answer = isRealProcess
           ? exactAnswer
           : generalSimulacro
             ? exactAnswer
             : exactAnswer
-              ?? answerKeyFallbackByArea?.get(calculationArea)
-              ?? answerKeyRows.find(k => !k.area?.trim())
         return { row, answer, invalidTipo: '' }
       })
       .find((item) => item.answer || item.invalidTipo)

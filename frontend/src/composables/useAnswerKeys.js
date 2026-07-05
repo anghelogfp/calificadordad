@@ -190,11 +190,13 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
     return map
   })
 
-  // Fallback: primera clave por área (cuando no hay match por tipo)
+  // Fallback: clave única por área para simulacro por áreas (sin tipo P/Q/R/S/T)
   const answerKeyFallbackByArea = computed(() => {
     const map = new Map()
     tableState.rows.value.forEach((row) => {
       if (!row.area?.trim()) return
+      const tipo = (row.tipo || '').trim()
+      if (tipo) return
       const area = normalizeAreaStrict(row.area, effectiveAreaNames.value)
       if (!area || map.has(area)) return
       map.set(area, row)

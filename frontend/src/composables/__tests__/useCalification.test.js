@@ -299,6 +299,100 @@ describe('useCalification', () => {
     })
   })
 
+  it('calcular todas prioriza la plantilla específica del área sobre la global', () => {
+    const { calification } = makeSubject({
+      archiveRows: [
+        { dni: '11111111', area: 'Ingeniería', paterno: 'Ing' },
+        { dni: '22222222', area: 'Sociales', paterno: 'Soc' },
+      ],
+      responsesRows: [
+        { dni: '11111111', tipo: 'P', answers: makeAnswers('A'), litho: '200001' },
+        { dni: '22222222', tipo: 'P', answers: makeAnswers('A'), litho: '200002' },
+      ],
+      answerKeyRows: [
+        { area: 'Ingeniería', tipo: 'P', answers: makeAnswers('A') },
+        { area: 'Sociales', tipo: 'P', answers: makeAnswers('A') },
+      ],
+      plantillas: [
+        makePlantilla({
+          id: 'tpl-global',
+          area: '',
+          name: 'General',
+          items: [{ subject: 'General', questionCount: 60, ponderation: 1, order: 1 }],
+          questionTotal: 60,
+        }),
+        makePlantilla({
+          id: 'tpl-ing',
+          area: 'Ingeniería',
+          name: 'Ingeniería',
+          items: [{ subject: 'General', questionCount: 60, ponderation: 2, order: 1 }],
+          questionTotal: 60,
+        }),
+        makePlantilla({
+          id: 'tpl-soc',
+          area: 'Sociales',
+          name: 'Sociales',
+          items: [{ subject: 'General', questionCount: 60, ponderation: 3, order: 1 }],
+          questionTotal: 60,
+        }),
+      ],
+    })
+
+    calification.startNewProcess({ name: 'Por áreas', type: 'simulacro' })
+    calification.calificationPlantillaId.value = 'tpl-global'
+
+    const result = calification.runAllAreas()
+
+    expect(result?.calculated).toEqual(expect.arrayContaining(['INGENIERÍAS', 'SOCIALES']))
+    expect(calification.calificationAllResults.value).toEqual(expect.arrayContaining([
+      expect.objectContaining({ dni: '11111111', score: 1200 }),
+      expect.objectContaining({ dni: '22222222', score: 1800 }),
+    ]))
+  })
+
+  it('calcular todas usa claves únicas sin tipo por área', () => {
+    const { calification } = makeSubject({
+      archiveRows: [
+        { dni: '11111111', area: 'Ingeniería', paterno: 'Ing' },
+        { dni: '22222222', area: 'Sociales', paterno: 'Soc' },
+      ],
+      responsesRows: [
+        { dni: '11111111', tipo: 'P', answers: makeAnswers('A'), litho: '200001' },
+        { dni: '22222222', tipo: 'Q', answers: makeAnswers('B'), litho: '200002' },
+      ],
+      answerKeyRows: [
+        { area: 'Ingeniería', tipo: '', answers: makeAnswers('A') },
+        { area: 'Sociales', tipo: '', answers: makeAnswers('B') },
+      ],
+      plantillas: [
+        makePlantilla({
+          id: 'tpl-ing',
+          area: 'Ingeniería',
+          name: 'Ingeniería',
+          items: [{ subject: 'General', questionCount: 60, ponderation: 2, order: 1 }],
+          questionTotal: 60,
+        }),
+        makePlantilla({
+          id: 'tpl-soc',
+          area: 'Sociales',
+          name: 'Sociales',
+          items: [{ subject: 'General', questionCount: 60, ponderation: 3, order: 1 }],
+          questionTotal: 60,
+        }),
+      ],
+    })
+
+    calification.startNewProcess({ name: 'CEPRE por áreas', type: 'simulacro', simulacroScope: 'areas' })
+
+    const result = calification.runAllAreas()
+
+    expect(result?.calculated).toEqual(expect.arrayContaining(['INGENIERÍAS', 'SOCIALES']))
+    expect(calification.calificationAllResults.value).toEqual(expect.arrayContaining([
+      expect.objectContaining({ dni: '11111111', area: 'INGENIERÍAS', score: 1200 }),
+      expect.objectContaining({ dni: '22222222', area: 'SOCIALES', score: 1800 }),
+    ]))
+  })
+
   it('bloquea modo real si falta una clave P/Q/R/S/T', () => {
     const { calification } = makeSubject({
       archiveRows: [

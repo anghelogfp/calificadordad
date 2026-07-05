@@ -351,7 +351,7 @@ describe('useAnswerKeys imports', () => {
     expect(answerKeys.rows.value[0].observaciones).toContain('Sin coincidencia en identificador')
   })
 
-  it('expone lookup por área/tipo y fallback por área', async () => {
+  it('expone lookup por área/tipo y fallback solo para clave sin tipo por área', async () => {
     const answerKeys = makeSubject()
     answerKeys.rows.value = [
       createAnswerKeyRow({
@@ -369,6 +369,6 @@ describe('useAnswerKeys imports', () => {
     ]
 
     expect(answerKeys.answerKeyLookupByAreaTipo.value.get('INGENIERÍAS|P').answers).toBe(makeAnswers('A'))
-    expect(answerKeys.answerKeyFallbackByArea.value.get('INGENIERÍAS').answers).toBe(makeAnswers('A'))
+    expect(answerKeys.answerKeyFallbackByArea.value.get('INGENIERÍAS').answers).toBe(makeAnswers('B'))
   })
 })

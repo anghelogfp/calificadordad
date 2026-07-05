@@ -633,13 +633,26 @@ export function useCalification(
         continue
       }
 
-      // Respetar la plantilla elegida por el usuario si aplica a este área
+      const specificAvailable = available.filter(
+        (p) => p.area?.trim() && normalizeArea(p.area, effectiveAreaNames.value) === area
+      )
+      const globalAvailable = available.filter((p) => !p.area?.trim())
+
       const userSelected = calificationPlantillaId.value &&
         available.find(p => p.id === calificationPlantillaId.value)
-      const readyFirst = available.find(
-        p => !isGeneralSimulacro.value && p.area === area && p.questionTotal === effectiveAnswersLength.value
-      ) || available.find(p => p.questionTotal === effectiveAnswersLength.value)
-      const plantilla = userSelected || readyFirst || available[0]
+
+      const selectedIsSpecific = userSelected?.area?.trim() &&
+        normalizeArea(userSelected.area, effectiveAreaNames.value) === area
+      const selectedIsGlobal = userSelected && !userSelected.area?.trim()
+
+      const readySpecific = specificAvailable.find(p => p.questionTotal === effectiveAnswersLength.value)
+        || specificAvailable[0]
+      const readyGlobal = globalAvailable.find(p => p.questionTotal === effectiveAnswersLength.value)
+        || globalAvailable[0]
+
+      const plantilla = selectedIsSpecific
+        ? userSelected
+        : readySpecific || (selectedIsGlobal ? userSelected : readyGlobal) || available[0]
       const { correctValue, incorrectValue, blankValue } = getConfigForArea(calculationArea)
 
       try {

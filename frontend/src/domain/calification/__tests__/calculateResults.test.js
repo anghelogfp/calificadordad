@@ -117,6 +117,53 @@ describe('calculateAreaResults', () => {
     expect(result.results.map(row => row.position)).toEqual([1, 2, 3])
   })
 
+  it('en simulacro por áreas prioriza la clave única del área sin tipo', () => {
+    const result = calculateAreaResults(makeInput({
+      area: 'Sociales',
+      archiveRows: [
+        { dni: '11111111', area: 'Sociales', paterno: 'A' },
+        { dni: '22222222', area: 'Sociales', paterno: 'B' },
+      ],
+      responsesRows: [
+        { dni: '11111111', tipo: 'P', answers: makeAnswers('A') },
+        { dni: '22222222', tipo: 'Q', answers: makeAnswers('A') },
+      ],
+      answerKeyRows: [
+        { area: 'Sociales', tipo: '', answers: makeAnswers('A') },
+        { area: 'Sociales', tipo: 'P', answers: makeAnswers('B') },
+      ],
+      responsesByDni: new Map([
+        ['11111111', [{ dni: '11111111', tipo: 'P', answers: makeAnswers('A') }]],
+        ['22222222', [{ dni: '22222222', tipo: 'Q', answers: makeAnswers('A') }]],
+      ]),
+      answerKeyLookupByAreaTipo: new Map([
+        ['SOCIALES|P', { area: 'Sociales', tipo: 'P', answers: makeAnswers('B') }],
+      ]),
+      answerKeyFallbackByArea: new Map([
+        ['SOCIALES', { area: 'Sociales', tipo: '', answers: makeAnswers('A') }],
+      ]),
+    }))
+
+    expect(result.results.map(row => row.score)).toEqual([600, 600])
+    expect(result.results.every(row => row.correctAnswersRaw === makeAnswers('A'))).toBe(true)
+  })
+
+  it('en simulacro por áreas no usa clave general accidentalmente', () => {
+    const result = calculateAreaResults(makeInput({
+      answerKeyRows: [
+        { area: '', tipo: '', answers: makeAnswers('A') },
+      ],
+      answerKeyLookupByAreaTipo: new Map(),
+      answerKeyFallbackByArea: new Map(),
+    }))
+
+    expect(result.results).toHaveLength(0)
+    expect(result.summary.noCalificados[0]).toMatchObject({
+      dni: '12345678',
+      motivo: 'Sin clave',
+    })
+  })
+
   it('rechaza plantillas que no cubren todas las preguntas', () => {
     expect(() => calculateAreaResults(makeInput({
       plantilla: makePlantilla({

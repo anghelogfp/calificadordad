@@ -58,7 +58,7 @@ export function buildCalificationPreflight({
     ? missingRealKeyTypes.length === 0
     : isGeneralSimulacro
       ? generalAnswerKeys.length > 0 || answerKeyRows.length > 0
-      : areaAnswerKeys.length > 0 || generalAnswerKeys.length > 0
+      : areaAnswerKeys.length > 0
 
   const unlinked = archiveRows.length > 0
     ? responsesRows.filter(r => !stripDigits(r.dni)).length
