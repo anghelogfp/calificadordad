@@ -5,7 +5,7 @@ import {
   ARCHIVE_COLUMNS,
   ARCHIVE_KEY_ALIASES,
 } from '@/constants'
-import { generateId, normalize, normalizeArea, stripDigits } from '@/utils/helpers'
+import { generateId, normalize, normalizeAreaStrict, stripDigits } from '@/utils/helpers'
 import { apiFetch } from '@/utils/apiFetch'
 import { loadExcelDeps, loadExcelExportDeps } from '@/utils/exportLoaders'
 
@@ -63,8 +63,9 @@ export function mapArchiveRowToSchema(row) {
   return hasContent ? createArchiveRow(mappedRow) : null
 }
 
-function buildArchiveIssues(rows) {
+function buildArchiveIssues(rows, areaList = []) {
   const countsByDni = new Map()
+  const normalizedAreaList = Array.isArray(areaList) ? areaList : []
   rows.forEach((row) => {
     const dni = stripDigits(row.dni)
     if (!dni) return
@@ -80,6 +81,9 @@ function buildArchiveIssues(rows) {
       if (dni.length !== 8) issues.push(`DNI incompleto (${dni.length}/8)`)
       if ((countsByDni.get(dni) || 0) > 1) issues.push('DNI duplicado')
     }
+    if (normalizedAreaList.length && row.area?.trim() && !normalizeAreaStrict(row.area, normalizedAreaList)) {
+      issues.push('Área no configurada')
+    }
     return {
       row,
       dni,
@@ -92,7 +96,7 @@ function buildArchiveIssues(rows) {
 /**
  * Composable para gestión de archivos (padrón)
  */
-export function useArchives() {
+export function useArchives(areaNames) {
   const tableState = useTableState({
     pageSize: 10,
     createRow: createArchiveRow,
@@ -126,7 +130,7 @@ export function useArchives() {
   })
 
   const archiveIssues = computed(() =>
-    buildArchiveIssues(tableState.rows.value).filter(item => item.issues.length > 0)
+    buildArchiveIssues(tableState.rows.value, areaNames?.value || []).filter(item => item.issues.length > 0)
   )
 
   const archiveIssueCount = computed(() => archiveIssues.value.length)

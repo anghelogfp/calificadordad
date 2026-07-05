@@ -17,6 +17,18 @@ function roundScore(value) {
   return Math.round(value * 1000) / 1000
 }
 
+function compareByScoreAndName(a, b) {
+  const scoreDiff = Number(b.score || 0) - Number(a.score || 0)
+  if (scoreDiff !== 0) return scoreDiff
+
+  const nameA = [a.paterno, a.materno, a.nombres].map(value => String(value || '').trim()).join(' ')
+  const nameB = [b.paterno, b.materno, b.nombres].map(value => String(value || '').trim()).join(' ')
+  const nameDiff = nameA.localeCompare(nameB, 'es', { sensitivity: 'base' })
+  if (nameDiff !== 0) return nameDiff
+
+  return String(a.dni || '').localeCompare(String(b.dni || ''))
+}
+
 export function calculateAreaResults({
   area,
   plantilla,
@@ -38,7 +50,7 @@ export function calculateAreaResults({
 }) {
   const isRealProcess = processType === 'real'
   const generalSimulacro = !isRealProcess && simulacroScope === 'general'
-  const calculationArea = generalSimulacro ? GENERAL_SIMULACRO_AREA : area
+  const calculationArea = generalSimulacro ? GENERAL_SIMULACRO_AREA : normalizeArea(area, areaList)
   const plan = buildQuestionPlan(plantilla.items)
 
   if (plan.length !== answersLength) {
@@ -49,16 +61,16 @@ export function calculateAreaResults({
 
   let candidates = generalSimulacro
     ? archiveRows
-    : archiveRows.filter((row) => normalizeAreaStrict(row.area, areaList) === area)
+    : archiveRows.filter((row) => normalizeAreaStrict(row.area, areaList) === calculationArea)
 
   if (isRealProcess) {
     const areaAnswerKeys = answerKeyRows.filter(
-      k => k.area?.trim() && normalizeAreaStrict(k.area, areaList) === area
+      k => k.area?.trim() && normalizeAreaStrict(k.area, areaList) === calculationArea
     )
     const keyTypes = new Set(areaAnswerKeys.map(k => (k.tipo || '').trim().toUpperCase().slice(0, 1)).filter(Boolean))
     const missingRealKeyTypes = REAL_TEST_TYPES.filter(tipo => !keyTypes.has(tipo))
     if (missingRealKeyTypes.length > 0) {
-      throw new Error(`Faltan claves para ${area}: ${missingRealKeyTypes.join(', ')}.`)
+      throw new Error(`Faltan claves para ${calculationArea}: ${missingRealKeyTypes.join(', ')}.`)
     }
   }
 
@@ -146,18 +158,22 @@ export function calculateAreaResults({
             invalidTipo: tipo || 'vacío',
           }
         }
-        const key = buildAreaTipoKey(area, tipo, areaList)
+        const key = buildAreaTipoKey(calculationArea, tipo, areaList)
+        const legacyKey = area && tipo ? `${area}|${tipo}` : ''
+        const lookupAnswer = key
+          ? (answerKeyLookupByAreaTipo?.get(key) || answerKeyLookupByAreaTipo?.get(legacyKey))
+          : undefined
         const exactAnswer = isRealProcess
-          ? getExactAnswerKey(answerKeyRows, area, tipo, areaList)
+          ? getExactAnswerKey(answerKeyRows, calculationArea, tipo, areaList)
           : generalSimulacro
             ? answerKeyRows.find(k => !k.area?.trim()) || answerKeyRows[0]
-            : key ? answerKeyLookupByAreaTipo.get(key) : undefined
+            : lookupAnswer
         const answer = isRealProcess
           ? exactAnswer
           : generalSimulacro
             ? exactAnswer
             : exactAnswer
-              ?? answerKeyFallbackByArea?.get(normalizeArea(area, areaList))
+              ?? answerKeyFallbackByArea?.get(calculationArea)
               ?? answerKeyRows.find(k => !k.area?.trim())
         return { row, answer, invalidTipo: '' }
       })
@@ -289,7 +305,7 @@ export function calculateAreaResults({
     })
 
     byPrograma.forEach((rows, prog) => {
-      rows.sort((a, b) => b.score - a.score)
+      rows.sort(compareByScoreAndName)
       const cupo = vacantesPrograma?.[prog] ?? 0
       rows.forEach((r, i) => {
         r.positionInPrograma = i + 1
@@ -298,7 +314,7 @@ export function calculateAreaResults({
     })
   }
 
-  processedResults.sort((a, b) => b.score - a.score)
+  processedResults.sort(compareByScoreAndName)
   processedResults.forEach((r, i) => { r.position = i + 1 })
 
   const unlinkedResponses = responsesRows.filter(

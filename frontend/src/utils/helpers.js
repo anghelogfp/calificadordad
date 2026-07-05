@@ -34,6 +34,20 @@ export function normalize(value) {
   return removeDiacritics(value).toLowerCase().trim()
 }
 
+export function canonicalAreaName(value) {
+  const trimmed = String(value ?? '').trim()
+  if (!trimmed) return ''
+
+  const normalized = removeDiacritics(trimmed).toLowerCase()
+  const aliasMatch = ANSWER_KEY_AREA_ALIASES[normalized]
+  if (aliasMatch) return aliasMatch
+
+  const defaultMatch = ANSWER_KEY_AREAS.find(
+    (area) => removeDiacritics(area).toLowerCase() === normalized,
+  )
+  return defaultMatch || trimmed
+}
+
 /**
  * Normaliza un área a su forma canónica.
  * @param {string} value - Valor a normalizar
@@ -45,6 +59,10 @@ export function normalizeArea(value, areaList = ANSWER_KEY_AREAS) {
   if (!trimmedOriginal) {
     return areaList[0] ?? ANSWER_KEY_AREAS[0]
   }
+
+  const canonical = canonicalAreaName(trimmedOriginal)
+  const canonicalIsOfficial = ANSWER_KEY_AREAS.includes(canonical)
+  if (canonicalIsOfficial) return canonical
 
   const exactMatch = areaList.find((area) => area === trimmedOriginal)
   if (exactMatch) {
@@ -74,6 +92,10 @@ export function normalizeAreaStrict(value, areaList = ANSWER_KEY_AREAS) {
   const raw = String(value ?? '')
   const trimmedOriginal = raw.trim()
   if (!trimmedOriginal) return ''
+
+  const canonical = canonicalAreaName(trimmedOriginal)
+  const canonicalIsOfficial = ANSWER_KEY_AREAS.includes(canonical)
+  if (canonicalIsOfficial) return canonical
 
   const exactMatch = areaList.find((area) => area === trimmedOriginal)
   if (exactMatch) return exactMatch

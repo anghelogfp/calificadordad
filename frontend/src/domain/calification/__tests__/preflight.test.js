@@ -123,7 +123,8 @@ describe('buildCalificationPreflight', () => {
     }))
 
     expect(byKey(preflight).candidates).toMatchObject({ value: 0, status: 'error' })
-    expect(byKey(preflight).unknownArea).toMatchObject({ value: 1, status: 'warn' })
+    expect(preflight.hasBlockers).toBe(true)
+    expect(byKey(preflight).unknownArea).toMatchObject({ value: 1, status: 'error' })
   })
 
   it('en modo real exige claves P/Q/R/S/T y advierte datos incompletos', () => {
@@ -148,7 +149,7 @@ describe('buildCalificationPreflight', () => {
     expect(preflight.hasBlockers).toBe(true)
     expect(items.answerKeys).toMatchObject({
       status: 'error',
-      detail: 'Faltan claves para Ingeniería: Q, R, S, T.',
+      detail: 'Faltan claves para INGENIERÍAS: Q, R, S, T.',
     })
     expect(items.missingArea.value).toBe(1)
     expect(items.missingTipo.value).toBe(1)

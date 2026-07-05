@@ -306,8 +306,22 @@ describe('useResponses.observationSummary', () => {
     ]
 
     expect(responses.observationSummary.value).toEqual(expect.arrayContaining([
-      { label: 'Blancos finales asumidos (7 posiciones)', count: 2 },
-      { label: 'Tipo no vinculado', count: 1 },
+      { label: 'Blancos finales asumidos (7 posiciones)', count: 2, informational: true },
+      { label: 'Tipo no vinculado', count: 1, informational: false },
     ]))
+  })
+
+  it('no trata blancos finales asumidos como observacion accionable', () => {
+    const responses = makeSubject()
+    responses.rows.value = [
+      { id: '1', observaciones: 'Blancos finales asumidos (5)' },
+      { id: '2', observaciones: 'Tipo no vinculado' },
+      { id: '3', observaciones: 'Sin observaciones' },
+    ]
+
+    expect(responses.observationCount.value).toBe(2)
+    expect(responses.actionableObservationCount.value).toBe(1)
+    expect(responses.observationByRowId.value.has('1')).toBe(false)
+    expect(responses.observationByRowId.value.has('2')).toBe(true)
   })
 })

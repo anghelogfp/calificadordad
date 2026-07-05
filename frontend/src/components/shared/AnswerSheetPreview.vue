@@ -16,13 +16,20 @@ function normalizeAt(source, index) {
   return OPTIONS.includes(value) ? value : ''
 }
 
+function isMultipleAt(source, index) {
+  return String(source || '').toUpperCase()[index] === '*'
+}
+
 const rows = computed(() => {
   const total = Math.max(0, Number(props.totalQuestions) || 60)
   return Array.from({ length: total }, (_, index) => {
     const marked = normalizeAt(props.answers, index)
+    const multiple = isMultipleAt(props.answers, index)
     const correct = normalizeAt(props.correctAnswers, index)
     const keyMarked = props.mode === 'inspect-key' ? marked : ''
-    const status = !marked && !keyMarked
+    const status = multiple
+      ? 'multiple'
+      : !marked && !keyMarked
       ? 'blank'
       : props.mode === 'compare' && correct
         ? (marked === correct ? 'correct' : 'incorrect')
@@ -31,6 +38,7 @@ const rows = computed(() => {
     return {
       number: index + 1,
       marked,
+      multiple,
       keyMarked,
       correct,
       status,
@@ -59,7 +67,7 @@ function optionClass(row, option) {
     if (isMarked && row.status === 'correct') classes.push('bubble--correct')
     if (isMarked && row.status === 'incorrect') classes.push('bubble--incorrect')
   }
-  if (!isMarked && !isCorrect) classes.push('bubble--empty')
+  if (!isMarked && !isCorrect) classes.push(row.multiple ? 'bubble--multiple-empty' : 'bubble--empty')
   return classes
 }
 </script>
@@ -92,6 +100,9 @@ function optionClass(row, option) {
               :class="optionClass(row, option)"
             >
               {{ option }}
+            </span>
+            <span v-if="row.multiple" class="sheet-row__multiple" title="Marca múltiple/anulada">
+              *
             </span>
           </span>
         </div>
@@ -175,10 +186,11 @@ function optionClass(row, option) {
 
 .sheet-row__options {
   display: inline-grid;
-  grid-template-columns: repeat(5, 22px);
+  grid-template-columns: repeat(5, 22px) auto;
   gap: 3px;
   padding: 3px 8px 3px 3px;
   justify-content: start;
+  align-items: center;
 }
 
 .bubble {
@@ -218,6 +230,37 @@ function optionClass(row, option) {
   border-color: #ef4444;
   background: #fee2e2;
   color: #dc2626;
+}
+
+.sheet-row--multiple {
+  background: #fff7ed;
+  box-shadow: inset 3px 0 0 #f97316;
+}
+
+.sheet-row--multiple:nth-child(even) {
+  background: #ffedd5;
+}
+
+.bubble--multiple-empty {
+  border-color: #fdba74;
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.sheet-row__multiple {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid #fb923c;
+  border-radius: 999px;
+  background: #fed7aa;
+  color: #9a3412;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .bubble--empty {

@@ -240,6 +240,20 @@ function selectAnswerKeyAnswersOffset(remainder, formatConfig) {
     .sort((a, b) => b.score - a.score || a.offset - b.offset)[0]?.offset ?? configuredOffset
 }
 
+function selectResponseAnswersOffset(remainder, formatConfig) {
+  const configuredOffset = formatConfig.responseAnswersOffset
+    ?? (formatConfig.tipoOffset + formatConfig.tipoLength)
+  const noTypeOffset = formatConfig.lithoOffset + formatConfig.lithoLength
+  const candidates = Array.from(new Set([configuredOffset, noTypeOffset]))
+
+  return candidates
+    .map(offset => ({
+      offset,
+      score: scoreAnswersSegment(remainder.slice(offset), formatConfig.answersLength),
+    }))
+    .sort((a, b) => b.score - a.score || a.offset - b.offset)[0]?.offset ?? configuredOffset
+}
+
 function selectLinkedAnswersOffset(remainder, formatConfig, linkedIdentifier) {
   const configuredOffset = formatConfig.responseAnswersOffset
     ?? (formatConfig.tipoOffset + formatConfig.tipoLength)
@@ -316,7 +330,7 @@ function parseResponseLineInternal(
   const answersOffset = linkedAnswersOffset
     ?? (autoDetectAnswerKeyOffset
       ? selectAnswerKeyAnswersOffset(remainder, formatConfig)
-      : responseAnswersOffset)
+      : selectResponseAnswersOffset(remainder, formatConfig))
   const typeOverlapsAnswers = answersOffset <= formatConfig.tipoOffset
   const tipoSegment = typeOverlapsAnswers
     ? (linkedIdentifier?.tipo || '')

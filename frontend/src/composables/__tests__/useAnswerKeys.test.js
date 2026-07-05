@@ -108,14 +108,14 @@ describe('answer key row helpers', () => {
       answers: makeAnswers('A'),
     })
 
-    expect(row.area).toBe('Ingeniería')
+    expect(row.area).toBe('INGENIERÍAS')
     expect(row.scope).toBe('area')
     expect(row.observaciones).toBe('Sin observaciones')
   })
 
   it('detecta litho y respuestas inválidas', () => {
     const observation = buildAnswerKeyObservation({
-      area: 'Ingeniería',
+      area: 'INGENIERÍAS',
       scope: 'area',
       tipo: 'P',
       litho: '123',
@@ -227,11 +227,11 @@ describe('useAnswerKeys imports', () => {
       answers: makeAnswers('C'),
     }))
 
-    await answerKeys.readAnswerKeyFiles('Ingeniería', identificationFile, responsesFile)
+    await answerKeys.readAnswerKeyFiles('INGENIERÍAS', identificationFile, responsesFile)
 
     expect(answerKeys.rows.value).toHaveLength(1)
     expect(answerKeys.rows.value[0]).toMatchObject({
-      area: 'Ingeniería',
+      area: 'INGENIERÍAS',
       scope: 'area',
       tipo: 'Q',
       litho: '222222',
@@ -241,7 +241,7 @@ describe('useAnswerKeys imports', () => {
     expect(answerKeys.sources.value[0]).toMatchObject({
       name: 'claves.dat',
       identificationName: 'ids.dat',
-      area: 'Ingeniería',
+      area: 'INGENIERÍAS',
       validRows: 1,
       responseErrors: 0,
       identificationErrors: 0,
@@ -263,11 +263,11 @@ describe('useAnswerKeys imports', () => {
       payload: `074151${answers}`,
     }))
 
-    await answerKeys.readAnswerKeyFiles('Biomédicas', identificationFile, responsesFile)
+    await answerKeys.readAnswerKeyFiles('BIOMÉDICAS', identificationFile, responsesFile)
 
     expect(answerKeys.rows.value).toHaveLength(1)
     expect(answerKeys.rows.value[0]).toMatchObject({
-      area: 'Biomédicas',
+      area: 'BIOMÉDICAS',
       tipo: 'P',
       litho: '074151',
       answers,
@@ -292,10 +292,10 @@ describe('useAnswerKeys imports', () => {
       answers: makeAnswers('D'),
     }))
 
-    await answerKeys.readAnswerKeyFiles('Sociales', identificationFile, responsesFile)
+    await answerKeys.readAnswerKeyFiles('SOCIALES', identificationFile, responsesFile)
 
     expect(answerKeys.rows.value[0]).toMatchObject({
-      area: 'Sociales',
+      area: 'SOCIALES',
       tipo: 'R',
       litho: '333333',
       answers: makeAnswers('D'),
@@ -317,10 +317,10 @@ describe('useAnswerKeys imports', () => {
       answers: makeAnswers('D'),
     }))
 
-    await answerKeys.readAnswerKeyFiles('Sociales', identificationFile, responsesFile)
+    await answerKeys.readAnswerKeyFiles('SOCIALES', identificationFile, responsesFile)
 
     expect(answerKeys.rows.value[0]).toMatchObject({
-      area: 'Sociales',
+      area: 'SOCIALES',
       tipo: '',
       litho: '333333',
       answers: makeAnswers('D'),
@@ -340,10 +340,10 @@ describe('useAnswerKeys imports', () => {
       answers: makeAnswers('E'),
     }))
 
-    await answerKeys.readAnswerKeyFiles('Biomédicas', identificationFile, responsesFile)
+    await answerKeys.readAnswerKeyFiles('BIOMÉDICAS', identificationFile, responsesFile)
 
     expect(answerKeys.rows.value[0]).toMatchObject({
-      area: 'Biomédicas',
+      area: 'BIOMÉDICAS',
       tipo: '',
       litho: '555555',
       answers: makeAnswers('E'),
@@ -355,20 +355,20 @@ describe('useAnswerKeys imports', () => {
     const answerKeys = makeSubject()
     answerKeys.rows.value = [
       createAnswerKeyRow({
-        area: 'Ingeniería',
+        area: 'INGENIERÍAS',
         tipo: 'P',
         litho: '111111',
         answers: makeAnswers('A'),
       }),
       createAnswerKeyRow({
-        area: 'Ingeniería',
+        area: 'INGENIERÍAS',
         tipo: '',
         litho: '222222',
         answers: makeAnswers('B'),
       }),
     ]
 
-    expect(answerKeys.answerKeyLookupByAreaTipo.value.get('Ingeniería|P').answers).toBe(makeAnswers('A'))
-    expect(answerKeys.answerKeyFallbackByArea.value.get('Ingeniería').answers).toBe(makeAnswers('A'))
+    expect(answerKeys.answerKeyLookupByAreaTipo.value.get('INGENIERÍAS|P').answers).toBe(makeAnswers('A'))
+    expect(answerKeys.answerKeyFallbackByArea.value.get('INGENIERÍAS').answers).toBe(makeAnswers('A'))
   })
 })

@@ -42,7 +42,7 @@ export const ARCHIVE_COLUMNS = [
   { key: 'materno', label: 'Apellido materno', placeholder: 'García' },
   { key: 'nombres', label: 'Nombres', placeholder: 'María Fernanda' },
   { key: 'observaciones', label: 'Observaciones', placeholder: 'Sin observaciones' },
-  { key: 'area', label: 'Área', placeholder: 'Ingeniería' },
+  { key: 'area', label: 'Área', placeholder: 'INGENIERÍAS' },
   { key: 'programa', label: 'Programa de estudios', placeholder: 'Ing. Civil' },
 ]
 
@@ -82,21 +82,23 @@ export const ANSWER_KEY_COLUMNS = [
 ]
 
 // Áreas disponibles por defecto (fallback cuando no hay API)
-export const ANSWER_KEY_AREAS = ['Biomédicas', 'Sociales', 'Ingeniería']
+export const ANSWER_KEY_AREAS = ['BIOMÉDICAS', 'SOCIALES', 'INGENIERÍAS']
 
 // Alias de áreas para normalización
 export const ANSWER_KEY_AREA_ALIASES = Object.freeze({
-  biomédica: 'Biomédicas',
-  biomedica: 'Biomédicas',
-  biomedicas: 'Biomédicas',
-  socials: 'Sociales',
-  social: 'Sociales',
-  sociales: 'Sociales',
-  ingenieria: 'Ingeniería',
-  ingenierías: 'Ingeniería',
-  ingenierias: 'Ingeniería',
-  ingeniero: 'Ingeniería',
-  ingenieros: 'Ingeniería',
+  biomédica: 'BIOMÉDICAS',
+  biomedica: 'BIOMÉDICAS',
+  biomedicas: 'BIOMÉDICAS',
+  biomédicas: 'BIOMÉDICAS',
+  socials: 'SOCIALES',
+  social: 'SOCIALES',
+  sociales: 'SOCIALES',
+  ingenieria: 'INGENIERÍAS',
+  ingeniería: 'INGENIERÍAS',
+  ingenierías: 'INGENIERÍAS',
+  ingenierias: 'INGENIERÍAS',
+  ingeniero: 'INGENIERÍAS',
+  ingenieros: 'INGENIERÍAS',
 })
 
 // Claves de almacenamiento localStorage

@@ -49,18 +49,20 @@ const sheetModalAnswers = ref('')
 const sheetModalMode = ref('inspect-answers')
 
 const displayedRows = computed(() => (
-  showOnlyObserved.value ? responses.observations : responses.pagedRows
+  showOnlyObserved.value ? responses.actionableObservations : responses.pagedRows
 ))
 
 const displayedRowsWithCounts = computed(() =>
   displayedRows.value.map((row) => {
     const expected = responses.expectedAnswersLength ?? 60
-    const actual = String(row.answers || '').length
-    row.answerCount = `${actual}/${expected}`
-    row.answerCountStatus = actual === expected ? 'ok' : 'warn'
+    const rawAnswers = String(row.answers || '')
+    const actual = rawAnswers.length
+    const marked = rawAnswers.replace(/\s/g, '').length
+    row.answerCount = `${marked}/${expected}`
+    row.answerCountStatus = marked === expected ? 'ok' : 'warn'
     row.answerCountTitle = actual === expected
-      ? 'Cadena completa'
-      : `Cadena incompleta: ${actual} de ${expected} caracteres`
+      ? `${marked} respuesta(s) marcada(s); ${expected - marked} blanco(s) en la cadena`
+      : `Cadena incompleta: ${actual} de ${expected} posiciones; ${marked} respuesta(s) marcada(s)`
     return row
   })
 )
@@ -78,7 +80,7 @@ const stepState = computed(() => {
       title: 'Corregir respuestas duplicadas',
     }
   }
-  if (props.reconciliation?.issues || responses.observationCount) {
+  if (props.reconciliation?.issues || responses.actionableObservationCount) {
     return {
       variant: 'warn',
       title: 'Revisar respuestas antes de calificar',
@@ -247,10 +249,15 @@ function closeSheetPreview() {
             </svg>
             {{ detecting ? 'Analizando...' : 'Detectar formato' }}
           </button>
-          <button type="button" class="btn btn--ghost" :disabled="!responses.observationCount" @click="showOnlyObserved = !showOnlyObserved">
+          <button type="button" class="btn btn--ghost" :disabled="!responses.actionableObservationCount" @click="showOnlyObserved = !showOnlyObserved">
             {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
           </button>
-          <button type="button" class="btn btn--primary" @click="responses.exportResponseObservationsToExcel">
+          <button
+            type="button"
+            class="btn btn--primary"
+            :disabled="!responses.actionableObservationCount"
+            @click="responses.exportResponseObservationsToExcel"
+          >
             Exportar observados
           </button>
       </template>
@@ -271,7 +278,12 @@ function closeSheetPreview() {
       </template>
 
       <template v-if="responses.observationCount" #detail>
-        <span v-for="item in responses.observationSummary" :key="item.label" class="verification-chip verification-chip--warn">
+        <span
+          v-for="item in responses.observationSummary"
+          :key="item.label"
+          class="verification-chip"
+          :class="item.informational ? 'verification-chip--info' : 'verification-chip--warn'"
+        >
           <strong>{{ item.count }}</strong> {{ item.label }}
         </span>
       </template>
@@ -320,7 +332,7 @@ function closeSheetPreview() {
           type="button"
           class="btn btn--ghost"
           @click="responses.exportResponseObservationsToExcel"
-          :disabled="!responses.observationCount"
+          :disabled="!responses.actionableObservationCount"
         >
           Observados Excel
         </button>
@@ -328,7 +340,7 @@ function closeSheetPreview() {
           type="button"
           class="btn btn--ghost"
           @click="responses.exportResponsesObservationsPdf"
-          :disabled="!responses.observationCount"
+          :disabled="!responses.actionableObservationCount"
         >
           <span class="icon">
             <svg viewBox="0 0 24 24" aria-hidden="true">

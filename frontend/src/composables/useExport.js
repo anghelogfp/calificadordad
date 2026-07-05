@@ -1,4 +1,5 @@
 import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
+import { canonicalAreaName } from '@/utils/helpers'
 
 /**
  * Composable para exportar resultados a Excel y PDF
@@ -53,6 +54,10 @@ export function useExport() {
     return String(value || '').replaceAll(' ', '·')
   }
 
+  function displayAreaName(area) {
+    return canonicalAreaName(area) || area || ''
+  }
+
   function styleHeaderRow(row, fill = 'FF1E3A5F') {
     row.eachCell((cell) => {
       cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
@@ -73,7 +78,6 @@ export function useExport() {
 
   function addSummarySheet(workbook, rows, area, areaSummary, areaStats, convocatoriaName) {
     const sheet = workbook.addWorksheet('Resumen')
-    const first = rows[0] || {}
     const answerTotals = aggregateAnswerStats(rows)
     const calculationDate = areaSummary?.timestamp
       ? new Date(areaSummary.timestamp).toLocaleString('es-PE')
@@ -87,7 +91,7 @@ export function useExport() {
     const summaryRows = [
       ['Proceso', convocatoriaName || 'Sin nombre'],
       ['Modo', 'Simulacro'],
-      ['Área exportada', area || ''],
+      ['Área exportada', displayAreaName(area)],
       ['Fecha de cálculo', calculationDate],
       ['Plantilla de ponderación', areaSummary?.plantillaName || ''],
       ['Puntos por correcta', areaSummary?.correctValue ?? ''],
@@ -103,16 +107,13 @@ export function useExport() {
       ['Total múltiples/anuladas', answerTotals.multiple],
       ['Total en blanco', answerTotals.blank],
       ['Sin respuesta', areaSummary?.missingResponses ?? 0],
-      ['Sin clave', areaSummary?.missingKeys ?? 0],
-      ['Respuestas duplicadas', areaSummary?.duplicateResponses ?? 0],
-      ['DNI observado en padrón', areaSummary?.invalidCandidates ?? 0],
-      ['Sin programa', areaSummary?.missingPrograms ?? 0],
-      ['Tipo de prueba inválido', areaSummary?.invalidResponseTypes ?? 0],
-      ['Respuestas sin DNI', areaSummary?.unlinkedResponses ?? 0],
+      ['Sin clave del área', areaSummary?.missingKeys ?? 0],
+      ['Respuestas duplicadas por DNI', areaSummary?.duplicateResponses ?? 0],
+      ['DNI observado', areaSummary?.invalidCandidates ?? 0],
+      ['Respuestas no vinculadas', areaSummary?.unlinkedResponses ?? 0],
       ['Puntaje máximo', areaStats?.max ?? ''],
       ['Puntaje mínimo', areaStats?.min ?? ''],
       ['Promedio', areaStats?.avg ?? ''],
-      ['Clave usada', first.correctAnswersRaw || ''],
     ]
 
     summaryRows.forEach((item) => sheet.addRow(item))
@@ -135,12 +136,10 @@ export function useExport() {
     const observationRows = [
       ['Marcas múltiples/anuladas (*)', answerTotals.multiple, 'Preguntas con más de una alternativa marcada. Puntúan 0, no cuentan como blanco.'],
       ['Sin respuesta', areaSummary?.missingResponses ?? 0, 'Postulantes del padrón sin respuesta .dat.'],
-      ['Sin clave', areaSummary?.missingKeys ?? 0, 'Respuestas que no pudieron cruzarse con una clave del área.'],
-      ['Respuestas duplicadas', areaSummary?.duplicateResponses ?? 0, 'Postulantes con más de una hoja de respuestas vinculada al mismo DNI.'],
-      ['DNI observado en padrón', areaSummary?.invalidCandidates ?? 0, 'Postulantes con DNI vacío, incompleto o duplicado.'],
-      ['Sin programa', areaSummary?.missingPrograms ?? 0, 'Postulantes sin programa de estudios en convocatoria real.'],
-      ['Tipo de prueba inválido', areaSummary?.invalidResponseTypes ?? 0, 'Respuestas sin tipo P/Q/R/S/T válido en convocatoria real.'],
-      ['Respuestas sin DNI', areaSummary?.unlinkedResponses ?? 0, 'Respuestas no vinculadas a un DNI.'],
+      ['Sin clave del área', areaSummary?.missingKeys ?? 0, 'Respuestas que no pudieron cruzarse con una clave del área.'],
+      ['Respuestas duplicadas por DNI', areaSummary?.duplicateResponses ?? 0, 'Postulantes con más de una hoja de respuestas vinculada al mismo DNI.'],
+      ['DNI observado', areaSummary?.invalidCandidates ?? 0, 'Postulantes con DNI vacío, incompleto o duplicado.'],
+      ['Respuestas no vinculadas', areaSummary?.unlinkedResponses ?? 0, 'Respuestas no vinculadas a un DNI.'],
     ]
 
     observationRows.forEach((item) => sheet.addRow(item))
@@ -148,49 +147,146 @@ export function useExport() {
     sheet.getColumn(2).alignment = { horizontal: 'center' }
   }
 
-  function addNoCalificadosSheet(workbook, noCalificados = []) {
+  function addNoCalificadosSheet(workbook, noCalificados = [], options = {}) {
+    const includeProgram = options.includeProgram === true
     const sheet = workbook.addWorksheet('No calificados')
-    const header = sheet.addRow([
+    const headerValues = [
       'DNI',
       'Apellido Paterno',
       'Apellido Materno',
       'Nombres',
       'Área',
-      'Programa',
       'Motivo',
       'Detalle',
-    ])
+    ]
+    if (includeProgram) headerValues.splice(5, 0, 'Programa')
+
+    const header = sheet.addRow(headerValues)
     styleHeaderRow(header, 'FF7C2D12')
 
     noCalificados.forEach((row) => {
-      sheet.addRow([
+      const values = [
         row.dni || '',
         row.paterno || '',
         row.materno || '',
         row.nombres || '',
-        row.area || '',
-        row.programa || '',
+        displayAreaName(row.area),
         row.motivo || '',
         row.detalle || '',
-      ])
+      ]
+      if (includeProgram) values.splice(5, 0, row.programa || '')
+      sheet.addRow(values)
     })
 
     if (!noCalificados.length) {
-      sheet.addRow(['', '', '', '', '', '', 'Sin observaciones', 'Todos los postulantes con respuesta válida fueron calificados.'])
+      sheet.addRow(includeProgram
+        ? ['', '', '', '', '', '', 'Sin observaciones', 'Todos los postulantes con respuesta válida fueron calificados.']
+        : ['', '', '', '', '', 'Sin observaciones', 'Todos los postulantes con respuesta válida fueron calificados.'])
     }
 
-    sheet.columns = [
-      { width: 12 }, { width: 18 }, { width: 18 }, { width: 25 },
-      { width: 16 }, { width: 28 }, { width: 22 }, { width: 70 },
-    ]
-    sheet.getColumn(8).alignment = { wrapText: true }
+    sheet.columns = includeProgram
+      ? [
+        { width: 12 }, { width: 18 }, { width: 18 }, { width: 25 },
+        { width: 16 }, { width: 28 }, { width: 22 }, { width: 70 },
+      ]
+      : [
+        { width: 12 }, { width: 18 }, { width: 18 }, { width: 25 },
+        { width: 16 }, { width: 22 }, { width: 70 },
+      ]
+    sheet.getColumn(includeProgram ? 8 : 7).alignment = { wrapText: true }
   }
 
-  function addSimulacroResultsSheet(workbook, rows, area) {
-    const sheet = workbook.addWorksheet(safeSheetName(`Resultados ${area || ''}`))
+  function addSimulacroGeneralSummarySheet(workbook, areaEntries, convocatoriaName) {
+    const sheet = workbook.addWorksheet('Resumen general')
+    const allRows = areaEntries.flatMap((entry) => entry.results)
+    const allNoCalificados = areaEntries.flatMap((entry) => entry.summary?.noCalificados || [])
+    const answerTotals = aggregateAnswerStats(allRows)
 
-    sheet.mergeCells('A1:R1')
-    sheet.getCell('A1').value = `Resultados de Simulacro - Área: ${area || ''}`
+    sheet.mergeCells('A1:D1')
+    sheet.getCell('A1').value = 'Resumen general de simulacro por áreas'
+    sheet.getCell('A1').font = { bold: true, size: 16, color: { argb: 'FF0F2F57' } }
+    sheet.getCell('A1').alignment = { horizontal: 'center' }
+
+    sheet.addRow(['Proceso', convocatoriaName || 'Sin nombre'])
+    sheet.addRow(['Áreas exportadas', areaEntries.length])
+    sheet.addRow(['Postulantes calificados', allRows.length])
+    sheet.addRow(['No calificados', allNoCalificados.length])
+    sheet.addRow(['Total correctas', answerTotals.correct])
+    sheet.addRow(['Total incorrectas', answerTotals.incorrect])
+    sheet.addRow(['Total múltiples/anuladas', answerTotals.multiple])
+    sheet.addRow(['Total en blanco', answerTotals.blank])
+    sheet.addRow([])
+
+    const header = sheet.addRow([
+      'Área',
+      'Postulantes',
+      'Calificados',
+      'No calificados',
+      'Sin respuesta',
+      'Sin clave del área',
+      'Duplicadas por DNI',
+      'DNI observado',
+      'Puntaje máximo',
+      'Puntaje mínimo',
+      'Promedio',
+    ])
+    styleHeaderRow(header)
+
+    areaEntries.forEach(({ area, results, summary, stats }) => {
+      sheet.addRow([
+        displayAreaName(area),
+        summary?.totalCandidates ?? results.length,
+        results.length,
+        summary?.noCalificados?.length ?? 0,
+        summary?.missingResponses ?? 0,
+        summary?.missingKeys ?? 0,
+        summary?.duplicateResponses ?? 0,
+        summary?.invalidCandidates ?? 0,
+        stats?.max ?? '',
+        stats?.min ?? '',
+        stats?.avg ?? '',
+      ])
+    })
+
+    sheet.columns = [
+      { width: 20 }, { width: 14 }, { width: 12 }, { width: 14 },
+      { width: 14 }, { width: 12 }, { width: 12 }, { width: 14 },
+      { width: 14 }, { width: 14 }, { width: 14 },
+    ]
+  }
+
+  function addSimulacroObservationsByAreaSheet(workbook, areaEntries) {
+    const sheet = workbook.addWorksheet('Observaciones')
+    const header = sheet.addRow(['Área', 'Tipo de observación', 'Cantidad', 'Detalle'])
+    styleHeaderRow(header)
+
+    areaEntries.forEach(({ area, results, summary }) => {
+      const answerTotals = aggregateAnswerStats(results)
+      const rows = [
+        ['Marcas múltiples/anuladas (*)', answerTotals.multiple, 'Preguntas con más de una alternativa marcada. Puntúan 0.'],
+        ['Sin respuesta', summary?.missingResponses ?? 0, 'Postulantes del padrón sin respuesta .dat.'],
+        ['Sin clave del área', summary?.missingKeys ?? 0, 'Respuestas que no pudieron cruzarse con una clave del área.'],
+        ['Respuestas duplicadas por DNI', summary?.duplicateResponses ?? 0, 'Postulantes con más de una hoja de respuestas vinculada al mismo DNI.'],
+        ['DNI observado', summary?.invalidCandidates ?? 0, 'Postulantes con DNI vacío, incompleto o duplicado.'],
+        ['Respuestas no vinculadas', summary?.unlinkedResponses ?? 0, 'Respuestas no vinculadas a un DNI.'],
+      ]
+
+      rows.forEach(([type, count, detail]) => {
+        sheet.addRow([displayAreaName(area), type, count, detail])
+      })
+    })
+
+    sheet.columns = [{ width: 18 }, { width: 28 }, { width: 12 }, { width: 72 }]
+    sheet.getColumn(3).alignment = { horizontal: 'center' }
+    sheet.getColumn(4).alignment = { wrapText: true }
+  }
+
+  function addSimulacroResultsSheet(workbook, rows, area, convocatoriaName = '') {
+    const displayArea = displayAreaName(area)
+    const sheet = workbook.addWorksheet(safeSheetName(`Resultados ${displayArea}`))
+
+    sheet.mergeCells('A1:Q1')
+    sheet.getCell('A1').value = `${convocatoriaName || 'Simulacro'} - Área: ${displayArea}`
     sheet.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF0F2F57' } }
     sheet.getCell('A1').alignment = { horizontal: 'center' }
     sheet.addRow([])
@@ -202,7 +298,6 @@ export function useExport() {
       'Apellido Materno',
       'Nombres',
       'Área',
-      'Programa',
       'Tipo',
       'Aula',
       'Litho',
@@ -225,8 +320,7 @@ export function useExport() {
         row.paterno || '',
         row.materno || '',
         row.nombres || '',
-        row.area || area || '',
-        row.programa || '',
+        displayAreaName(row.area || area),
         row.tipo || '',
         row.aula || '',
         row.litho || '',
@@ -239,21 +333,55 @@ export function useExport() {
         row.answersRaw || '',
         visibleAnswerArray(row.answersRaw),
       ])
-      dataRow.getCell(11).font = { bold: true }
+      dataRow.getCell(10).font = { bold: true }
+      dataRow.getCell(16).font = { name: 'Courier New', size: 9 }
+      dataRow.getCell(16).numFmt = '@'
       dataRow.getCell(17).font = { name: 'Courier New', size: 9 }
       dataRow.getCell(17).numFmt = '@'
-      dataRow.getCell(18).font = { name: 'Courier New', size: 9 }
-      dataRow.getCell(18).numFmt = '@'
     })
 
     sheet.columns = [
       { width: 10 }, { width: 12 }, { width: 18 }, { width: 18 }, { width: 25 },
-      { width: 15 }, { width: 28 }, { width: 8 }, { width: 8 }, { width: 12 },
-      { width: 12 }, { width: 10 }, { width: 12 }, { width: 10 }, { width: 10 },
-      { width: 10 }, { width: 68 }, { width: 68 },
+      { width: 15 }, { width: 8 }, { width: 8 }, { width: 12 }, { width: 12 },
+      { width: 10 }, { width: 12 }, { width: 10 }, { width: 10 }, { width: 10 },
+      { width: 68 }, { width: 68 },
     ]
     sheet.views = [{ state: 'frozen', ySplit: 3 }]
-    sheet.autoFilter = 'A3:R3'
+    sheet.autoFilter = 'A3:Q3'
+  }
+
+  async function exportSimulacroAreasToExcel(areaResultsMap = {}, convocatoriaName = '', options = {}) {
+    const areaEntries = Object.entries(areaResultsMap)
+      .map(([area, value]) => ({
+        area,
+        results: value?.results || [],
+        summary: value?.summary || null,
+        stats: options.statsByArea?.get?.(area) || null,
+      }))
+      .filter((entry) => entry.results.length || entry.summary)
+
+    if (!areaEntries.length) return
+
+    const { ExcelJS, saveAs } = await loadExcelExportDeps()
+    const workbook = new ExcelJS.Workbook()
+    addSimulacroGeneralSummarySheet(workbook, areaEntries, convocatoriaName)
+
+    areaEntries.forEach(({ area, results }) => {
+      addSimulacroResultsSheet(workbook, results, area, convocatoriaName)
+    })
+
+    addSimulacroObservationsByAreaSheet(workbook, areaEntries)
+    addNoCalificadosSheet(
+      workbook,
+      areaEntries.flatMap((entry) => entry.summary?.noCalificados || []),
+      { includeProgram: false },
+    )
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    saveAs(blob, buildFilename('simulacro-resultados-todo', convocatoriaName, 'todas', 'xlsx'))
   }
 
   async function exportScoresToExcel(rankedResults, convocatoriaName = '', options = {}) {
@@ -266,9 +394,9 @@ export function useExport() {
     if (processType !== 'real') {
       const area = options.area || rankedResults[0]?.area || 'Área'
       addSummarySheet(workbook, rankedResults, area, options.areaSummary, options.areaStats, convocatoriaName)
-      addSimulacroResultsSheet(workbook, rankedResults, area)
+      addSimulacroResultsSheet(workbook, rankedResults, area, convocatoriaName)
       addObservationsSheet(workbook, options.areaSummary, rankedResults)
-      addNoCalificadosSheet(workbook, options.areaSummary?.noCalificados || [])
+      addNoCalificadosSheet(workbook, options.areaSummary?.noCalificados || [], { includeProgram: false })
 
       const buffer = await workbook.xlsx.writeBuffer()
       const blob = new Blob([buffer], {
@@ -286,7 +414,7 @@ export function useExport() {
     })
 
     byArea.forEach((rows, area) => {
-      const sheet = workbook.addWorksheet(area)
+      const sheet = workbook.addWorksheet(displayAreaName(area))
 
       // Encabezado institucional
       sheet.mergeCells('A1:I1')
@@ -295,7 +423,7 @@ export function useExport() {
       sheet.getCell('A1').alignment = { horizontal: 'center' }
 
       sheet.mergeCells('A2:I2')
-      sheet.getCell('A2').value = `Resultados de Calificación - ${convocatoriaName} - Área: ${area}`
+      sheet.getCell('A2').value = `Resultados de Calificación - ${convocatoriaName} - Área: ${displayAreaName(area)}`
       sheet.getCell('A2').font = { size: 11 }
       sheet.getCell('A2').alignment = { horizontal: 'center' }
 
@@ -325,7 +453,7 @@ export function useExport() {
           row.materno || '',
           row.nombres || '',
           row.programa || '',
-          row.area,
+          displayAreaName(row.area),
           row.score,
           row.isIngresante ? 'INGRESANTE' : 'NO INGRESANTE',
         ])
@@ -428,7 +556,7 @@ export function useExport() {
       doc.setFont(undefined, 'normal')
       doc.setTextColor(60, 60, 60)
       const modoLabel = isReal ? 'Convocatoria Real' : 'Simulacro'
-      doc.text(`${convocatoriaName}  —  Área: ${area}  —  ${modoLabel}`, pageW / 2, 28, { align: 'center' })
+      doc.text(`${convocatoriaName}  —  Área: ${displayAreaName(area)}  —  ${modoLabel}`, pageW / 2, 28, { align: 'center' })
       doc.text(`Fecha: ${date}`, pageW / 2, 33, { align: 'center' })
 
       // Línea separadora
@@ -512,17 +640,16 @@ export function useExport() {
           },
         })
       } else {
-        // Modo simulacro: tabla plana con columna Programa
+        // Modo simulacro: tabla plana sin programa/carrera
         autoTable(doc, {
           startY: 44,
-          head: [['N°', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Programa de Estudios', 'Puntaje']],
+          head: [['N°', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Puntaje']],
           body: rows.map((row, i) => [
             i + 1,
             row.dni,
             row.paterno || '',
             row.materno || '',
             row.nombres || '',
-            row.programa || '',
             row.score.toFixed(3),
           ]),
           headStyles: { fillColor: [30, 58, 95], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
@@ -531,7 +658,7 @@ export function useExport() {
           columnStyles: {
             0: { halign: 'center', cellWidth: 10 },
             1: { halign: 'center', cellWidth: 18 },
-            6: { halign: 'center', cellWidth: 18, fontStyle: 'bold' },
+            5: { halign: 'center', cellWidth: 18, fontStyle: 'bold' },
           },
           margin: { left: 8, right: 8 },
           didDrawPage: (data) => {
@@ -607,7 +734,7 @@ export function useExport() {
         doc.setFont(undefined, 'normal')
         doc.setTextColor(80, 80, 80)
         doc.text(`Proceso: ${convocatoriaName || 'Sin nombre'}`, 10, 40)
-        doc.text(`Área: ${area}  |  Fecha: ${date}  |  Total calificados: ${rows.length}`, 10, 45)
+        doc.text(`Área: ${displayAreaName(area)}  |  Fecha: ${date}  |  Total calificados: ${rows.length}`, 10, 45)
 
         const stats = [
           ['Máximo', areaStats?.max?.toFixed ? areaStats.max.toFixed(3) : (areaStats?.max ?? '-')],
@@ -643,14 +770,13 @@ export function useExport() {
 
         autoTable(doc, {
           startY: 76,
-          head: [['#', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Programa', 'Puntaje']],
+          head: [['#', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Puntaje']],
           body: rows.map((row) => [
             row.position,
             row.dni,
             row.paterno || '',
             row.materno || '',
             row.nombres || '',
-            row.programa || '',
             Number(row.score || 0).toFixed(3),
           ]),
           headStyles: {
@@ -665,8 +791,7 @@ export function useExport() {
           columnStyles: {
             0: { halign: 'center', cellWidth: 10 },
             1: { halign: 'center', cellWidth: 18 },
-            5: { cellWidth: 34 },
-            6: { halign: 'right', cellWidth: 18, fontStyle: 'bold' },
+            5: { halign: 'right', cellWidth: 18, fontStyle: 'bold' },
           },
           margin: { left: 10, right: 10 },
           didDrawPage: () => {
@@ -691,7 +816,7 @@ export function useExport() {
       doc.text(`Resultados de Calificación - ${convocatoriaName}`, 105, 22, { align: 'center' })
       doc.setFontSize(10)
       doc.setTextColor(100, 100, 100)
-      doc.text(`Área: ${area}  |  Fecha: ${date}  |  Total: ${rows.length}`, 105, 29, { align: 'center' })
+      doc.text(`Área: ${displayAreaName(area)}  |  Fecha: ${date}  |  Total: ${rows.length}`, 105, 29, { align: 'center' })
 
       if (areaStats) {
         doc.text(
@@ -740,9 +865,143 @@ export function useExport() {
     doc.save(buildFilename(isReal ? 'resultados' : 'simulacro-ranking', convocatoriaName, options.area || 'todas', 'pdf'))
   }
 
+  async function exportSimulacroAreasToPdf(areaResultsMap = {}, convocatoriaName = '', options = {}) {
+    const areaEntries = Object.entries(areaResultsMap)
+      .map(([area, value]) => ({
+        area,
+        results: value?.results || [],
+        summary: value?.summary || null,
+        stats: options.statsByArea?.get?.(area) || null,
+      }))
+      .filter((entry) => entry.results.length || entry.summary)
+
+    if (!areaEntries.length) return
+
+    const { jsPDF, autoTable } = await loadPdfExportDeps()
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const logoBase64 = await _loadLogoBase64()
+    const pageW = doc.internal.pageSize.getWidth()
+    const pageH = doc.internal.pageSize.getHeight()
+    const date = new Date().toLocaleDateString('es-PE')
+    const allRows = areaEntries.flatMap((entry) => entry.results)
+    const allNoCalificados = areaEntries.flatMap((entry) => entry.summary?.noCalificados || [])
+
+    if (logoBase64) doc.addImage(logoBase64, 'PNG', 10, 8, 18, 18)
+    doc.setFillColor(10, 36, 70)
+    doc.rect(0, 0, pageW, 7, 'F')
+    doc.setFontSize(13)
+    doc.setTextColor(30, 58, 95)
+    doc.setFont(undefined, 'bold')
+    doc.text('UNIVERSIDAD NACIONAL DEL ALTIPLANO', pageW / 2, 15, { align: 'center' })
+    doc.setFontSize(9)
+    doc.setFont(undefined, 'normal')
+    doc.setTextColor(90, 98, 112)
+    doc.text('Dirección de Admisión', pageW / 2, 20, { align: 'center' })
+
+    doc.setFontSize(14)
+    doc.setTextColor(15, 47, 87)
+    doc.setFont(undefined, 'bold')
+    doc.text('RESULTADOS GENERALES DE SIMULACRO', pageW / 2, 32, { align: 'center' })
+    doc.setFontSize(9)
+    doc.setFont(undefined, 'normal')
+    doc.setTextColor(80, 80, 80)
+    doc.text(`Proceso: ${convocatoriaName || 'Sin nombre'}`, pageW / 2, 38, { align: 'center' })
+    doc.text(`Fecha: ${date}  |  Áreas: ${areaEntries.length}  |  Calificados: ${allRows.length}`, pageW / 2, 43, { align: 'center' })
+
+    autoTable(doc, {
+      startY: 52,
+      head: [['Área', 'Postulantes', 'Calificados', 'No calificados', 'Máximo', 'Mínimo', 'Promedio']],
+      body: areaEntries.map(({ area, results, summary, stats }) => [
+        area,
+        summary?.totalCandidates ?? results.length,
+        results.length,
+        summary?.noCalificados?.length ?? 0,
+        stats?.max ?? '',
+        stats?.min ?? '',
+        stats?.avg ?? '',
+      ]),
+      headStyles: { fillColor: [10, 36, 70], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+      bodyStyles: { fontSize: 7.5 },
+      alternateRowStyles: { fillColor: [246, 248, 251] },
+      columnStyles: {
+        1: { halign: 'center' },
+        2: { halign: 'center' },
+        3: { halign: 'center' },
+        4: { halign: 'right' },
+        5: { halign: 'right' },
+        6: { halign: 'right' },
+      },
+      margin: { left: 10, right: 10 },
+    })
+
+    areaEntries.forEach(({ area, results, summary, stats }) => {
+      doc.addPage()
+
+      doc.setFillColor(10, 36, 70)
+      doc.rect(0, 0, pageW, 7, 'F')
+      doc.setFontSize(13)
+      doc.setTextColor(15, 47, 87)
+      doc.setFont(undefined, 'bold')
+      doc.text(convocatoriaName || 'Simulacro', 10, 17)
+      doc.setFontSize(10)
+      doc.setFont(undefined, 'normal')
+      doc.setTextColor(80, 80, 80)
+      doc.text(`Área: ${displayAreaName(area)}  |  Fecha: ${date}  |  Calificados: ${results.length}`, 10, 24)
+
+      const statRows = [
+        ['Máximo', stats?.max ?? '-'],
+        ['Mínimo', stats?.min ?? '-'],
+        ['Promedio', stats?.avg ?? '-'],
+        ['Preguntas', summary?.answersLength ?? '-'],
+      ]
+      autoTable(doc, {
+        startY: 31,
+        body: [statRows.map(([label, value]) => `${label}: ${value}`)],
+        theme: 'plain',
+        bodyStyles: { fontSize: 8, fillColor: [244, 247, 251], textColor: [15, 47, 87] },
+        margin: { left: 10, right: 10 },
+      })
+
+      autoTable(doc, {
+        startY: 43,
+        head: [['#', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Puntaje']],
+        body: results.map((row) => [
+          row.position,
+          row.dni,
+          row.paterno || '',
+          row.materno || '',
+          row.nombres || '',
+          Number(row.score || 0).toFixed(3),
+        ]),
+        headStyles: { fillColor: [10, 36, 70], textColor: 255, fontStyle: 'bold', fontSize: 7.5 },
+        bodyStyles: { fontSize: 7.2, cellPadding: 2 },
+        alternateRowStyles: { fillColor: [246, 248, 251] },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 10 },
+          1: { halign: 'center', cellWidth: 20 },
+          5: { halign: 'right', cellWidth: 18, fontStyle: 'bold' },
+        },
+        margin: { left: 10, right: 10 },
+        didDrawPage: () => {
+          const pg = doc.internal.getCurrentPageInfo().pageNumber
+          doc.setDrawColor(221, 226, 232)
+          doc.line(10, pageH - 12, pageW - 10, pageH - 12)
+          doc.setFontSize(7)
+          doc.setTextColor(140, 148, 160)
+          doc.text(`Página ${pg}`, pageW / 2, pageH - 7, { align: 'center' })
+          doc.text(`Generado el ${date}`, pageW - 10, pageH - 7, { align: 'right' })
+        },
+      })
+    })
+
+    doc.save(buildFilename('simulacro-ranking-todo', convocatoriaName, 'todas', 'pdf'))
+  }
+
   return {
     exportScoresToExcel,
+    exportSimulacroAreasToExcel,
     exportScoresToPdf,
+    exportSimulacroAreasToPdf,
     exportIngresantesPdf,
   }
 }

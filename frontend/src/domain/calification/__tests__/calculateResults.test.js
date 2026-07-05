@@ -62,7 +62,7 @@ describe('calculateAreaResults', () => {
     expect(result.results).toEqual([
       expect.objectContaining({
         dni: '12345678',
-        area: 'Ingeniería',
+        area: 'INGENIERÍAS',
         score: 600,
         position: 1,
         answersRaw: makeAnswers('A'),
@@ -70,7 +70,7 @@ describe('calculateAreaResults', () => {
       }),
     ])
     expect(result.summary).toMatchObject({
-      area: 'Ingeniería',
+      area: 'INGENIERÍAS',
       timestamp: '2026-07-01T12:00:00.000Z',
       totalCandidates: 1,
       totalWeight: 60,
@@ -92,6 +92,29 @@ describe('calculateAreaResults', () => {
         ['Biomédicas|P', { area: 'Biomédicas', tipo: 'P', answers: makeAnswers('A') }],
       ]),
     }))).toThrow('No hay postulantes registrados')
+  })
+
+  it('desempata por orden alfabético y luego DNI', () => {
+    const result = calculateAreaResults(makeInput({
+      archiveRows: [
+        { dni: '22222222', area: 'Ingeniería', programa: 'Civil', paterno: 'Zeta', materno: 'B', nombres: 'Ana' },
+        { dni: '11111111', area: 'Ingeniería', programa: 'Civil', paterno: 'Alfa', materno: 'C', nombres: 'Luis' },
+        { dni: '33333333', area: 'Ingeniería', programa: 'Civil', paterno: 'Alfa', materno: 'C', nombres: 'Luis' },
+      ],
+      responsesRows: [
+        { dni: '22222222', tipo: 'P', answers: makeAnswers('A') },
+        { dni: '11111111', tipo: 'P', answers: makeAnswers('A') },
+        { dni: '33333333', tipo: 'P', answers: makeAnswers('A') },
+      ],
+      responsesByDni: new Map([
+        ['22222222', [{ dni: '22222222', tipo: 'P', answers: makeAnswers('A') }]],
+        ['11111111', [{ dni: '11111111', tipo: 'P', answers: makeAnswers('A') }]],
+        ['33333333', [{ dni: '33333333', tipo: 'P', answers: makeAnswers('A') }]],
+      ]),
+    }))
+
+    expect(result.results.map(row => row.dni)).toEqual(['11111111', '33333333', '22222222'])
+    expect(result.results.map(row => row.position)).toEqual([1, 2, 3])
   })
 
   it('rechaza plantillas que no cubren todas las preguntas', () => {
@@ -284,5 +307,36 @@ describe('calculateAreaResults', () => {
       processType: 'real',
       vacantesPrograma: { Civil: 1 },
     })).toMatchObject({ valid: true })
+  })
+
+  it('desempata alfabéticamente dentro del ranking por programa en proceso real', () => {
+    const answerKeyRows = ['P', 'Q', 'R', 'S', 'T'].map((tipo) => ({
+      area: 'Ingeniería',
+      tipo,
+      answers: makeAnswers('A'),
+    }))
+
+    const result = calculateAreaResults(makeInput({
+      processType: 'real',
+      archiveRows: [
+        { dni: '22222222', area: 'Ingeniería', programa: 'Civil', paterno: 'Zeta', materno: '', nombres: 'Ana' },
+        { dni: '11111111', area: 'Ingeniería', programa: 'Civil', paterno: 'Alfa', materno: '', nombres: 'Luis' },
+      ],
+      responsesRows: [
+        { dni: '22222222', tipo: 'P', answers: makeAnswers('A') },
+        { dni: '11111111', tipo: 'P', answers: makeAnswers('A') },
+      ],
+      answerKeyRows,
+      responsesByDni: new Map([
+        ['22222222', [{ dni: '22222222', tipo: 'P', answers: makeAnswers('A') }]],
+        ['11111111', [{ dni: '11111111', tipo: 'P', answers: makeAnswers('A') }]],
+      ]),
+      vacantesPrograma: { Civil: 1 },
+    }))
+
+    expect(result.results.map(row => ({ dni: row.dni, positionInPrograma: row.positionInPrograma, isIngresante: row.isIngresante }))).toEqual([
+      { dni: '11111111', positionInPrograma: 1, isIngresante: true },
+      { dni: '22222222', positionInPrograma: 2, isIngresante: false },
+    ])
   })
 })

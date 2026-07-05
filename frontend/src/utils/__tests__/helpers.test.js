@@ -59,35 +59,35 @@ describe('normalize', () => {
 })
 
 describe('normalizeArea', () => {
-  const areas = ['Biomédicas', 'Sociales', 'Ingeniería']
+  const areas = ['BIOMÉDICAS', 'SOCIALES', 'INGENIERÍAS']
 
   it('encuentra coincidencia exacta', () => {
-    expect(normalizeArea('Biomédicas', areas)).toBe('Biomédicas')
-    expect(normalizeArea('Sociales', areas)).toBe('Sociales')
+    expect(normalizeArea('Biomédicas', areas)).toBe('BIOMÉDICAS')
+    expect(normalizeArea('Sociales', areas)).toBe('SOCIALES')
   })
 
   it('normaliza con tildes', () => {
-    expect(normalizeArea('Biomedicas', areas)).toBe('Biomédicas')
-    expect(normalizeArea('Ingenieria', areas)).toBe('Ingeniería')
+    expect(normalizeArea('Biomedicas', areas)).toBe('BIOMÉDICAS')
+    expect(normalizeArea('Ingenieria', areas)).toBe('INGENIERÍAS')
   })
 
   it('devuelve primera área si no hay match', () => {
-    expect(normalizeArea('Desconocida', areas)).toBe('Biomédicas')
-    expect(normalizeArea('', areas)).toBe('Biomédicas')
-    expect(normalizeArea(null, areas)).toBe('Biomédicas')
+    expect(normalizeArea('Desconocida', areas)).toBe('BIOMÉDICAS')
+    expect(normalizeArea('', areas)).toBe('BIOMÉDICAS')
+    expect(normalizeArea(null, areas)).toBe('BIOMÉDICAS')
   })
 
   it('normaliza a minúsculas', () => {
-    expect(normalizeArea('BIOMÉDICAS', areas)).toBe('Biomédicas')
+    expect(normalizeArea('BIOMÉDICAS', areas)).toBe('BIOMÉDICAS')
   })
 })
 
 describe('normalizeAreaStrict', () => {
-  const areas = ['Biomédicas', 'Sociales', 'Ingeniería']
+  const areas = ['BIOMÉDICAS', 'SOCIALES', 'INGENIERÍAS']
 
   it('normaliza solo áreas conocidas', () => {
-    expect(normalizeAreaStrict('Biomedicas', areas)).toBe('Biomédicas')
-    expect(normalizeAreaStrict('Ingenieria', areas)).toBe('Ingeniería')
+    expect(normalizeAreaStrict('Biomedicas', areas)).toBe('BIOMÉDICAS')
+    expect(normalizeAreaStrict('Ingenieria', areas)).toBe('INGENIERÍAS')
   })
 
   it('no asume la primera área si no hay match', () => {
@@ -133,11 +133,11 @@ describe('buildUniqueLithoLookup', () => {
 })
 
 describe('buildAreaTipoKey', () => {
-  const areas = ['Biomédicas', 'Sociales', 'Ingeniería']
+  const areas = ['BIOMÉDICAS', 'SOCIALES', 'INGENIERÍAS']
 
   it('construye clave con área y tipo normalizados', () => {
-    expect(buildAreaTipoKey('Biomédicas', 'P', areas)).toBe('Biomédicas|P')
-    expect(buildAreaTipoKey('biomedicas', 'p', areas)).toBe('Biomédicas|P')
+    expect(buildAreaTipoKey('Biomédicas', 'P', areas)).toBe('BIOMÉDICAS|P')
+    expect(buildAreaTipoKey('biomedicas', 'p', areas)).toBe('BIOMÉDICAS|P')
   })
 
   it('devuelve string vacío si no hay tipo', () => {
@@ -147,11 +147,11 @@ describe('buildAreaTipoKey', () => {
 })
 
 describe('buildPonderationKey', () => {
-  const areas = ['Biomédicas', 'Sociales']
+  const areas = ['BIOMÉDICAS', 'SOCIALES']
 
   it('construye clave única para área y materia', () => {
-    expect(buildPonderationKey('Biomédicas', 'Matemáticas', areas)).toBe('Biomédicas|matematicas')
-    expect(buildPonderationKey('Sociales', 'Historia', areas)).toBe('Sociales|historia')
+    expect(buildPonderationKey('Biomédicas', 'Matemáticas', areas)).toBe('BIOMÉDICAS|matematicas')
+    expect(buildPonderationKey('Sociales', 'Historia', areas)).toBe('SOCIALES|historia')
   })
 })
 

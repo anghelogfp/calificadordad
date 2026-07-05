@@ -52,12 +52,12 @@ const simulacroDetection = computed(() => {
 
 // Validación de áreas: detecta áreas del padrón que no están en la DB
 const unknownAreas = computed(() => {
-  if (!props.areaNames.length || !archives.rows?.value?.length) return []
-  const knownNorm = new Set(props.areaNames.map(n => n.trim().toLowerCase()))
   const unknown = new Set()
-  archives.rows.value.forEach(row => {
-    const a = (row.area || '').trim()
-    if (a && !knownNorm.has(a.toLowerCase())) unknown.add(a)
+  ;(archives.archiveIssues || []).forEach(({ row, issues }) => {
+    if (issues?.includes('Área no configurada')) {
+      const area = String(row.area || '').trim()
+      if (area) unknown.add(area)
+    }
   })
   return Array.from(unknown).sort()
 })

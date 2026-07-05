@@ -1,6 +1,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ANSWER_KEY_AREAS } from '@/constants'
 import { apiFetch } from '@/utils/apiFetch'
+import { canonicalAreaName } from '@/utils/helpers'
 
 const defaultAreas = ANSWER_KEY_AREAS.map((name, i) => ({
   id: null,
@@ -9,6 +10,13 @@ const defaultAreas = ANSWER_KEY_AREAS.map((name, i) => ({
   vacantes: 0,
   order: i + 1,
 }))
+
+function normalizeAreaRecord(area) {
+  return {
+    ...area,
+    name: canonicalAreaName(area?.name) || area?.name || '',
+  }
+}
 
 export function useAreas() {
   const areas = ref([...defaultAreas])
@@ -38,7 +46,7 @@ export function useAreas() {
       const res = await apiFetch('/areas/')
       if (!res.ok) throw new Error(res.statusText)
       const data = await res.json()
-      areas.value = data.length > 0 ? data : [...defaultAreas]
+      areas.value = data.length > 0 ? data.map(normalizeAreaRecord) : [...defaultAreas]
     } catch (e) {
       error.value = e.message
       areas.value = [...defaultAreas]
@@ -55,8 +63,9 @@ export function useAreas() {
     })
     if (!res.ok) throw new Error(res.statusText)
     const created = await res.json()
-    areas.value.push(created)
-    return created
+    const normalized = normalizeAreaRecord(created)
+    areas.value.push(normalized)
+    return normalized
   }
 
   async function updateArea(id, data) {
@@ -66,7 +75,7 @@ export function useAreas() {
       body: JSON.stringify(data),
     })
     if (!res.ok) throw new Error(res.statusText)
-    const updated = await res.json()
+    const updated = normalizeAreaRecord(await res.json())
     const idx = areas.value.findIndex((a) => a.id === id)
     if (idx >= 0) areas.value[idx] = updated
     return updated
@@ -86,7 +95,7 @@ export function useAreas() {
         body: JSON.stringify({ vacantes }),
       })
       if (!res.ok) throw new Error(res.statusText)
-      const updated = await res.json()
+        const updated = normalizeAreaRecord(await res.json())
       const idx = areas.value.findIndex((a) => a.id === area.id)
       if (idx >= 0) areas.value[idx] = updated
     } catch {

@@ -320,7 +320,7 @@ describe('useCalification', () => {
     calification.runCalification()
 
     expect(calification.calificationResults.value).toEqual([])
-    expect(calification.calificationError.value).toContain('Faltan claves para Ingeniería: T')
+    expect(calification.calificationError.value).toContain('Faltan claves para INGENIERÍAS: T')
   })
 
   it('bloquea resultados inválidos detectados por la auditoría', () => {

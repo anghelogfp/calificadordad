@@ -76,8 +76,8 @@ watch(activeTab, (tab) => {
 // COMPOSABLES
 // ═══════════════════════════════════════════════════════════════════════════
 
-const archives = useArchives()
 const areas = useAreas()
+const archives = useArchives(areas.areaNames)
 const datFormat = useDatFormat()
 const identifiers = useIdentifiers(datFormat.formatConfig)
 const responses = useResponses(
@@ -109,6 +109,8 @@ const calification = useCalification(
 const dashboard = useScoreDashboard(calification.calificationAllResults)
 const showDashboardPanel = ref(false)
 const showNuevoProcesoModal = ref(false)
+const savingToHistory = ref(false)
+const savedProcessFingerprint = ref('')
 const mobileMenuOpen = ref(false)
 const appBootstrapping = ref(true)
 const authenticatedDataInitialized = ref(false)
@@ -293,6 +295,25 @@ const answerKeyReconciliation = computed(() => {
   }
 })
 
+function getProcessFingerprint(process) {
+  if (!process?.id || !Object.keys(process.areas || {}).length) return ''
+  return JSON.stringify({
+    id: process.id,
+    name: process.name || '',
+    type: process.type || 'simulacro',
+    simulacroScope: process.simulacroScope || '',
+    areas: process.areas || {},
+  })
+}
+
+const currentProcessFingerprint = computed(() =>
+  getProcessFingerprint(calification.getActiveProcess())
+)
+
+const resultSavedToHistory = computed(() =>
+  Boolean(currentProcessFingerprint.value && currentProcessFingerprint.value === savedProcessFingerprint.value)
+)
+
 // ═══════════════════════════════════════════════════════════════════════════
 // WATCHERS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -321,13 +342,24 @@ watch(activeTab, () => {
 
 async function saveToHistory(customName) {
   const process = calification.getActiveProcess()
-  if (!process) return
-  const ok = await history.saveProcess(process, customName)
+  if (!process) return false
+  const name = customName || process.name
+  savingToHistory.value = true
+  let ok = false
+  try {
+    ok = await history.saveProcess(process, name)
+  } finally {
+    savingToHistory.value = false
+  }
   if (ok) {
+    calification.activeProcess.value = { ...calification.activeProcess.value, name }
+    calification.processName.value = name
+    savedProcessFingerprint.value = getProcessFingerprint(calification.getActiveProcess())
     toast.showToast('Proceso guardado en el historial', 'success')
   } else {
     toast.showToast('Error al guardar el proceso', 'error')
   }
+  return ok
 }
 
 function navigateToHistory() {
@@ -344,6 +376,7 @@ function confirmNewProcess({ name, type, simulacroScope }) {
   identifiers.clearAllIdentifiers()
   responses.clearAllResponses()
   answerKeys.clearAllAnswerKeys()
+  savedProcessFingerprint.value = ''
   calification.startNewProcess({ name, type, simulacroScope })
   showNuevoProcesoModal.value = false
   activeTab.value = TAB_KEYS.ARCHIVES
@@ -355,11 +388,13 @@ async function handleLoadProcess(process) {
     const full = await history.loadProcessFromApi(process.dbId)
     if (full) {
       calification.loadProcess(full)
+      savedProcessFingerprint.value = getProcessFingerprint(calification.getActiveProcess())
       activeTab.value = TAB_KEYS.RESULTS
       return
     }
   }
   calification.loadProcess(process)
+  savedProcessFingerprint.value = getProcessFingerprint(calification.getActiveProcess())
   activeTab.value = TAB_KEYS.RESULTS
 }
 
@@ -375,7 +410,7 @@ function getStepStatus(key) {
   }
   if (key === TAB_KEYS.RESPONSES) {
     if (responses.rows.value.length === 0) return 'pending'
-    return responseReconciliation.value.issues > 0 ? 'warning' : 'completed'
+    return responseReconciliation.value.issues > 0 || responses.actionableObservationCount.value > 0 ? 'warning' : 'completed'
   }
   if (key === TAB_KEYS.ANSWER_KEYS) {
     if (answerKeyReconciliation.value.status === 'ok') return 'completed'
@@ -411,7 +446,11 @@ function getStepDescription(key) {
   if (key === TAB_KEYS.RESPONSES) {
     const n = responses.rows.value.length
     if (n === 0) return 'Necesarias para calificar'
-    return responseReconciliation.value.issues > 0 ? `${n} respuestas con observaciones` : `${n} respuestas listas`
+    const linked = responseReconciliation.value.linkedResponses
+    const reviewCount = Math.max(responseReconciliation.value.issues, responses.actionableObservationCount.value)
+    return reviewCount > 0
+      ? `${linked}/${n} vinculadas, ${reviewCount} por revisar`
+      : `${linked}/${n} vinculadas`
   }
   if (key === TAB_KEYS.ANSWER_KEYS) {
     const { keysTotal, missingPairs, incompleteKeys, duplicatePairs } = answerKeyReconciliation.value
@@ -662,6 +701,8 @@ watch(
             :vacantes-programa="vacantesPrograma"
             :convocatoria-name="calification.processName.value"
             :on-save-to-history="saveToHistory"
+            :is-saved-to-history="resultSavedToHistory"
+            :saving-to-history="savingToHistory"
             @open-modal="calification.openCalificationModal"
             @open-dashboard="showDashboardPanel = true"
           />

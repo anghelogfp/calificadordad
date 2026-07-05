@@ -5,7 +5,7 @@ import {
   ANSWER_KEY_AREAS,
 } from '@/constants'
 import { apiFetch } from '@/utils/apiFetch'
-import { normalizeArea } from '@/utils/helpers'
+import { canonicalAreaName, normalizeArea } from '@/utils/helpers'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Normalización API ↔ frontend
@@ -26,7 +26,7 @@ function plantillaFromApi(p) {
   return {
     id: p.id,
     name: p.name,
-    area: p.area || null,
+    area: p.area ? canonicalAreaName(p.area) : null,
     questionTotal: p.question_total,
     items: (p.items || []).map(itemFromApi),
   }
@@ -77,7 +77,7 @@ export function usePonderations(areaNames) {
     const areaMap = new Map()
 
     plantillas.value.forEach(p => {
-      const key = p.area || '__global__'
+      const key = p.area ? canonicalAreaName(p.area) : '__global__'
       if (!areaMap.has(key)) areaMap.set(key, [])
       areaMap.get(key).push(p)
     })
@@ -117,7 +117,7 @@ export function usePonderations(areaNames) {
 
   function getPlantillasForCalification(area) {
     const normalized = normalizeArea(area, effectiveAreaNames.value)
-    return plantillas.value.filter(p => !p.area || p.area === normalized)
+    return plantillas.value.filter(p => !p.area || canonicalAreaName(p.area) === normalized)
   }
 
   function selectPlantilla(id) {
@@ -317,7 +317,7 @@ export function usePonderations(areaNames) {
 
     areas.forEach(area => {
       const items = DEFAULT_PONDERATIONS
-        .filter(d => d.area === area)
+        .filter(d => normalizeArea(d.area, areas) === area)
         .map(d => ({
           subject: d.subject,
           question_count: d.questionCount,

@@ -39,7 +39,27 @@ function summarizeObservations(rows) {
       assumedFinalBlankRows
     )
   }
-  return Array.from(summary.entries()).map(([label, count]) => ({ label, count }))
+  return Array.from(summary.entries()).map(([label, count]) => ({
+    label,
+    count,
+    informational: isInformationalObservation(label),
+  }))
+}
+
+function splitObservationIssues(row) {
+  return String(row.observaciones || '')
+    .split(' · ')
+    .map(issue => issue.trim())
+    .filter(issue => issue && issue !== 'Sin observaciones')
+}
+
+function isInformationalObservation(issue) {
+  return /^Blancos finales asumidos(?: \(\d+(?: posiciones)?\))?$/.test(String(issue || ''))
+}
+
+function hasActionableObservation(row) {
+  const issues = splitObservationIssues(row)
+  return issues.some(issue => !isInformationalObservation(issue))
 }
 
 /**
@@ -103,10 +123,14 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
   )
 
   const observationCount = computed(() => observations.value.length)
+  const actionableObservations = computed(() =>
+    tableState.rows.value.filter(hasActionableObservation)
+  )
+  const actionableObservationCount = computed(() => actionableObservations.value.length)
   const observationSummary = computed(() => summarizeObservations(observations.value))
   const observationByRowId = computed(() => {
     const map = new Map()
-    observations.value.forEach(row => map.set(row.id, row))
+    actionableObservations.value.forEach(row => map.set(row.id, row))
     return map
   })
 
@@ -387,7 +411,7 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
   }
 
   async function exportResponseObservationsToExcel() {
-    const rows = observations.value
+    const rows = actionableObservations.value
     if (!rows.length) return
     const { ExcelJS, saveAs } = await loadExcelExportDeps()
     const workbook = new ExcelJS.Workbook()
@@ -419,7 +443,7 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
    * Exporta observaciones a PDF
    */
   async function exportResponsesObservationsPdf() {
-    const rows = observations.value
+    const rows = actionableObservations.value
     const { jsPDF, autoTable } = await loadPdfExportDeps()
     const doc = new jsPDF()
     doc.setFontSize(16)
@@ -468,6 +492,8 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
     sourcesCount,
     observations,
     observationCount,
+    actionableObservations,
+    actionableObservationCount,
     observationSummary,
     observationByRowId,
     responsesByDni,

@@ -93,13 +93,16 @@ function mountScoresTab(calification = makeCalification()) {
       },
       exporter: {
         exportScoresToExcel: vi.fn(),
+        exportSimulacroAreasToExcel: vi.fn(),
         exportScoresToPdf: vi.fn(),
+        exportSimulacroAreasToPdf: vi.fn(),
         exportIngresantesPdf: vi.fn(),
       },
       convocatoriaName: 'Convocatoria',
       vacantesPrograma: {
         vacantesPrograma: ref({}),
       },
+      onSaveToHistory: vi.fn(),
     },
     global: {
       stubs: {
@@ -128,5 +131,17 @@ describe('ScoresTab', () => {
 
     expect(wrapper.text()).not.toContain('Sin resultados de calificación')
     expect(wrapper.find('.table-wrapper').exists()).toBe(true)
+  })
+
+  it('muestra el estado guardado cuando el proceso ya fue persistido', async () => {
+    const wrapper = mountScoresTab()
+
+    expect(wrapper.text()).toContain('Pendiente de guardar')
+    expect(wrapper.text()).toContain('Guardar')
+
+    await wrapper.setProps({ isSavedToHistory: true })
+
+    expect(wrapper.text()).toContain('Guardado en historial')
+    expect(wrapper.text()).not.toContain('Pendiente de guardar')
   })
 })

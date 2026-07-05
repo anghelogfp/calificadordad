@@ -1,6 +1,6 @@
 <script setup>
 import { reactive, ref, computed, watch } from 'vue'
-import { formatTimestamp } from '@/utils/helpers'
+import { canonicalAreaName, formatTimestamp } from '@/utils/helpers'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
@@ -16,6 +16,8 @@ const props = defineProps({
   exporter: { type: Object, required: true },
   convocatoriaName: { type: String, default: '' },
   onSaveToHistory: { type: Function, default: null },
+  isSavedToHistory: { type: Boolean, default: false },
+  savingToHistory: { type: Boolean, default: false },
   vacantesPrograma: { type: Object, default: null },
 })
 
@@ -25,6 +27,10 @@ const ponderations = reactive(props.ponderations)
 const emit = defineEmits(['openModal', 'openDashboard'])
 
 function openModal() { emit('openModal') }
+
+function displayAreaName(area) {
+  return canonicalAreaName(area) || area || ''
+}
 
 // ── Guardar con nombre editable ──────────────────────────────────────────────
 
@@ -36,14 +42,26 @@ function handleSaveToHistory() {
   savingName.value = true
 }
 
-function confirmSaveName() {
-  props.onSaveToHistory?.(saveNameInput.value.trim() || saveNameInput.value)
-  savingName.value = false
+async function confirmSaveName() {
+  const ok = await props.onSaveToHistory?.(saveNameInput.value.trim() || saveNameInput.value)
+  if (ok !== false) savingName.value = false
 }
 
 function cancelSaveName() {
   savingName.value = false
 }
+
+const saveStatusLabel = computed(() => {
+  if (!props.onSaveToHistory) return 'Resultado cargado'
+  if (props.savingToHistory) return 'Guardando...'
+  return props.isSavedToHistory ? 'Guardado en historial' : 'Pendiente de guardar'
+})
+
+const saveStatusClass = computed(() => {
+  if (!props.onSaveToHistory) return 'result-save-status--neutral'
+  if (props.isSavedToHistory) return 'result-save-status--saved'
+  return 'result-save-status--pending'
+})
 
 // ── Confirmación inline ──────────────────────────────────────────────────────
 
@@ -272,6 +290,16 @@ function handleExportExcel() {
   )
 }
 
+function handleExportAllSimulacroExcel() {
+  props.exporter.exportSimulacroAreasToExcel(
+    calification.activeProcess?.areas || {},
+    props.convocatoriaName,
+    {
+      statsByArea: props.dashboard.statsByArea.value,
+    },
+  )
+}
+
 function handleExportPdf() {
   props.exporter.exportScoresToPdf(
     localFilteredResults.value,
@@ -281,6 +309,16 @@ function handleExportPdf() {
       processType: calification.activeProcess?.type ?? 'simulacro',
       area: calification.calificationDisplayArea,
       areaSummary: calification.calificationSummary,
+    },
+  )
+}
+
+function handleExportAllSimulacroPdf() {
+  props.exporter.exportSimulacroAreasToPdf(
+    calification.activeProcess?.areas || {},
+    props.convocatoriaName,
+    {
+      statsByArea: props.dashboard.statsByArea.value,
     },
   )
 }
@@ -357,7 +395,7 @@ function handleExportIngresantesPdf() {
             />
           </div>
           <div class="results-header__context">
-            <span>{{ calification.calificationDisplayArea }}</span>
+            <span>{{ displayAreaName(calification.calificationDisplayArea) }}</span>
             <span>·</span>
             <span>{{ processModeLabel }}</span>
             <span>·</span>
@@ -366,16 +404,17 @@ function handleExportIngresantesPdf() {
         </div>
 
         <div class="results-header__actions">
-          <span class="result-save-status" :class="onSaveToHistory ? 'result-save-status--pending' : 'result-save-status--neutral'">
-            {{ onSaveToHistory ? 'Pendiente de guardar' : 'Resultado cargado' }}
+          <span class="result-save-status" :class="saveStatusClass">
+            {{ saveStatusLabel }}
           </span>
           <button type="button" class="btn btn--ghost" @click="openModal">
             Recalcular
           </button>
           <button
-            v-if="onSaveToHistory && !savingName"
+            v-if="onSaveToHistory && !savingName && !isSavedToHistory"
             type="button"
             class="btn btn--primary"
+            :disabled="savingToHistory"
             @click="handleSaveToHistory"
           >
             Guardar
@@ -384,8 +423,22 @@ function handleExportIngresantesPdf() {
           <details class="action-menu">
             <summary class="btn btn--ghost">Exportar <span aria-hidden="true">▾</span></summary>
             <div class="action-menu__panel">
-              <button type="button" @click="handleExportExcel">Exportar Excel</button>
-              <button type="button" @click="handleExportPdf">Exportar PDF completo</button>
+              <button type="button" @click="handleExportExcel">Exportar Excel área actual</button>
+              <button
+                v-if="!isRealMode && !isGeneralSimulacro && calification.processAreas.length > 1"
+                type="button"
+                @click="handleExportAllSimulacroExcel"
+              >
+                Exportar Excel todo el simulacro
+              </button>
+              <button type="button" @click="handleExportPdf">Exportar PDF área actual</button>
+              <button
+                v-if="!isRealMode && !isGeneralSimulacro && calification.processAreas.length > 1"
+                type="button"
+                @click="handleExportAllSimulacroPdf"
+              >
+                Exportar PDF todo el simulacro
+              </button>
               <button v-if="isRealMode && hasIngresanteData" type="button" @click="handleExportIngresantesPdf">PDF de ingresantes</button>
             </div>
           </details>
@@ -412,8 +465,10 @@ function handleExportIngresantesPdf() {
           @keyup.escape="cancelSaveName"
           autofocus
         />
-        <button type="button" class="btn btn--primary" @click="confirmSaveName">Confirmar</button>
-        <button type="button" class="btn btn--ghost" @click="cancelSaveName">Cancelar</button>
+        <button type="button" class="btn btn--primary" :disabled="savingToHistory" @click="confirmSaveName">
+          {{ savingToHistory ? 'Guardando...' : 'Confirmar' }}
+        </button>
+        <button type="button" class="btn btn--ghost" :disabled="savingToHistory" @click="cancelSaveName">Cancelar</button>
       </div>
 
       <nav v-if="calification.processAreas.length > 1" class="area-tabs area-tabs--compact" aria-label="Áreas calificadas">
@@ -425,7 +480,7 @@ function handleExportIngresantesPdf() {
           :class="{ 'area-tab--active': calification.calificationDisplayArea === area }"
           @click="calification.switchDisplayArea(area)"
         >
-          {{ area }}
+          {{ displayAreaName(area) }}
           <span class="area-tab__count">{{ calification.activeProcess?.areas?.[area]?.results?.length ?? 0 }}</span>
         </button>
       </nav>
@@ -819,6 +874,11 @@ function handleExportIngresantesPdf() {
   border-color: #bfdbfe;
   background: #eff6ff;
   color: var(--unap-blue-700);
+}
+.result-save-status--saved {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
 }
 
 .action-menu { position: relative; }

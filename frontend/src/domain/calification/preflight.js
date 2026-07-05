@@ -107,8 +107,8 @@ export function buildCalificationPreflight({
       key: 'unknownArea',
       label: 'Postulantes con área desconocida',
       value: unknownAreaCandidates.length,
-      status: 'warn',
-      detail: `${unknownAreaCandidates.length} postulante(s) tienen un área que no coincide con la configuración y no entrarán al cálculo hasta corregir el padrón.`,
+      status: 'error',
+      detail: `${unknownAreaCandidates.length} postulante(s) tienen un área que no coincide con la configuración. Corrige el padrón antes de calificar.`,
     })
   }
 

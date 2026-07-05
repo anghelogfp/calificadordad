@@ -324,6 +324,22 @@ describe('parseResponseLine', () => {
     expect(result.row.answers).toHaveLength(60)
   })
 
+  it('detecta respuestas sin tipo aunque no exista identificador vinculado', () => {
+    const answers = 'BCBDACECCCDDDDBDEAEEDEABDBEECCDACAEADECEDCDEBCCABCAAAED'
+    const line = buildDatLine({
+      payload: `016248${answers}`,
+    })
+
+    const result = parseResponseLine(line, 1, DEFAULT_DAT_FORMAT)
+
+    expect(result.error).toBeUndefined()
+    expect(result.row.litho).toBe('016248')
+    expect(result.row.tipo).toBe('')
+    expect(result.row.answers).toBe(answers)
+    expect(result.row.detectedAnswersOffset).toBe(6)
+    expect(result.row.tipoSource).toBe('none')
+  })
+
   it('mantiene offset con tipo explícito aunque no coincida con el identificador', () => {
     const answers = 'C'.repeat(60)
     const line = buildDatLine({
