@@ -17,22 +17,44 @@ export { createResponseRow, buildResponseObservation }
 
 function summarizeObservations(rows) {
   const summary = new Map()
+  const add = (label) => summary.set(label, (summary.get(label) || 0) + 1)
   let assumedFinalBlankRows = 0
   let assumedFinalBlankTotal = 0
+
   rows.forEach((row) => {
-    String(row.observaciones || '')
+    const issues = String(row.observaciones || '')
       .split(' · ')
+      .map(issue => issue.trim())
       .filter(Boolean)
-      .forEach((issue) => {
-        const assumedBlanks = issue.match(/^Blancos finales asumidos \((\d+)\)$/)
-        if (assumedBlanks) {
-          assumedFinalBlankRows += 1
-          assumedFinalBlankTotal += Number(assumedBlanks[1]) || 0
-          return
-        }
-        summary.set(issue, (summary.get(issue) || 0) + 1)
-      })
+
+    const hasUnlinkedDni = issues.includes('DNI no vinculado')
+    const hasUnlinkedTipo = issues.includes('Tipo no vinculado')
+    if (hasUnlinkedDni && hasUnlinkedTipo) {
+      add('Sin vinculación completa')
+    }
+
+    issues.forEach((issue) => {
+      const assumedBlanks = issue.match(/^Blancos finales asumidos \((\d+)\)$/)
+      if (assumedBlanks) {
+        assumedFinalBlankRows += 1
+        assumedFinalBlankTotal += Number(assumedBlanks[1]) || 0
+        return
+      }
+      if (hasUnlinkedDni && hasUnlinkedTipo && (issue === 'DNI no vinculado' || issue === 'Tipo no vinculado')) {
+        return
+      }
+      if (/^DNI incompleto \(/.test(issue)) {
+        add('DNI incompleto')
+        return
+      }
+      if (/^Litho incompleto \(/.test(issue)) {
+        add('Litho incompleto')
+        return
+      }
+      add(issue)
+    })
   })
+
   if (assumedFinalBlankRows) {
     summary.set(
       `Blancos finales asumidos (${assumedFinalBlankTotal} posiciones)`,
@@ -44,6 +66,25 @@ function summarizeObservations(rows) {
     count,
     informational: isInformationalObservation(label),
   }))
+    .sort((a, b) => {
+      const priority = [
+        'Sin vinculación completa',
+        'DNI no vinculado',
+        'DNI incompleto',
+        'Tipo no vinculado',
+        'Litho sin marcar',
+        'Litho incompleto',
+        'Sin respuestas marcadas',
+        'Respuestas con marcas no válidas',
+      ]
+      if (a.informational !== b.informational) return a.informational ? 1 : -1
+      const left = priority.indexOf(a.label)
+      const right = priority.indexOf(b.label)
+      if (left !== -1 || right !== -1) {
+        return (left === -1 ? priority.length : left) - (right === -1 ? priority.length : right)
+      }
+      return b.count - a.count || a.label.localeCompare(b.label)
+    })
 }
 
 function splitObservationIssues(row) {

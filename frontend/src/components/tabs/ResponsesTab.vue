@@ -92,6 +92,36 @@ const stepState = computed(() => {
   }
 })
 
+const responseDatClosure = computed(() => {
+  const reconciliation = props.reconciliation || {}
+  const total = Number(reconciliation.responsesTotal || responses.totalRows || 0)
+  const outsidePadron = Number(reconciliation.responsesWithoutCandidate || 0)
+  const withoutDni = Number(reconciliation.unlinkedResponses || 0)
+  const linkedToPadron = Math.max(0, Number(reconciliation.linkedResponses || 0) - outsidePadron)
+
+  return {
+    total,
+    linkedToPadron,
+    outsidePadron,
+    withoutDni,
+    closes: total === linkedToPadron + outsidePadron + withoutDni,
+  }
+})
+
+const responsePadronClosure = computed(() => {
+  const reconciliation = props.reconciliation || {}
+  const total = Number(reconciliation.padronTotal || 0)
+  const missing = Number(reconciliation.candidatesWithoutResponse || 0)
+  const withResponse = Math.max(0, total - missing)
+
+  return {
+    total,
+    withResponse,
+    missing,
+    closes: total === withResponse + missing,
+  }
+})
+
 const detectStatus = computed(() => {
   const r = responses.detectedOffset
   if (!r) return null
@@ -264,12 +294,30 @@ function closeSheetPreview() {
 
       <template #chips>
         <template v-if="reconciliation && reconciliation.responsesTotal">
-          <span class="verification-chip verification-chip--ok"><strong>{{ reconciliation.linkedResponses }}</strong> vinculadas</span>
-          <span class="verification-chip" :class="reconciliation.unlinkedResponses ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.unlinkedResponses }}</strong> sin DNI</span>
-          <span class="verification-chip" :class="reconciliation.candidatesWithoutResponse ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.candidatesWithoutResponse }}</strong> postulantes sin respuesta</span>
-          <span class="verification-chip" :class="reconciliation.identifiersWithoutResponse ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.identifiersWithoutResponse }}</strong> identificadores sin respuesta</span>
-          <span class="verification-chip" :class="reconciliation.responsesWithoutCandidate ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.responsesWithoutCandidate }}</strong> fuera del padrón</span>
-          <span class="verification-chip" :class="reconciliation.duplicateResponseDnis ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.duplicateResponseDnis }}</strong> duplicadas</span>
+          <div class="verification-group">
+            <span class="verification-group__title">DAT respuestas</span>
+            <span class="verification-chip verification-chip--info"><strong>{{ responseDatClosure.total }}</strong> registros cargados</span>
+            <span class="verification-chip verification-chip--ok"><strong>{{ responseDatClosure.linkedToPadron }}</strong> vinculadas al padrón</span>
+            <span class="verification-chip" :class="responseDatClosure.outsidePadron ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ responseDatClosure.outsidePadron }}</strong> fuera del padrón</span>
+            <span class="verification-chip" :class="responseDatClosure.withoutDni ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ responseDatClosure.withoutDni }}</strong> sin DNI</span>
+          </div>
+
+          <div class="verification-group">
+            <span class="verification-group__title">Padrón</span>
+            <span class="verification-chip verification-chip--info"><strong>{{ responsePadronClosure.total }}</strong> postulantes</span>
+            <span class="verification-chip verification-chip--ok"><strong>{{ responsePadronClosure.withResponse }}</strong> con respuesta</span>
+            <span class="verification-chip" :class="responsePadronClosure.missing ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ responsePadronClosure.missing }}</strong> sin respuesta</span>
+          </div>
+
+          <div class="verification-group">
+            <span class="verification-group__title">Identificadores</span>
+            <span class="verification-chip" :class="reconciliation.identifiersWithoutResponse ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.identifiersWithoutResponse }}</strong> sin respuesta</span>
+          </div>
+
+          <div class="verification-group">
+            <span class="verification-group__title">Duplicados</span>
+            <span class="verification-chip" :class="reconciliation.duplicateResponseDnis ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.duplicateResponseDnis }}</strong> DNI duplicados</span>
+          </div>
         </template>
         <span class="verification-chip verification-chip--info"><strong>{{ configuredOffset }}</strong> offset respuestas</span>
         <span v-if="detectStatus" class="detect-badge" :class="`detect-badge--${detectStatus.variant}`">
@@ -278,14 +326,18 @@ function closeSheetPreview() {
       </template>
 
       <template v-if="responses.observationCount" #detail>
-        <span
-          v-for="item in responses.observationSummary"
-          :key="item.label"
-          class="verification-chip"
-          :class="item.informational ? 'verification-chip--info' : 'verification-chip--warn'"
-        >
-          <strong>{{ item.count }}</strong> {{ item.label }}
-        </span>
+        <div class="verification-group verification-group--quality">
+          <span class="verification-group__title">Calidad del DAT</span>
+          <span class="verification-chip" :class="responses.actionableObservationCount ? 'verification-chip--warn' : 'verification-chip--info'"><strong>{{ responses.observationCount }}</strong> registros observados</span>
+          <span
+            v-for="item in responses.observationSummary"
+            :key="item.label"
+            class="verification-chip"
+            :class="item.informational ? 'verification-chip--info' : 'verification-chip--warn'"
+          >
+            <strong>{{ item.count }}</strong> {{ item.label }}
+          </span>
+        </div>
       </template>
 
       <div class="step-state-panel__progress" :class="`step-state-panel__progress--${matchStatus}`">
@@ -818,6 +870,92 @@ function closeSheetPreview() {
   color: var(--slate-500);
   font-size: 0.8rem;
   line-height: 1.45;
+}
+
+.verification-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) 0;
+}
+
+.verification-group + .verification-group {
+  border-top: 1px dashed var(--slate-200);
+}
+
+.verification-group--quality {
+  padding-top: 0;
+}
+
+.verification-group__title {
+  min-width: 126px;
+  color: var(--slate-500);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.verification-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px var(--space-2);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-full);
+  background: white;
+  color: var(--slate-600);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.verification-chip strong {
+  color: var(--slate-900);
+  font-family: var(--font-mono);
+}
+
+.verification-chip--ok {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.verification-chip--ok strong {
+  color: #14532d;
+}
+
+.verification-chip--warn {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.verification-chip--warn strong {
+  color: #78350f;
+}
+
+.verification-chip--error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.verification-chip--error strong {
+  color: #991b1b;
+}
+
+.verification-chip--info {
+  border-color: #dbe7f5;
+  background: #f8fbff;
+  color: var(--unap-blue-700);
+}
+
+.verification-chip--muted {
+  border-color: var(--slate-200);
+  background: var(--slate-50);
+  color: var(--slate-500);
 }
 
 .icon {

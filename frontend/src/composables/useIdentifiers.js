@@ -15,13 +15,55 @@ export { createIdentifierRow, buildIdentifierObservation }
 
 function summarizeObservations(rows) {
   const summary = new Map()
+  const add = (label) => summary.set(label, (summary.get(label) || 0) + 1)
+
   rows.forEach((row) => {
-    String(row.observaciones || '')
+    const issues = String(row.observaciones || '')
       .split(' · ')
+      .map(issue => issue.trim())
       .filter(Boolean)
-      .forEach((issue) => summary.set(issue, (summary.get(issue) || 0) + 1))
+
+    const hasMissingTipo = issues.includes('Tipo sin marcar')
+    const hasMissingDni = issues.includes('DNI sin marcar')
+    const hasMissingAula = issues.includes('Aula sin marcar')
+
+    if (hasMissingTipo && hasMissingDni && hasMissingAula) {
+      add('Sin identificación completa')
+      return
+    }
+
+    issues.forEach((issue) => {
+      if (/^DNI incompleto \(/.test(issue)) {
+        add('DNI incompleto')
+        return
+      }
+      if (/^Aula incompleta \(/.test(issue)) {
+        add('Aula incompleta')
+        return
+      }
+      add(issue)
+    })
   })
-  return Array.from(summary.entries()).map(([label, count]) => ({ label, count }))
+
+  const priority = [
+    'Sin identificación completa',
+    'DNI sin marcar',
+    'DNI incompleto',
+    'Tipo sin marcar',
+    'Aula sin marcar',
+    'Aula incompleta',
+  ]
+
+  return Array.from(summary.entries())
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => {
+      const left = priority.indexOf(a.label)
+      const right = priority.indexOf(b.label)
+      if (left !== -1 || right !== -1) {
+        return (left === -1 ? priority.length : left) - (right === -1 ? priority.length : right)
+      }
+      return b.count - a.count || a.label.localeCompare(b.label)
+    })
 }
 
 /**

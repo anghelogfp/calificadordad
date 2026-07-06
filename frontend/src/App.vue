@@ -201,6 +201,7 @@ const responseReconciliation = computed(() => {
   const duplicateResponseDnis = countDuplicates(responseDnis)
   const issues = unlinkedResponses + responsesWithoutCandidate + candidatesWithoutResponse + duplicateResponseDnis
   return {
+    padronTotal: padronDnis.size,
     responsesTotal: responses.rows.value.length,
     linkedResponses,
     unlinkedResponses,

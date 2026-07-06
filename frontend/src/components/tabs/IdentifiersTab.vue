@@ -52,6 +52,36 @@ const stepState = computed(() => {
   }
 })
 
+const identifierDatClosure = computed(() => {
+  const reconciliation = props.reconciliation || {}
+  const total = Number(reconciliation.identifiersTotal || identifiers.totalRows || 0)
+  const linked = Number(reconciliation.matchedCandidates || 0)
+  const outsidePadron = Number(reconciliation.identifiersWithoutCandidate || 0)
+  const withoutDni = Math.max(0, total - linked - outsidePadron)
+
+  return {
+    total,
+    linked,
+    outsidePadron,
+    withoutDni,
+    closes: total === linked + outsidePadron + withoutDni,
+  }
+})
+
+const identifierPadronClosure = computed(() => {
+  const reconciliation = props.reconciliation || {}
+  const total = Number(reconciliation.padronTotal || 0)
+  const linked = Number(reconciliation.matchedCandidates || 0)
+  const missing = Number(reconciliation.missingIdentifiers || 0)
+
+  return {
+    total,
+    linked,
+    missing,
+    closes: total === linked + missing,
+  }
+})
+
 // ── Confirmación inline ──────────────────────────────────────────────────────
 const pendingAction = ref(null)
 
@@ -159,17 +189,36 @@ function getRowClass(row) {
       </template>
 
       <template v-if="reconciliation && (reconciliation.padronTotal || reconciliation.identifiersTotal)" #chips>
-        <span class="verification-chip verification-chip--ok"><strong>{{ reconciliation.matchedCandidates }}</strong> con identificador</span>
-        <span class="verification-chip" :class="reconciliation.missingIdentifiers ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.missingIdentifiers }}</strong> sin identificador</span>
-        <span class="verification-chip" :class="reconciliation.identifiersWithoutCandidate ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ reconciliation.identifiersWithoutCandidate }}</strong> fuera del padrón</span>
-        <span class="verification-chip" :class="reconciliation.duplicateIdentifierDnis ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.duplicateIdentifierDnis }}</strong> DNI duplicados</span>
-        <span class="verification-chip" :class="reconciliation.duplicateMatchKeys ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.duplicateMatchKeys }}</strong> lecturas/litho duplicados</span>
+        <div class="verification-group">
+          <span class="verification-group__title">DAT identificadores</span>
+          <span class="verification-chip verification-chip--info"><strong>{{ identifierDatClosure.total }}</strong> registros cargados</span>
+          <span class="verification-chip verification-chip--ok"><strong>{{ identifierDatClosure.linked }}</strong> vinculados al padrón</span>
+          <span class="verification-chip" :class="identifierDatClosure.outsidePadron ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ identifierDatClosure.outsidePadron }}</strong> fuera del padrón</span>
+          <span class="verification-chip" :class="identifierDatClosure.withoutDni ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ identifierDatClosure.withoutDni }}</strong> sin DNI leído</span>
+        </div>
+
+        <div class="verification-group">
+          <span class="verification-group__title">Padrón</span>
+          <span class="verification-chip verification-chip--info"><strong>{{ identifierPadronClosure.total }}</strong> postulantes</span>
+          <span class="verification-chip verification-chip--ok"><strong>{{ identifierPadronClosure.linked }}</strong> con identificador</span>
+          <span class="verification-chip" :class="identifierPadronClosure.missing ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ identifierPadronClosure.missing }}</strong> sin identificador</span>
+        </div>
+
+        <div class="verification-group">
+          <span class="verification-group__title">Duplicados</span>
+          <span class="verification-chip" :class="reconciliation.duplicateIdentifierDnis ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.duplicateIdentifierDnis }}</strong> DNI duplicados</span>
+          <span class="verification-chip" :class="reconciliation.duplicateMatchKeys ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.duplicateMatchKeys }}</strong> lecturas/litho duplicados</span>
+        </div>
       </template>
 
       <template v-if="identifiers.observationCount" #detail>
-        <span v-for="item in identifiers.observationSummary" :key="item.label" class="verification-chip verification-chip--warn">
-          <strong>{{ item.count }}</strong> {{ item.label }}
-        </span>
+        <div class="verification-group verification-group--quality">
+          <span class="verification-group__title">Calidad del DAT</span>
+          <span class="verification-chip verification-chip--warn"><strong>{{ identifiers.observationCount }}</strong> registros observados</span>
+          <span v-for="item in identifiers.observationSummary" :key="item.label" class="verification-chip verification-chip--warn">
+            <strong>{{ item.count }}</strong> {{ item.label }}
+          </span>
+        </div>
       </template>
 
       <template #hint>
@@ -621,6 +670,92 @@ function getRowClass(row) {
   color: var(--slate-500);
   font-size: 0.8rem;
   line-height: 1.45;
+}
+
+.verification-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) 0;
+}
+
+.verification-group + .verification-group {
+  border-top: 1px dashed var(--slate-200);
+}
+
+.verification-group--quality {
+  padding-top: 0;
+}
+
+.verification-group__title {
+  min-width: 126px;
+  color: var(--slate-500);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.verification-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px var(--space-2);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-full);
+  background: white;
+  color: var(--slate-600);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.verification-chip strong {
+  color: var(--slate-900);
+  font-family: var(--font-mono);
+}
+
+.verification-chip--ok {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.verification-chip--ok strong {
+  color: #14532d;
+}
+
+.verification-chip--warn {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.verification-chip--warn strong {
+  color: #78350f;
+}
+
+.verification-chip--error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.verification-chip--error strong {
+  color: #991b1b;
+}
+
+.verification-chip--info {
+  border-color: #dbe7f5;
+  background: #f8fbff;
+  color: var(--unap-blue-700);
+}
+
+.verification-chip--muted {
+  border-color: var(--slate-200);
+  background: var(--slate-50);
+  color: var(--slate-500);
 }
 
 .icon {
