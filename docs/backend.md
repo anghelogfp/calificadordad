@@ -38,7 +38,7 @@ Existe endpoint backend para restauracion de backup. Debe tratarse como zona sen
 - Debe ejecutarse en transaccion.
 - Debe validar payload completo antes de borrar datos.
 - Debe evitar borrar datos globales o compartidos sin una decision explicita.
-- Debe tener pruebas especificas antes de usarse en produccion real.
+- Tiene pruebas basicas de transaccion y reemplazo; antes de usarlo en produccion real requiere ampliar las pruebas de aislamiento y de datos globales.
 
 Estado actual:
 
@@ -57,5 +57,5 @@ Decision vigente:
 
 - Revisar en una fase futura si `Area`, `DatFormatConfig` y plantillas deben seguir globales o pasar a depender de un proceso/convocatoria reintroducida.
 - Endurecer backup con export/import backend completo cuando se defina el alcance personal/institucional.
-- Agregar pruebas de restauracion y aislamiento.
+- Ampliar las pruebas de restauracion y aislamiento, en especial para datos globales y errores de payload complejos.
 - Preparar configuracion formal para despliegue.

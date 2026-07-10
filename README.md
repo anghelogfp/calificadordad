@@ -65,4 +65,4 @@ python manage.py test
 python manage.py check
 ```
 
-Nota: la ultima iteracion funcional fue frontend (`fix: pasos 1 al 5`). El backend no cambio en esa iteracion.
+Nota: la ultima iteracion funcional registrada es `5c3a977 fix` (frontend, 2026-07-06). Refino la conciliacion visual de identificadores y respuestas; el backend no cambio en esa iteracion.

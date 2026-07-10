@@ -347,7 +347,7 @@ function setVacantes(programa, val) {
           <div v-if="isRealMode && calification.programasForCurrentArea.length > 0" class="section section--vacantes">
             <p class="section__label">
               Vacantes por programa
-              <span class="section__hint">0 = sin límite de cupos</span>
+              <span class="section__hint">0 = sin vacantes; no marcará ingresantes</span>
             </p>
             <div class="vacantes-list">
               <div

@@ -164,6 +164,15 @@ describe('calculateAreaResults', () => {
     })
   })
 
+  it('exige exactamente una clave general en simulacro general', () => {
+    expect(() => calculateAreaResults(makeInput({
+      processType: 'simulacro',
+      simulacroScope: 'general',
+      archiveRows: [{ dni: '12345678', area: '' }],
+      answerKeyRows: [{ area: 'Ingeniería', tipo: 'P', answers: makeAnswers('A') }],
+    }))).toThrow('exactamente una clave general')
+  })
+
   it('rechaza plantillas que no cubren todas las preguntas', () => {
     expect(() => calculateAreaResults(makeInput({
       plantilla: makePlantilla({
@@ -353,6 +362,31 @@ describe('calculateAreaResults', () => {
       result,
       processType: 'real',
       vacantesPrograma: { Civil: 1 },
+    })).toMatchObject({ valid: true })
+  })
+
+  it('no marca ingresantes cuando el programa tiene cero vacantes', () => {
+    const answerKeyRows = ['P', 'Q', 'R', 'S', 'T'].map((tipo) => ({
+      area: 'Ingeniería', tipo, answers: makeAnswers('A'),
+    }))
+
+    const result = calculateAreaResults(makeInput({
+      processType: 'real',
+      archiveRows: [{ dni: '11111111', area: 'Ingeniería', programa: 'Civil' }],
+      responsesRows: [{ dni: '11111111', tipo: 'P', answers: makeAnswers('A') }],
+      responsesByDni: new Map([
+        ['11111111', [{ dni: '11111111', tipo: 'P', answers: makeAnswers('A') }]],
+      ]),
+      answerKeyRows,
+      answerKeyLookupByAreaTipo: new Map(),
+      vacantesPrograma: { Civil: 0 },
+    }))
+
+    expect(result.results[0]).toMatchObject({ positionInPrograma: 1, isIngresante: false })
+    expect(validateCalificationResult({
+      result,
+      processType: 'real',
+      vacantesPrograma: { Civil: 0 },
     })).toMatchObject({ valid: true })
   })
 

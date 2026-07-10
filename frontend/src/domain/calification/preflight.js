@@ -52,12 +52,20 @@ export function buildCalificationPreflight({
     k => k.area?.trim() && normalizeArea(k.area, areaList) === normalizedArea
   )
   const generalAnswerKeys = answerKeyRows.filter(k => !k.area?.trim())
-  const keyTypes = new Set(areaAnswerKeys.map(k => (k.tipo || '').trim().toUpperCase().slice(0, 1)).filter(Boolean))
+  const keyTypeCounts = new Map()
+  areaAnswerKeys.forEach((key) => {
+    const tipo = (key.tipo || '').trim().toUpperCase().slice(0, 1) || 'sin tipo'
+    keyTypeCounts.set(tipo, (keyTypeCounts.get(tipo) || 0) + 1)
+  })
+  const duplicatedKeyTypes = [...keyTypeCounts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([tipo]) => tipo)
+  const keyTypes = new Set([...keyTypeCounts.keys()].filter(tipo => tipo !== 'sin tipo'))
   const missingRealKeyTypes = REAL_TEST_TYPES.filter(tipo => !keyTypes.has(tipo))
   const hasAnswerKeys = isRealProcess
     ? missingRealKeyTypes.length === 0
     : isGeneralSimulacro
-      ? generalAnswerKeys.length > 0 || answerKeyRows.length > 0
+      ? generalAnswerKeys.length === 1
       : areaAnswerKeys.length > 0
 
   const unlinked = archiveRows.length > 0
@@ -69,6 +77,17 @@ export function buildCalificationPreflight({
       const dni = stripDigits(candidate.dni)
       const responseList = responsesByDni.get(dni) || []
       return responseList.some(r => !(r.tipo || '').trim())
+    }).length
+    : 0
+
+  const invalidTipoResponses = isRealProcess
+    ? effectiveCandidates.filter((candidate) => {
+      const dni = stripDigits(candidate.dni)
+      const responseList = responsesByDni.get(dni) || []
+      return responseList.some((row) => {
+        const tipo = (row.tipo || '').trim().toUpperCase().slice(0, 1)
+        return tipo && !REAL_TEST_TYPES.includes(tipo)
+      })
     }).length
     : 0
 
@@ -109,6 +128,28 @@ export function buildCalificationPreflight({
       value: unknownAreaCandidates.length,
       status: 'error',
       detail: `${unknownAreaCandidates.length} postulante(s) tienen un área que no coincide con la configuración. Corrige el padrón antes de calificar.`,
+    })
+  }
+
+  if (isGeneralSimulacro && generalAnswerKeys.length !== 1) {
+    items.push({
+      key: 'generalAnswerKeyScope',
+      label: 'Clave general única',
+      value: generalAnswerKeys.length,
+      status: 'error',
+      detail: generalAnswerKeys.length === 0
+        ? 'El simulacro general requiere una clave sin área asignada; no se usarán claves de área como reemplazo.'
+        : `Se encontraron ${generalAnswerKeys.length} claves generales. Conserva solo una antes de calcular.`,
+    })
+  }
+
+  if (!isGeneralSimulacro && duplicatedKeyTypes.length > 0) {
+    items.push({
+      key: 'duplicatedAnswerKeys',
+      label: 'Claves duplicadas',
+      value: duplicatedKeyTypes.length,
+      status: 'error',
+      detail: `Hay más de una clave para ${normalizedArea} y tipo ${duplicatedKeyTypes.join(', ')}. Conserva una única clave por alcance.`,
     })
   }
 
@@ -179,6 +220,16 @@ export function buildCalificationPreflight({
       value: missingTipoResponses,
       status: 'warn',
       detail: 'Estos postulantes quedarán como no calificados porque el modo real requiere tipo P, Q, R, S o T.',
+    })
+  }
+
+  if (invalidTipoResponses > 0) {
+    items.push({
+      key: 'invalidTipo',
+      label: 'Respuestas con tipo inválido',
+      value: invalidTipoResponses,
+      status: 'warn',
+      detail: `Estos postulantes quedarán como no calificados: el tipo debe ser ${REAL_TEST_TYPES.join(', ')}.`,
     })
   }
 

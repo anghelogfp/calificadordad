@@ -175,6 +175,48 @@ describe('buildCalificationPreflight', () => {
     expect(byKey(preflight).answerKeys.status).toBe('ok')
   })
 
+  it('bloquea el simulacro general si falta o se duplica la clave general', () => {
+    const withoutGeneralKey = buildCalificationPreflight(makeBaseInput({
+      area: 'General',
+      simulacroScope: 'general',
+      archiveRows: [{ dni: '12345678', area: '' }],
+      answerKeyRows: [{ area: 'Ingeniería', tipo: 'P', answers: makeAnswers('A') }],
+    }))
+    const duplicatedGeneralKey = buildCalificationPreflight(makeBaseInput({
+      area: 'General',
+      simulacroScope: 'general',
+      archiveRows: [{ dni: '12345678', area: '' }],
+      answerKeyRows: [
+        { area: '', tipo: '', answers: makeAnswers('A') },
+        { area: '', tipo: '', answers: makeAnswers('B') },
+      ],
+    }))
+
+    expect(withoutGeneralKey.hasBlockers).toBe(true)
+    expect(byKey(withoutGeneralKey).generalAnswerKeyScope).toMatchObject({ status: 'error', value: 0 })
+    expect(duplicatedGeneralKey.hasBlockers).toBe(true)
+    expect(byKey(duplicatedGeneralKey).generalAnswerKeyScope).toMatchObject({ status: 'error', value: 2 })
+  })
+
+  it('bloquea claves duplicadas y advierte tipos de respuesta inválidos en modo real', () => {
+    const preflight = buildCalificationPreflight(makeBaseInput({
+      processType: 'real',
+      archiveRows: [{ dni: '12345678', area: 'Ingeniería', programa: 'Civil' }],
+      responsesRows: [{ dni: '12345678', tipo: 'U', answers: makeAnswers('A') }],
+      responsesByDni: new Map([
+        ['12345678', [{ dni: '12345678', tipo: 'U', answers: makeAnswers('A') }]],
+      ]),
+      answerKeyRows: [
+        ...['P', 'Q', 'R', 'S', 'T'].map((tipo) => ({ area: 'Ingeniería', tipo, answers: makeAnswers('A') })),
+        { area: 'Ingeniería', tipo: 'P', answers: makeAnswers('B') },
+      ],
+    }))
+
+    expect(preflight.hasBlockers).toBe(true)
+    expect(byKey(preflight).duplicatedAnswerKeys).toMatchObject({ status: 'error', value: 1 })
+    expect(byKey(preflight).invalidTipo).toMatchObject({ status: 'warn', value: 1 })
+  })
+
   it('no acepta clave general como clave de simulacro por áreas', () => {
     const preflight = buildCalificationPreflight(makeBaseInput({
       answerKeyRows: [

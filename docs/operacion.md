@@ -75,6 +75,8 @@ Frontend:
 12. Guardar historial.
 13. Exportar reportes.
 
+En convocatoria real, `0` vacantes significa que el programa no tiene cupos y no generará ingresantes. Para un simulacro general debe existir una única clave sin área; las claves de área no se usan como reemplazo.
+
 En las tablas de Respuestas y Claves tambien existe una vista de cartilla en modal para revisar la cadena cargada antes de seguir con el proceso.
 
 ## Padron Excel
@@ -98,12 +100,17 @@ Columnas extra como `nro` o `sede` no bloquean la importacion; se ignoran mientr
 - El stepper superior debe mostrar cinco pasos operativos con estado `Listo`, `Revisar` o `Pendiente`.
 - Cada paso debe mostrar una descripcion breve y la accion esperada, por ejemplo cargar padron, revisar cruces, corregir faltantes o calcular puntajes.
 - Padron, identificadores, respuestas, claves y resultados deben mostrar un panel de verificacion con resumen, chips y observaciones relevantes.
+- En identificadores y respuestas, el panel debe separar los cierres del DAT y del padron, los duplicados y la calidad del archivo; los totales deben ser conciliables entre si.
 - En resultados, el bloque principal debe mostrar estado, no calificados e incidencias antes del detalle tecnico.
 - El modal de calificacion debe mostrar contexto superior, configuracion, salida y validacion sin parecer cuatro tarjetas aisladas.
 - Si falta informacion para calificar, el click debe dar feedback visible y no quedarse silencioso.
 - El boton `Calcular Puntajes` debe seguir abriendo el modal aun cuando haya datos incompletos; el bloqueo real se explica dentro del flujo.
 - El camino elegido al crear el proceso debe verse igual en claves, ponderaciones, calculo, resultados, historial y dashboard.
 - `Simulacro por areas` debe cargar claves por area; no queda cubierto por una clave general.
+- `Simulacro general` requiere exactamente una clave sin área; una clave de área no reemplaza la clave general.
+- Las claves duplicadas para la misma área y tipo bloquean el cálculo hasta que se conserve una sola.
+- En convocatoria real, las respuestas con tipo distinto de `P`, `Q`, `R`, `S` o `T` quedan observadas y no se califican.
+- `0` vacantes significa que el programa no tiene vacantes y no marcará ingresantes.
 - Las respuestas con menos marcas al final deben aparecer como `Blancos finales asumidos`, no como error critico de cadena incompleta.
 
 ## Cuidados

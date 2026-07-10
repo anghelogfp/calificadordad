@@ -37,16 +37,17 @@ El repo contiene pruebas para:
 - Componentes principales de tablas/resultados.
 - Stepper, paneles de verificacion y badge del camino del proceso.
 - Tratamiento de blancos finales asumidos en parser, resumen de observaciones y detalle de calificacion.
+- Cierres de conciliacion y resumen de observaciones para identificadores y respuestas.
 - Backend: autenticacion, usuarios, aislamiento por usuario, bulk replace, procesos, verificador, ponderaciones, areas y formato DAT.
+- Backend: restauracion de backup con validacion de payload, transaccion y reemplazo basico de datos.
 
 ## Ultima Verificacion Local
 
-Fecha: 2026-07-04.
+Fecha: 2026-07-10.
 
-- Frontend: ultima iteracion registrada en commit `6b61871 fix: pasos 1 al 5`.
-- Frontend: se agregaron pruebas para `StepNav`, `StepVerificationPanel`, `ProcessPathBadge`, respuestas, parsers y calculo.
-- Backend: no cambio en la iteracion `fix: pasos 1 al 5`.
-- Backend: `48` tests pasando en la ultima verificacion completa registrada anterior.
+- Frontend: ultima iteracion registrada en commit `5c3a977 fix` (2026-07-06), que refino la conciliacion visual de identificadores y respuestas.
+- Frontend: `169` pruebas pasando en `21` archivos; build de produccion exitoso.
+- Backend: `48` pruebas pasando y `python manage.py check` sin incidencias. El backend no cambio desde la iteracion de frontend indicada.
 
 Notas del entorno:
 
@@ -55,14 +56,15 @@ Notas del entorno:
 - `npm ci` fallo previamente porque `package-lock.json` no estaba sincronizado; `npm install` actualizo el lockfile y CI usa `npm ci`.
 - Vite/Vitest requirieron ejecucion fuera del sandbox local por `spawn EPERM`.
 - En esta iteracion se corrigio un error de render del modal al tratar `processAreas` como arreglo directo en vez de `ref/computed`.
-- La documentacion fue actualizada despues del commit `6b61871`; no se ejecuto una nueva corrida completa de tests durante esta actualizacion documental.
+- La documentacion fue contrastada con el codigo y las validaciones locales el 2026-07-10.
 
 ## Brechas Importantes
 
 - Golden tests con fixtures completas.
 - Fixtures `.dat` reales o semirreales.
 - Flujo E2E completo en navegador.
-- Backup export/import con datos representativos.
+- Backup export/import con datos representativos, aislamiento de datos globales y casos de error complejos.
+- Política institucional de empates, corte de vacantes y publicación oficial de resultados.
 - Prueba de carga con miles de postulantes.
 
 ## Recomendacion

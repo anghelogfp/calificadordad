@@ -64,6 +64,7 @@ La pantalla de resultados, el modal de calificacion y el flujo de pasos se reord
 - Los bloqueos de preflight ya no quedan silenciosos: el flujo muestra error visible y toast cuando falta informacion para calificar.
 - El stepper de los pasos 1 al 5 muestra estado, descripcion y accion contextual por etapa.
 - Los pasos de padron, identificadores, respuestas, claves y resultados usan paneles de verificacion para resumir carga, cruces, observaciones y faltantes.
+- En identificadores y respuestas, los paneles separan el cierre del DAT, el cierre contra el padron, los duplicados y la calidad del archivo para que los conteos sean auditables.
 - Las tablas de Respuestas y Claves exponen un boton de vista que abre una cartilla visual en modal para revisar la cadena cargada sin alterar el dato original.
 - El camino del proceso se muestra con una insignia compartida para mantener consistencia visual entre las etapas.
 
@@ -78,6 +79,8 @@ El estado del stepper se calcula desde datos reales del proceso:
 - Resultados: `completed` cuando existen resultados; antes de calcular muestra faltantes u observaciones segun el preflight.
 
 Las respuestas con cadena mas corta que el formato esperado ya no se tratan como error generico de cadena incompleta. Se registran como `Blancos finales asumidos` y el detalle por pregunta marca esos blancos finales con `blankSource: assumed-final`.
+
+En los pasos de identificadores y respuestas, el panel de verificacion muestra cierres independientes: registros del DAT vinculados, fuera del padron o sin dato de enlace; y postulantes del padron con o sin registro correspondiente. Tambien agrupa duplicados y observaciones de calidad del DAT.
 
 ## Importacion De Padron
 
@@ -94,6 +97,13 @@ El camino se define al crear el proceso y queda bloqueado para el resto del fluj
 - `Simulacro general`: usa clave general y la clave general cubre el simulacro.
 - `Simulacro por areas`: exige claves por area; una clave general no cubre este camino.
 - `Convocatoria real`: usa claves por area y tipo, con ponderaciones y resultados de convocatoria.
+
+Reglas de seguridad del cálculo:
+
+- El simulacro general exige exactamente una clave sin área asignada; no reutiliza una clave de área como reemplazo.
+- El preflight bloquea claves duplicadas para la misma área y tipo, evitando que el resultado dependa del orden de carga.
+- En convocatoria real, las respuestas con tipo diferente de `P/Q/R/S/T` se muestran antes del cálculo y quedan no calificadas hasta corregirse.
+- Una vacante con valor `0` significa que el programa no tiene vacantes y no marcará ingresantes.
 
 La UI muestra este camino de forma consistente en claves, ponderaciones, modal de calificacion, resultados, historial y dashboard.
 

@@ -59,14 +59,32 @@ export function calculateAreaResults({
 
   const totalWeight = plan.reduce((acc, item) => acc + (Number(item.weight) || 0), 0)
 
+  const areaAnswerKeys = answerKeyRows.filter(
+    k => k.area?.trim() && normalizeAreaStrict(k.area, areaList) === calculationArea
+  )
+  const keyTypeCounts = new Map()
+  areaAnswerKeys.forEach((key) => {
+    const tipo = (key.tipo || '').trim().toUpperCase().slice(0, 1) || 'sin tipo'
+    keyTypeCounts.set(tipo, (keyTypeCounts.get(tipo) || 0) + 1)
+  })
+  const duplicatedKeyTypes = [...keyTypeCounts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([tipo]) => tipo)
+
+  if (generalSimulacro) {
+    const generalAnswerKeys = answerKeyRows.filter(k => !k.area?.trim())
+    if (generalAnswerKeys.length !== 1) {
+      throw new Error('El simulacro general requiere exactamente una clave general sin área asignada.')
+    }
+  } else if (duplicatedKeyTypes.length > 0) {
+    throw new Error(`Hay claves duplicadas para ${calculationArea}: ${duplicatedKeyTypes.join(', ')}.`)
+  }
+
   let candidates = generalSimulacro
     ? archiveRows
     : archiveRows.filter((row) => normalizeAreaStrict(row.area, areaList) === calculationArea)
 
   if (isRealProcess) {
-    const areaAnswerKeys = answerKeyRows.filter(
-      k => k.area?.trim() && normalizeAreaStrict(k.area, areaList) === calculationArea
-    )
     const keyTypes = new Set(areaAnswerKeys.map(k => (k.tipo || '').trim().toUpperCase().slice(0, 1)).filter(Boolean))
     const missingRealKeyTypes = REAL_TEST_TYPES.filter(tipo => !keyTypes.has(tipo))
     if (missingRealKeyTypes.length > 0) {
@@ -167,7 +185,7 @@ export function calculateAreaResults({
         const exactAnswer = isRealProcess
           ? getExactAnswerKey(answerKeyRows, calculationArea, tipo, areaList)
           : generalSimulacro
-            ? answerKeyRows.find(k => !k.area?.trim()) || answerKeyRows[0]
+            ? answerKeyRows.find(k => !k.area?.trim())
             : areaOnlyAnswer ?? lookupAnswer
         const answer = isRealProcess
           ? exactAnswer

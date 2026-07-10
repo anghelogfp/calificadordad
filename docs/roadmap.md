@@ -30,7 +30,7 @@ Pendiente:
 - Definir si el backup sera personal, institucional o ambos.
 - Mover exportacion/importacion a backend de forma completa.
 - Agregar validacion previa del payload.
-- Agregar tests de restauracion y aislamiento.
+- Ampliar los tests de restauracion y aislamiento; ya existe cobertura basica de transaccion y reemplazo.
 - Evitar reemplazar datos globales compartidos salvo en modo institucional explicito.
 
 Riesgo conocido:
@@ -75,6 +75,7 @@ Trabajo actual:
 - Claves, ponderaciones, modal de calificacion, resultados, historial y dashboard ya respetan ese camino.
 - Stepper de pasos 1 al 5 ya muestra estados `Listo`, `Revisar` y `Pendiente`, con accion contextual.
 - Paneles de verificacion ya resumen estado, observaciones y faltantes en padron, identificadores, respuestas, claves y resultados.
+- Identificadores y respuestas ya separan en su panel los cierres del DAT, los cruces contra padron, duplicados y calidad de archivo.
 - Verificador manual ya cuenta con mejoras visuales y operativas sin afectar el core del flujo principal.
 - Tests unitarios agregados para stepper, paneles compartidos, insignia de camino, claves, respuestas, parsers y calculo.
 
