@@ -23,6 +23,10 @@ import { useExport } from '@/composables/useExport'
 import { useVacantesPrograma } from '@/composables/useVacantesPrograma'
 import { useToast } from '@/composables/useToast'
 import { GENERAL_SIMULACRO_AREA, REAL_TEST_TYPES } from '@/utils/calificationHelpers'
+import {
+  buildIdentifierReconciliation,
+  buildResponseReconciliation,
+} from '@/domain/reconciliation/buildReconciliation'
 
 // Layout
 import AppHeader from '@/components/layout/AppHeader.vue'
@@ -159,59 +163,16 @@ function countDuplicates(values) {
 }
 
 const identifierReconciliation = computed(() => {
-  const padronDnis = new Set(archives.rows.value.map(row => onlyDigits(row.dni)).filter(Boolean))
-  const identifierDnis = identifiers.rows.value.map(row => onlyDigits(row.dni)).filter(Boolean)
-  const identifierDniSet = new Set(identifierDnis)
-  const matchedCandidates = [...padronDnis].filter(dni => identifierDniSet.has(dni)).length
-  const missingIdentifiers = [...padronDnis].filter(dni => !identifierDniSet.has(dni)).length
-  const identifiersWithoutCandidate = identifierDnis.filter(dni => !padronDnis.has(dni)).length
-  const duplicateIdentifierDnis = countDuplicates(identifierDnis)
-  const duplicateMatchKeys = countDuplicates(
-    identifiers.rows.value.map(row => {
-      const litho = onlyDigits(row.litho)
-      const indicator = firstLetter(row.indicator)
-      const folio = String(row.folio || '').trim()
-      return litho && folio ? `${litho}|${indicator}|${folio}` : ''
-    }),
-  )
-  const issues = missingIdentifiers + identifiersWithoutCandidate + duplicateIdentifierDnis + duplicateMatchKeys
-  return {
-    padronTotal: padronDnis.size,
-    identifiersTotal: identifiers.rows.value.length,
-    matchedCandidates,
-    missingIdentifiers,
-    identifiersWithoutCandidate,
-    duplicateIdentifierDnis,
-    duplicateMatchKeys,
-    issues,
-    status: issues === 0 && padronDnis.size > 0 && identifiers.rows.value.length > 0 ? 'ok' : issues > 0 ? 'warn' : 'empty',
-  }
+  return buildIdentifierReconciliation(archives.rows.value, identifiers.rows.value, identifiers.sources.value)
 })
 
 const responseReconciliation = computed(() => {
-  const padronDnis = new Set(archives.rows.value.map(row => onlyDigits(row.dni)).filter(Boolean))
-  const identifierDnis = new Set(identifiers.rows.value.map(row => onlyDigits(row.dni)).filter(Boolean))
-  const responseDnis = responses.rows.value.map(row => onlyDigits(row.dni)).filter(Boolean)
-  const responseDniSet = new Set(responseDnis)
-  const linkedResponses = responses.rows.value.filter(row => onlyDigits(row.dni)).length
-  const unlinkedResponses = responses.rows.value.length - linkedResponses
-  const responsesWithoutCandidate = responseDnis.filter(dni => !padronDnis.has(dni)).length
-  const candidatesWithoutResponse = [...padronDnis].filter(dni => !responseDniSet.has(dni)).length
-  const identifiersWithoutResponse = [...identifierDnis].filter(dni => !responseDniSet.has(dni)).length
-  const duplicateResponseDnis = countDuplicates(responseDnis)
-  const issues = unlinkedResponses + responsesWithoutCandidate + candidatesWithoutResponse + duplicateResponseDnis
-  return {
-    padronTotal: padronDnis.size,
-    responsesTotal: responses.rows.value.length,
-    linkedResponses,
-    unlinkedResponses,
-    responsesWithoutCandidate,
-    candidatesWithoutResponse,
-    identifiersWithoutResponse,
-    duplicateResponseDnis,
-    issues,
-    status: issues === 0 && responses.rows.value.length > 0 ? 'ok' : issues > 0 ? 'warn' : 'empty',
-  }
+  return buildResponseReconciliation(
+    archives.rows.value,
+    identifiers.rows.value,
+    responses.rows.value,
+    responses.sources.value,
+  )
 })
 
 const answerKeyReconciliation = computed(() => {

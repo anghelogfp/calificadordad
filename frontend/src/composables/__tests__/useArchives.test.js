@@ -46,6 +46,62 @@ describe('mapArchiveRowToSchema', () => {
     })
   })
 
+  it('mapea las 23 columnas del padrón oficial CEPREUNA', () => {
+    const row = mapArchiveRowToSchema({
+      'FECHA DE INSCRIPCIÓN': '2026-01-06 12:46:38',
+      'COD PROGRAMA': '1',
+      'PROGRAMA DE ESTUDIOS': 'ADMINISTRACIÓN',
+      AREA: 'SOCIALES',
+      'COD MODALIDAD': '9',
+      MODALIDAD: 'CEPREUNA',
+      'N° DOCUMENTO': '60759049',
+      PATERNO: 'ACERO',
+      MATERNO: 'MAMANI',
+      NOMBRES: 'POSTULANTE PRUEBA',
+      SEXO: 'M',
+      'FEC NACIMIENTO': '2006-07-12',
+      EDAD: '20',
+      'UBIGEO RESIDENCIA': '200101',
+      'DEPARTAMENTO RESIDENCIA': 'PUNO',
+      'PROVINCIA RESIDENCIA': 'PUNO',
+      'DISTRITO RESIDENCIA': 'PUNO',
+      EGRESO: '2022',
+      'COD MODULAR': '0240267',
+      'UBIGEO COLEGIO': '200101',
+      'DEPARTAMENTO COLEGIO': 'PUNO',
+      'PROVINCIA COLEGIO': 'PUNO',
+      'DISTRITO COLEGIO': 'PUNO',
+    })
+
+    expect(row).toMatchObject({
+      dni: '60759049',
+      fecha_inscripcion: '2026-01-06T12:46:38',
+      codigo_programa: '1',
+      programa: 'ADMINISTRACIÓN',
+      area: 'SOCIALES',
+      codigo_modalidad: '9',
+      modalidad: 'CEPREUNA',
+      fecha_nacimiento: '2006-07-12',
+      edad: '20',
+      codigo_modular: '0240267',
+      distrito_colegio: 'PUNO',
+    })
+  })
+
+
+  it('usa null en fechas y edad opcionales para que la API acepte filas antiguas', () => {
+    const row = mapArchiveRowToSchema({
+      DNI: '12345678',
+      PATERNO: 'QUISPE',
+    })
+
+    expect(row).toMatchObject({
+      fecha_inscripcion: null,
+      fecha_nacimiento: null,
+      edad: null,
+    })
+  })
+
   it('infiere área desde idexamen cuando el padrón no trae área', () => {
     const row = mapArchiveRowToSchema({
       dni: '75471201',

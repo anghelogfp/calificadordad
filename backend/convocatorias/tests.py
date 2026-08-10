@@ -30,6 +30,29 @@ def candidate_payload(client_id='cand-1', dni='12345678'):
     }
 
 
+def official_candidate_payload(client_id='official-1', dni='60759049'):
+    return {
+        **candidate_payload(client_id, dni),
+        'fecha_inscripcion': '2026-01-06T12:46:38-05:00',
+        'codigo_programa': '1',
+        'codigo_modalidad': '9',
+        'modalidad': 'CEPREUNA',
+        'sexo': 'M',
+        'fecha_nacimiento': '2006-07-12',
+        'edad': 20,
+        'ubigeo_residencia': '200101',
+        'departamento_residencia': 'PUNO',
+        'provincia_residencia': 'PUNO',
+        'distrito_residencia': 'PUNO',
+        'egreso': '2022',
+        'codigo_modular': '0240267',
+        'ubigeo_colegio': '200101',
+        'departamento_colegio': 'PUNO',
+        'provincia_colegio': 'PUNO',
+        'distrito_colegio': 'PUNO',
+    }
+
+
 def source_payload(client_id='source-1', name='archivo.dat'):
     return {
         'id': client_id,
@@ -133,6 +156,22 @@ class UserScopedDataTests(TestCase):
         self.authenticate(self.user_b)
         list_response = self.client.get('/api/candidatos/')
         self.assertEqual([row['id'] for row in list_response.data], ['b-cand'])
+
+    def test_candidate_bulk_replace_preserves_official_registry_fields(self):
+        self.authenticate(self.user_a)
+        response = self.client.post(
+            '/api/candidatos/bulk_replace/',
+            {'rows': [official_candidate_payload()]},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        candidate = Candidato.objects.get(created_by=self.user_a)
+        self.assertEqual(candidate.codigo_programa, '1')
+        self.assertEqual(candidate.modalidad, 'CEPREUNA')
+        self.assertEqual(candidate.fecha_nacimiento.isoformat(), '2006-07-12')
+        self.assertEqual(candidate.codigo_modular, '0240267')
+        self.assertEqual(response.data[0]['ubigeo_residencia'], '200101')
 
     def test_identifier_bulk_replace_replaces_sources_and_rows_only_for_current_user(self):
         other_source = IdentifierSource.objects.create(

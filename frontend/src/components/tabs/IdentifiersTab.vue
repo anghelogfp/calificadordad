@@ -55,7 +55,7 @@ const stepState = computed(() => {
 const identifierDatClosure = computed(() => {
   const reconciliation = props.reconciliation || {}
   const total = Number(reconciliation.identifiersTotal || identifiers.totalRows || 0)
-  const linked = Number(reconciliation.matchedCandidates || 0)
+  const linked = Number(reconciliation.linkedIdentifierRows || 0)
   const outsidePadron = Number(reconciliation.identifiersWithoutCandidate || 0)
   const withoutDni = Math.max(0, total - linked - outsidePadron)
 
@@ -206,6 +206,7 @@ function getRowClass(row) {
 
         <div class="verification-group">
           <span class="verification-group__title">Duplicados</span>
+          <span class="verification-chip" :class="reconciliation.duplicatePadronDnis ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.duplicatePadronDnis || 0 }}</strong> DNI duplicados en padrón</span>
           <span class="verification-chip" :class="reconciliation.duplicateIdentifierDnis ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.duplicateIdentifierDnis }}</strong> DNI duplicados</span>
           <span class="verification-chip" :class="reconciliation.duplicateMatchKeys ? 'verification-chip--error' : 'verification-chip--muted'"><strong>{{ reconciliation.duplicateMatchKeys }}</strong> lecturas/litho duplicados</span>
         </div>

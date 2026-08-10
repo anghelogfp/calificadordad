@@ -4,6 +4,7 @@ import { useTableState } from './useTableState'
 import {
   ARCHIVE_COLUMNS,
   ARCHIVE_KEY_ALIASES,
+  ARCHIVE_SCHEMA_FIELDS,
 } from '@/constants'
 import { generateId, normalize, normalizeAreaStrict, stripDigits } from '@/utils/helpers'
 import { apiFetch } from '@/utils/apiFetch'
@@ -15,12 +16,22 @@ const AREA_BY_EXAM_ID = Object.freeze({
   3: 'INGENIERÍAS',
 })
 
+const NULLABLE_ARCHIVE_FIELDS = new Set([
+  'fecha_inscripcion',
+  'fecha_nacimiento',
+  'edad',
+])
+
 /**
  * Crea una fila de archivo (padrón)
  */
 export function createArchiveRow(data = {}) {
-  const normalized = ARCHIVE_COLUMNS.reduce((acc, { key }) => {
+  const normalized = ARCHIVE_SCHEMA_FIELDS.reduce((acc, key) => {
     const raw = data[key]
+    if (NULLABLE_ARCHIVE_FIELDS.has(key) && (raw === undefined || raw === null || raw === '')) {
+      acc[key] = null
+      return acc
+    }
     if (typeof raw === 'string') {
       acc[key] = raw
     } else if (raw === undefined || raw === null) {
@@ -41,7 +52,7 @@ export function createArchiveRow(data = {}) {
  * Crea una fila de archivo vacía
  */
 export function createEmptyArchiveRow() {
-  return ARCHIVE_COLUMNS.reduce((acc, { key }) => {
+  return ARCHIVE_SCHEMA_FIELDS.reduce((acc, key) => {
     acc[key] = ''
     return acc
   }, {})
@@ -77,7 +88,7 @@ export function mapArchiveRowToSchema(row) {
 
   const lookup = new Map(normalizedEntries)
 
-  const mappedRow = ARCHIVE_COLUMNS.reduce((acc, { key }) => {
+  const mappedRow = ARCHIVE_SCHEMA_FIELDS.reduce((acc, key) => {
     const aliases = ARCHIVE_KEY_ALIASES[key] || []
     acc[key] = getLookupValue(lookup, aliases)
     return acc
@@ -85,6 +96,10 @@ export function mapArchiveRowToSchema(row) {
 
   if (!mappedRow.area) {
     mappedRow.area = inferAreaFromExamId(lookup)
+  }
+
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(mappedRow.fecha_inscripcion || '')) {
+    mappedRow.fecha_inscripcion = mappedRow.fecha_inscripcion.replace(' ', 'T')
   }
 
   const hasContent = Object.values(mappedRow).some(Boolean)

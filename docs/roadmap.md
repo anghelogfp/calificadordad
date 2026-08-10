@@ -43,6 +43,34 @@ Riesgo conocido:
 - Fixtures reales anonimizadas.
 - E2E del flujo: padron, identificadores, respuestas, claves, calificacion, historial y export.
 
+## Prioridad 4.1 - Reportes Institucionales
+
+Alcance acordado el 2026-07-15:
+
+- Adecuar el sistema al Excel oficial de inscritos de 23 columnas.
+- Generar verificación de hojas de identificación.
+- Generar relaciones de postulantes por área y programa.
+- Adecuar rankings, clasificados e ingresantes al formato institucional.
+- Excluir fotografías, huellas y firmas digitalizadas.
+- Mantener espacios institucionales para firmas manuales.
+
+Completado:
+
+- Modelo, API, backup e importador conservan los 23 campos oficiales.
+- El encabezado `N° DOCUMENTO` se reconoce como DNI.
+- Migración `convocatorias.0011_candidato_padron_oficial_fields` creada y aplicada localmente.
+- Conciliación extraída a funciones de dominio testeables.
+- La conciliación produce estados, códigos semánticos, archivo fuente y detalle por fila.
+
+Pendiente:
+
+- Definir equivalencia oficial de los códigos `[03]`, `[05]` y `[07]`.
+- Implementar el PDF de verificación de hojas de identificación.
+- Implementar relaciones generales, por área y por programa.
+- Definir puntaje vocacional, empates, corte de vacantes y clasificados.
+- Adecuar rankings e ingresantes.
+- Centralizar reportes oficiales en backend.
+
 ## Prioridad 5 - Limpieza Frontend
 
 - Extraer reconciliaciones desde `App.vue`.
@@ -78,9 +106,13 @@ Trabajo actual:
 - Identificadores y respuestas ya separan en su panel los cierres del DAT, los cruces contra padron, duplicados y calidad de archivo.
 - Verificador manual ya cuenta con mejoras visuales y operativas sin afectar el core del flujo principal.
 - Tests unitarios agregados para stepper, paneles compartidos, insignia de camino, claves, respuestas, parsers y calculo.
+- Padrón oficial de 5,555 inscritos analizado: estructura consistente, 5,555 DNI únicos, 44 programas y tres áreas.
+- Importador adecuado para conservar las 23 columnas oficiales sin ampliar la tabla operativa visible.
+- Conciliación de padrón, identificadores y respuestas fortalecida y lista para alimentar el reporte.
 
 Siguiente paso recomendado:
 
-1. Revisar visualmente el flujo completo con datos reales o fixtures representativas.
-2. Ajustar textos y jerarquia si el negocio quiere menos densidad.
-3. Crear fixtures representativas y avanzar con pruebas E2E del flujo completo.
+1. Implementar el reporte PDF de verificación usando `verificationRows` de la conciliación.
+2. Confirmar con Admisión el significado de `[03]`, `[05]` y `[07]` antes de presentarlos como códigos oficiales.
+3. Probar el reporte con fixtures anonimizadas y después con los 5,555 inscritos.
+4. Continuar con relaciones de postulantes, rankings e ingresantes.

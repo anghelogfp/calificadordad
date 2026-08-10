@@ -43,11 +43,15 @@ El repo contiene pruebas para:
 
 ## Ultima Verificacion Local
 
-Fecha: 2026-07-10.
+Fecha: 2026-07-15.
 
-- Frontend: ultima iteracion registrada en commit `5c3a977 fix` (2026-07-06), que refino la conciliacion visual de identificadores y respuestas.
-- Frontend: `169` pruebas pasando en `21` archivos; build de produccion exitoso.
-- Backend: `48` pruebas pasando y `python manage.py check` sin incidencias. El backend no cambio desde la iteracion de frontend indicada.
+- Frontend: `177` pruebas pasando en `22` archivos.
+- Frontend: build de producción exitoso.
+- Backend: `49` pruebas pasando.
+- Backend: `python manage.py check` sin incidencias.
+- Backend: `python manage.py makemigrations --check --dry-run` sin cambios pendientes.
+- Migración `convocatorias.0011_candidato_padron_oficial_fields` aplicada en la base local.
+- Los cambios están pendientes de commit.
 
 Notas del entorno:
 
@@ -57,6 +61,8 @@ Notas del entorno:
 - Vite/Vitest requirieron ejecucion fuera del sandbox local por `spawn EPERM`.
 - En esta iteracion se corrigio un error de render del modal al tratar `processAreas` como arreglo directo en vez de `ref/computed`.
 - La documentacion fue contrastada con el codigo y las validaciones locales el 2026-07-10.
+- El 2026-07-15 se agregaron siete pruebas de importación del padrón y seis pruebas puras de conciliación.
+- El build mantiene advertencias no bloqueantes de `exceljs` por `eval` y tamaño del chunk de exportación Excel.
 
 ## Brechas Importantes
 

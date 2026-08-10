@@ -46,19 +46,65 @@ export const ARCHIVE_COLUMNS = [
   { key: 'programa', label: 'Programa de estudios', placeholder: 'Ing. Civil' },
 ]
 
+// Esquema completo del padrón oficial. ARCHIVE_COLUMNS sigue siendo el
+// subconjunto operativo que se muestra en la tabla principal.
+export const ARCHIVE_SCHEMA_FIELDS = [
+  'fecha_inscripcion',
+  'codigo_programa',
+  'programa',
+  'area',
+  'codigo_modalidad',
+  'modalidad',
+  'dni',
+  'paterno',
+  'materno',
+  'nombres',
+  'sexo',
+  'fecha_nacimiento',
+  'edad',
+  'ubigeo_residencia',
+  'departamento_residencia',
+  'provincia_residencia',
+  'distrito_residencia',
+  'egreso',
+  'codigo_modular',
+  'ubigeo_colegio',
+  'departamento_colegio',
+  'provincia_colegio',
+  'distrito_colegio',
+  'observaciones',
+]
+
 // Alias de claves para mapeo de columnas Excel
 export const ARCHIVE_KEY_ALIASES = {
-  dni: ['dni', 'documento', 'numdoc', 'número de documento'],
+  fecha_inscripcion: ['fecha de inscripción', 'fecha de inscripcion', 'fecha inscripción', 'fecha inscripcion'],
+  codigo_programa: ['cod programa', 'código programa', 'codigo programa', 'cod_programa'],
+  dni: ['dni', 'documento', 'numdoc', 'número de documento', 'numero de documento', 'n° documento', 'nº documento', 'nro documento'],
   paterno: ['paterno', 'apellido paterno', 'apellido_paterno', 'apellidos paterno', 'apellidos_paterno', 'ape_pat', 'ap_paterno'],
   materno: ['materno', 'apellido materno', 'apellido_materno', 'apellidos materno', 'apellidos_materno', 'ape_mat', 'ap_materno'],
   nombres: ['nombres', 'nombre', 'nombres completos'],
   observaciones: ['observaciones', 'observacione', 'obs'],
   area: ['area', 'área', 'especialidad', 'desarea', 'des_area', 'area_des', 'descripcion area', 'descripción área', 'areades', 'cod_area', 'codarea', 'area de postulacion', 'área de postulación'],
   programa: ['programa', 'desprograma', 'des_programa', 'carrera', 'escuela', 'programa de estudios', 'prog'],
+  codigo_modalidad: ['cod modalidad', 'código modalidad', 'codigo modalidad', 'cod_modalidad'],
+  modalidad: ['modalidad'],
+  sexo: ['sexo'],
+  fecha_nacimiento: ['fec nacimiento', 'fecha nacimiento', 'fecha de nacimiento', 'fec_nacimiento'],
+  edad: ['edad'],
+  ubigeo_residencia: ['ubigeo residencia', 'ubigeo_residencia'],
+  departamento_residencia: ['departamento residencia', 'departamento_residencia'],
+  provincia_residencia: ['provincia residencia', 'provincia_residencia'],
+  distrito_residencia: ['distrito residencia', 'distrito_residencia'],
+  egreso: ['egreso', 'año egreso', 'ano egreso'],
+  codigo_modular: ['cod modular', 'código modular', 'codigo modular', 'cod_modular'],
+  ubigeo_colegio: ['ubigeo colegio', 'ubigeo_colegio'],
+  departamento_colegio: ['departamento colegio', 'departamento_colegio'],
+  provincia_colegio: ['provincia colegio', 'provincia_colegio'],
+  distrito_colegio: ['distrito colegio', 'distrito_colegio'],
 }
 
 // Inicializar aliases completos
-ARCHIVE_COLUMNS.forEach(({ key }) => {
+ARCHIVE_SCHEMA_FIELDS.forEach((key) => {
   const aliases = ARCHIVE_KEY_ALIASES[key] || []
   ARCHIVE_KEY_ALIASES[key] = Array.from(new Set([key, ...aliases]))
 })

@@ -12,6 +12,8 @@ Sistema web para calificar examenes de admision de la Direccion de Admision. Pro
 - Motor critico de calificacion: separado en funciones de dominio testeables.
 - UI/UX en curso: pantalla de resultados, modal de calificacion y pasos 1 al 5 ya reorganizados para reforzar estados operativos y verificacion por etapa.
 - Respuestas y Claves incluyen un modal de cartilla visual para inspeccionar las cadenas cargadas sin salir de la tabla.
+- El padrón oficial CEPREUNA de 23 columnas ya puede mapearse y conservarse completo; `N° DOCUMENTO` se reconoce como DNI.
+- La conciliación entre padrón, identificadores y respuestas produce detalle por registro para el futuro reporte institucional de verificación.
 - El verificador manual sigue siendo una herramienta auxiliar independiente del core principal.
 - CI: frontend tests/build y backend tests en GitHub Actions.
 
@@ -23,6 +25,7 @@ Sistema web para calificar examenes de admision de la Direccion de Admision. Pro
 - [Operacion](docs/operacion.md)
 - [Testing](docs/testing.md)
 - [Roadmap](docs/roadmap.md)
+- [Avance padrón oficial y conciliación (2026-07-15)](docs/changelog/2026-07-15-padron-oficial-conciliacion.md)
 
 Los documentos anteriores se conservaron en [docs/historico](docs/historico/). Son referencia historica y pueden estar desactualizados.
 
@@ -65,4 +68,4 @@ python manage.py test
 python manage.py check
 ```
 
-Nota: la ultima iteracion funcional registrada es `5c3a977 fix` (frontend, 2026-07-06). Refino la conciliacion visual de identificadores y respuestas; el backend no cambio en esa iteracion.
+Nota: la última verificación local se realizó el 2026-07-15. Los cambios del padrón oficial y conciliación están implementados en el árbol de trabajo y pendientes de commit.
