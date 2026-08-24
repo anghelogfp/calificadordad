@@ -368,9 +368,9 @@ function visiblePages(current, total) {
 .data-card {
   background: white;
   border: 1px solid var(--slate-200);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -394,17 +394,18 @@ function visiblePages(current, total) {
 }
 
 .data-table {
-  width: 100%; border-collapse: collapse; font-size: 0.9rem;
+  width: 100%; border-collapse: collapse; font-size: 0.875rem;
 }
 
 .data-table thead {
-  background: linear-gradient(135deg, var(--unap-blue-700) 0%, var(--unap-blue-800) 100%);
+  background: var(--slate-50);
+  border-bottom: 2px solid var(--slate-200);
 }
 
 .data-table th {
-  padding: var(--space-4); text-align: left; font-weight: 600;
-  color: white; font-size: 0.8rem; text-transform: uppercase;
-  letter-spacing: 0.05em; white-space: nowrap;
+  padding: var(--space-3) var(--space-4); text-align: left; font-weight: 700;
+  color: var(--slate-600); font-size: 0.72rem; text-transform: uppercase;
+  letter-spacing: 0.06em; white-space: nowrap;
 }
 
 .data-table tbody tr {
@@ -416,18 +417,18 @@ function visiblePages(current, total) {
 .data-table tbody tr.row--selected { background: var(--unap-gold-50); }
 .data-table tbody tr.row--editing {
   background: var(--unap-blue-50);
-  box-shadow: inset 4px 0 0 var(--unap-blue-500);
+  box-shadow: inset 3px 0 0 var(--unap-blue-500);
 }
-.data-table tbody tr.row--issue { box-shadow: inset 4px 0 0 var(--warning-500); }
+.data-table tbody tr.row--issue { box-shadow: inset 3px 0 0 var(--warning-500); }
 
-.data-table td { padding: var(--space-3) var(--space-4); vertical-align: middle; }
+.data-table td { padding: var(--space-2) var(--space-4); vertical-align: middle; }
 
 .col-index {
   width: 50px; text-align: center; font-family: var(--font-mono);
   font-weight: 600; color: var(--slate-400); font-size: 0.8rem;
 }
 .col-check { width: 40px; text-align: center; }
-.col-actions { width: 84px; min-width: 84px; }
+.col-actions { width: 76px; min-width: 76px; }
 
 /* Checkbox */
 .checkbox { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -448,8 +449,8 @@ function visiblePages(current, total) {
 
 /* Cell inputs */
 .cell-input {
-  width: 100%; padding: var(--space-2); border: 1px solid transparent;
-  border-radius: var(--radius-sm); font-size: 0.875rem;
+  width: 100%; padding: var(--space-1) var(--space-2); border: 1px solid transparent;
+  border-radius: var(--radius-sm); font-size: 0.82rem;
   background: transparent; transition: all var(--transition-fast);
 }
 .cell-input:focus {
@@ -480,10 +481,10 @@ function visiblePages(current, total) {
 .column--observations { min-width: 220px; }
 
 .cell-textarea {
-  width: 100%; padding: var(--space-2); border: 1px solid transparent;
+  width: 100%; padding: var(--space-1) var(--space-2); border: 1px solid transparent;
   border-radius: var(--radius-sm); background: transparent;
-  resize: none; min-height: 38px; font-family: inherit;
-  font-size: 0.9rem; line-height: 1.35; transition: all var(--transition-fast);
+  resize: none; min-height: 32px; font-family: inherit;
+  font-size: 0.82rem; line-height: 1.35; transition: all var(--transition-fast);
   display: block;
 }
 .cell-textarea:focus {
@@ -498,10 +499,10 @@ function visiblePages(current, total) {
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 38px;
-  padding: var(--space-2);
+  min-height: 32px;
+  padding: var(--space-1) var(--space-2);
   color: var(--slate-700);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   line-height: 1.35;
 }
 
@@ -566,7 +567,7 @@ function visiblePages(current, total) {
 }
 
 /* Row actions — aparecen al hover */
-.col-actions { width: 84px; min-width: 84px; }
+.col-actions { width: 76px; min-width: 76px; }
 
 .row-actions {
   display: flex; gap: var(--space-1);
@@ -580,13 +581,13 @@ function visiblePages(current, total) {
 }
 
 .action-btn {
-  width: 30px; height: 30px; border: none; border-radius: var(--radius-md);
-  background: var(--slate-100); color: var(--slate-500); cursor: pointer;
+  width: 28px; height: 28px; border: none; border-radius: var(--radius-sm);
+  background: transparent; color: var(--slate-400); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: all var(--transition-fast);
 }
-.action-btn svg { width: 15px; height: 15px; }
-.action-btn:hover { background: var(--unap-blue-100); color: var(--unap-blue-600); }
+.action-btn svg { width: 14px; height: 14px; }
+.action-btn:hover { background: var(--slate-100); color: var(--slate-700); }
 
 .action-btn--save { background: var(--success-100); color: var(--success-600); }
 .action-btn--save:hover { background: var(--success-500); color: white; }
@@ -607,8 +608,8 @@ function visiblePages(current, total) {
 /* ── Paginación ─────────────────────────────────────────────────────────── */
 .pagination-bar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--slate-200);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--slate-100);
   background: var(--slate-50);
   flex-wrap: wrap; gap: var(--space-2);
 }
@@ -632,10 +633,10 @@ function visiblePages(current, total) {
 }
 
 .page-btn {
-  min-width: 32px; height: 32px; padding: 0 var(--space-2);
-  border: 1px solid var(--slate-200); border-radius: var(--radius-md);
+  min-width: 28px; height: 28px; padding: 0 var(--space-2);
+  border: 1px solid var(--slate-200); border-radius: var(--radius-sm);
   background: white; color: var(--slate-600);
-  font-size: 0.82rem; font-weight: 500; cursor: pointer;
+  font-size: 0.78rem; font-weight: 500; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: all var(--transition-fast);
 }
@@ -647,10 +648,10 @@ function visiblePages(current, total) {
   opacity: 0.35; cursor: not-allowed;
 }
 .page-btn--active {
-  background: var(--unap-blue-700); border-color: var(--unap-blue-700);
-  color: white; font-weight: 700;
+  background: var(--unap-blue-600); border-color: var(--unap-blue-600);
+  color: white; font-weight: 600;
 }
-.page-btn--active:hover { background: var(--unap-blue-800); border-color: var(--unap-blue-800); color: white; }
+.page-btn--active:hover { background: var(--unap-blue-700); border-color: var(--unap-blue-700); color: white; }
 
 .page-ellipsis {
   min-width: 24px; text-align: center; color: var(--slate-400); font-size: 0.9rem;

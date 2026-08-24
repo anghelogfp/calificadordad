@@ -670,8 +670,8 @@ function getDatField(key) {
 }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn--xs { padding: var(--space-1) var(--space-2); font-size: 0.78rem; min-width: 36px; }
-.btn--primary { background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%); color: white; }
-.btn--primary:hover:not(:disabled) { background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%); }
+.btn--primary { background: var(--unap-blue-600); color: white; }
+.btn--primary:hover:not(:disabled) { background: var(--unap-blue-700); }
 .btn--ghost { background: transparent; color: var(--slate-600); border: 1px solid var(--slate-200); }
 .btn--ghost:hover { background: var(--slate-50); border-color: var(--slate-300); }
 

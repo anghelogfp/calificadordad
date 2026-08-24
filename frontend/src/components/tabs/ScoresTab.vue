@@ -811,7 +811,7 @@ function handleExportIngresantesPdf() {
 
 <style scoped>
 .tab-content {
-  display: flex; flex-direction: column; gap: var(--space-6);
+  display: flex; flex-direction: column; gap: var(--space-4);
   animation: slideUp 0.4s ease-out;
   min-width: 0;
 }
@@ -1214,11 +1214,11 @@ function handleExportIngresantesPdf() {
 }
 .area-tab:hover { background: var(--unap-blue-50); border-color: var(--unap-blue-200); color: var(--unap-blue-700); }
 .area-tab--active {
-  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
+  background: var(--unap-blue-600);
   border-color: var(--unap-blue-600); color: white;
 }
 .area-tab__count {
-  background: rgba(255,255,255,0.25); border-radius: var(--radius-full);
+  background: rgba(255,255,255,0.2); border-radius: var(--radius-full);
   padding: 0 var(--space-2); font-size: 0.75rem; font-weight: 700;
   min-width: 20px; text-align: center;
 }
@@ -1333,17 +1333,17 @@ function handleExportIngresantesPdf() {
 /* Table */
 .table-wrapper {
   background: white; border: 1px solid var(--slate-200);
-  border-radius: var(--radius-xl); overflow-x: auto; overflow-y: hidden;
-  box-shadow: var(--shadow-md); width: 100%; max-width: 100%; min-width: 0;
+  border-radius: var(--radius-lg); overflow-x: auto; overflow-y: hidden;
+  box-shadow: var(--shadow-sm); width: 100%; max-width: 100%; min-width: 0;
   overscroll-behavior-inline: contain; scrollbar-gutter: stable;
 }
 table { width: 100%; min-width: max-content; border-collapse: collapse; }
-thead { background: linear-gradient(135deg, var(--unap-blue-700) 0%, var(--unap-blue-800) 100%); }
+thead { background: var(--slate-50); border-bottom: 2px solid var(--slate-200); }
 th {
-  padding: var(--space-4); text-align: left; font-weight: 600; color: white;
-  font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;
+  padding: var(--space-3) var(--space-4); text-align: left; font-weight: 700; color: var(--slate-600);
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
 }
-td { padding: var(--space-3) var(--space-4); }
+td { padding: var(--space-2) var(--space-4); }
 .col-number { width: 50px; text-align: center; font-family: var(--font-mono); font-weight: 600; color: var(--slate-500); }
 .col-programa { font-size: 0.82rem; color: var(--slate-500); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .col-score { width: 100px; text-align: center; }
@@ -1357,13 +1357,16 @@ tbody tr.row--ingresante:hover { background: #dcfce7; }
 
 .score-badge {
   display: inline-block;
-  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
-  color: white; padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-full); font-family: var(--font-mono);
+  background: var(--unap-blue-50);
+  color: var(--unap-blue-700);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
   font-weight: 700; font-size: 0.875rem;
 }
 .score-badge--ingresante {
-  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  background: #f0fdf4;
+  color: #15803d;
 }
 
 .status-chip {
@@ -1386,12 +1389,11 @@ tbody tr.row--ingresante:hover { background: #dcfce7; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn--primary {
-  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
-  color: white; box-shadow: var(--shadow-sm);
+  background: var(--unap-blue-600);
+  color: white; box-shadow: none;
 }
 .btn--primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%);
-  transform: translateY(-1px); box-shadow: var(--shadow-md);
+  background: var(--unap-blue-700);
 }
 .btn--ghost {
   background: transparent; color: var(--slate-600); border: 1px solid var(--slate-200);
@@ -1491,8 +1493,8 @@ tbody tr.row--ingresante:hover { background: #dcfce7; }
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  background: linear-gradient(135deg, var(--unap-blue-700) 0%, var(--unap-blue-800) 100%);
-  color: white;
+  background: var(--slate-100);
+  color: var(--slate-700);
 }
 
 .carrera-header__left {

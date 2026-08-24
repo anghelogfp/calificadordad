@@ -1,7 +1,6 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { ANSWER_KEY_SUBTABS } from '@/constants'
-import WorkflowIntroCard from '@/components/shared/WorkflowIntroCard.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
 import SubTabs from '@/components/shared/SubTabs.vue'
 import DataTable from '@/components/shared/DataTable.vue'
@@ -9,6 +8,7 @@ import SourcesPanel from '@/components/shared/SourcesPanel.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import StepVerificationPanel from '@/components/shared/StepVerificationPanel.vue'
 import AnswerSheetPreviewModal from '@/components/shared/AnswerSheetPreviewModal.vue'
+import ProcessPathBadge from '@/components/shared/ProcessPathBadge.vue'
 
 const props = defineProps({
   answerKeys: {
@@ -84,10 +84,7 @@ function setImportMode(mode) {
   mode = mode === nextMode ? mode : nextMode
   importMode.value = mode
   if (mode === 'general') {
-    answerKeys.identificationFile = null
-    if (answerKeys.identificationInputRef) {
-      answerKeys.identificationInputRef.value = ''
-    }
+    answerKeys.answerKeyArea = ''
   }
 }
 
@@ -212,27 +209,26 @@ const stepState = computed(() => {
 
 <template>
   <section class="tab-content">
-    <WorkflowIntroCard
-      eyebrow="Paso 4 · Claves oficiales"
-      title="Claves de respuestas"
-      description="Registra las respuestas correctas oficiales para cada área y tipo de prueba."
-      :count="answerKeys.totalRows"
-      count-label="claves cargadas"
-      :ready="answerKeys.answerKeyHasData"
-      :process-type="processType"
-      :simulacro-scope="simulacroScope"
-    >
-      <template v-if="answerKeys.answerKeyHasData" #actions>
-        <button type="button" class="btn btn--ghost" @click="toggleUploadForm">
-          {{ showUploadForm ? 'Ocultar carga' : 'Cargar claves' }}
-        </button>
-      </template>
-      <template #icon>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-        </svg>
-      </template>
-      <section v-if="showUploadForm" class="upload-form-card">
+    <!-- ═══ Sin datos: tarjeta de importación completa ═══ -->
+    <section v-if="!answerKeys.answerKeyHasData" class="intro-card">
+      <header class="intro-card__header">
+        <div class="intro-card__identity">
+          <div class="intro-card__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+            </svg>
+          </div>
+          <div>
+            <span class="intro-card__eyebrow">Paso 4 · Claves oficiales</span>
+            <div class="intro-card__title-row">
+              <h2>Claves de respuestas</h2>
+              <ProcessPathBadge :process-type="processType" :simulacro-scope="simulacroScope" />
+            </div>
+            <p>Registra las respuestas correctas oficiales para cada área y tipo de prueba.</p>
+          </div>
+        </div>
+      </header>
+      <section class="upload-form-card">
         <header class="upload-form-card__header">
           <span class="upload-form-card__icon">
             <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
@@ -282,8 +278,11 @@ const stepState = computed(() => {
           </select>
         </div>
 
-        <div v-if="importMode === 'area'" class="form-field">
-          <label for="answer-key-identification" class="form-field__label">Archivo de identificación</label>
+        <div class="form-field">
+          <label for="answer-key-identification" class="form-field__label">
+            Archivo de identificación
+            <span v-if="importMode === 'general'" class="form-field__optional">(opcional)</span>
+          </label>
           <div class="file-input-wrapper">
             <input
               id="answer-key-identification"
@@ -292,7 +291,6 @@ const stepState = computed(() => {
               class="file-input"
               accept=".dat,.txt"
               @change="answerKeys.onAnswerKeyIdentificationChange"
-              :required="importMode === 'area'"
             />
             <div class="file-input-display">
               <span class="file-input-button">
@@ -342,7 +340,151 @@ const stepState = computed(() => {
         </div>
         </form>
       </section>
-    </WorkflowIntroCard>
+    </section>
+
+    <!-- ═══ Con datos: barra compacta + formulario toggleable ═══ -->
+    <div v-else class="data-bar">
+      <div class="data-bar__main">
+        <div class="data-bar__icon">
+          <svg viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+          </svg>
+        </div>
+        <div class="data-bar__text">
+          <div class="data-bar__title-row">
+            <h2>Claves de respuestas</h2>
+            <ProcessPathBadge :process-type="processType" :simulacro-scope="simulacroScope" />
+          </div>
+          <span class="data-bar__meta">
+            <strong>{{ answerKeys.totalRows.toLocaleString('es-PE') }}</strong> claves
+            · {{ answerKeys.sourcesCount }} archivo(s)
+            <template v-if="importMode === 'area'"> · {{ coveredCount }}/{{ areaCoverage.length }} áreas</template>
+          </span>
+        </div>
+      </div>
+      <div class="data-bar__actions">
+        <button type="button" class="btn btn--primary btn--sm" @click="toggleUploadForm">
+          <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+          </svg>
+          {{ showUploadForm ? 'Ocultar carga' : 'Cargar más claves' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Formulario de carga (toggleable cuando hay datos) -->
+    <section v-if="answerKeys.answerKeyHasData && showUploadForm" class="upload-form-card">
+      <header class="upload-form-card__header">
+        <span class="upload-form-card__icon">
+          <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+        </span>
+        <span class="upload-form-card__title">
+          <strong>Cargar más claves</strong>
+          <small>{{ importMode === 'general' ? 'Clave general de simulacro' : 'Selecciona un área y carga sus archivos .dat' }}</small>
+        </span>
+      </header>
+      <form class="upload-form-grid" @submit.prevent="answerKeys.importAnswerKeyFiles">
+      <div class="form-field form-field--wide">
+        <label class="form-field__label">Tipo de clave</label>
+        <div class="key-mode-toggle key-mode-toggle--locked">
+          <button
+            type="button"
+            class="key-mode-btn"
+            :class="{ 'key-mode-btn--active': importMode === 'general' }"
+            :disabled="expectedKeyMode !== 'general'"
+            @click="setImportMode('general')"
+          >
+            Clave general
+          </button>
+          <button
+            type="button"
+            class="key-mode-btn"
+            :class="{ 'key-mode-btn--active': importMode === 'area' }"
+            :disabled="expectedKeyMode !== 'area'"
+            @click="setImportMode('area')"
+          >
+            {{ processType === 'real' ? 'Por área/tipo' : 'Por área' }}
+          </button>
+        </div>
+        <p class="form-field__hint">Carga un archivo .dat por cada área para mantener el orden.</p>
+      </div>
+
+      <div v-if="importMode === 'area'" class="form-field">
+        <label for="answer-key-area-2" class="form-field__label">Área</label>
+        <select
+          id="answer-key-area-2"
+          v-model="answerKeys.answerKeyArea"
+          class="form-field__select"
+          required
+        >
+          <option v-for="option in answerKeys.answerKeyAreaOptions" :key="option" :value="option">
+            {{ option }}
+          </option>
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label for="answer-key-identification-2" class="form-field__label">
+          Archivo de identificación
+          <span v-if="importMode === 'general'" class="form-field__optional">(opcional)</span>
+        </label>
+        <div class="file-input-wrapper">
+          <input
+            id="answer-key-identification-2"
+            :ref="(el) => answerKeys.identificationInputRef = el"
+            type="file"
+            class="file-input"
+            accept=".dat,.txt"
+            @change="answerKeys.onAnswerKeyIdentificationChange"
+          />
+          <div class="file-input-display">
+            <span class="file-input-button">
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+              </svg>
+              Seleccionar .dat
+            </span>
+            <span class="file-input-name">{{ answerKeys.identificationFile?.name || 'Ningún archivo seleccionado' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-field">
+        <label for="answer-key-responses-2" class="form-field__label">
+          {{ importMode === 'general' ? 'Clave general (.dat)' : 'Archivo de respuestas correctas' }}
+        </label>
+        <div class="file-input-wrapper">
+          <input
+            id="answer-key-responses-2"
+            :ref="(el) => answerKeys.responsesInputRef = el"
+            type="file"
+            class="file-input"
+            accept=".dat,.txt"
+            @change="answerKeys.onAnswerKeyResponsesChange"
+            required
+          />
+          <div class="file-input-display">
+            <span class="file-input-button">
+              <svg viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+              </svg>
+              Seleccionar .dat
+            </span>
+            <span class="file-input-name">{{ answerKeys.responsesFile?.name || 'Ningún archivo seleccionado' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-field form-field--action">
+        <button type="submit" class="btn btn--primary btn--lg">
+          <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+          </svg>
+          Importar claves
+        </button>
+      </div>
+      </form>
+    </section>
 
     <StepVerificationPanel
       v-if="areaCoverage.length || (reconciliation && reconciliation.keysTotal)"
@@ -545,10 +687,56 @@ const stepState = computed(() => {
 .tab-content {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-4);
   animation: slideUp 0.4s ease-out;
   min-width: 0;
 }
+
+/* ── Tarjeta de introducción (sin datos) ────────────────────────────────────── */
+.intro-card {
+  display: flex; flex-direction: column; gap: var(--space-4);
+  padding: var(--space-5); background: white;
+  border: 1px solid var(--slate-200); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm); min-width: 0;
+}
+.intro-card__header { display: flex; align-items: center; gap: var(--space-4); min-width: 0; }
+.intro-card__identity { display: flex; align-items: center; gap: var(--space-4); min-width: 0; }
+.intro-card__icon {
+  width: 46px; height: 46px; flex-shrink: 0; display: flex;
+  align-items: center; justify-content: center; border-radius: var(--radius-lg);
+  background: var(--unap-blue-50); color: var(--unap-blue-600);
+}
+.intro-card__icon :deep(svg) { width: 24px; height: 24px; }
+.intro-card__eyebrow {
+  display: block; margin-bottom: 2px; color: var(--unap-blue-600);
+  font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
+}
+.intro-card__title-row { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.intro-card h2 { margin: 0; color: var(--slate-900); font-size: 1.2rem; line-height: 1.25; }
+.intro-card__identity p { margin: 3px 0 0; color: var(--slate-500); font-size: 0.82rem; }
+
+/* ── Barra compacta (datos cargados) ───────────────────────────────────────── */
+.data-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: white; border: 1px solid var(--slate-200);
+  border-left: 3px solid var(--success-400);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+}
+.data-bar__main { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.data-bar__icon {
+  width: 36px; height: 36px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-md); background: var(--success-100); color: var(--success-600);
+}
+.data-bar__icon svg { width: 20px; height: 20px; }
+.data-bar__text { min-width: 0; }
+.data-bar__title-row { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.data-bar h2 { margin: 0; color: var(--slate-900); font-size: 1.1rem; line-height: 1.25; }
+.data-bar__meta { font-size: 0.78rem; color: var(--slate-500); }
+.data-bar__meta strong { font-family: var(--font-mono); color: var(--slate-800); font-weight: 700; }
+.data-bar__actions { flex-shrink: 0; }
 
 @keyframes slideUp {
   from {
@@ -688,6 +876,12 @@ const stepState = computed(() => {
   font-size: 0.74rem;
 }
 
+.form-field__optional {
+  font-weight: 400;
+  color: var(--slate-400);
+  font-size: 0.72rem;
+}
+
 .form-field__select {
   width: 100%;
   height: 40px; padding: var(--space-2) var(--space-3);
@@ -766,12 +960,12 @@ const stepState = computed(() => {
   justify-content: center;
   gap: var(--space-2);
   height: 40px; padding: var(--space-2) var(--space-3);
-  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
+  background: var(--unap-blue-600);
   color: white;
   font-weight: 600;
   font-size: 0.85rem;
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
   transition: all var(--transition-fast);
   cursor: pointer;
 }
@@ -782,9 +976,7 @@ const stepState = computed(() => {
 }
 
 .file-input-wrapper:hover .file-input-button {
-  background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  background: var(--unap-blue-700);
 }
 
 .file-input-name {
@@ -861,15 +1053,13 @@ const stepState = computed(() => {
 }
 
 .btn--primary {
-  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
+  background: var(--unap-blue-600);
   color: white;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .btn--primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  background: var(--unap-blue-700);
 }
 
 .btn--lg {

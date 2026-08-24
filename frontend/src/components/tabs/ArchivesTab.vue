@@ -5,7 +5,6 @@ import FileUploader from '@/components/shared/FileUploader.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
 import DataTable from '@/components/shared/DataTable.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
-import StepVerificationPanel from '@/components/shared/StepVerificationPanel.vue'
 import ProcessPathBadge from '@/components/shared/ProcessPathBadge.vue'
 
 const props = defineProps({
@@ -17,6 +16,11 @@ const props = defineProps({
 
 const archives = reactive(props.archives)
 const showOnlyObserved = ref(false)
+const fileInputRef = ref(null)
+
+function triggerFileInput() {
+  fileInputRef.value?.click()
+}
 
 const tableColumns = ARCHIVE_COLUMNS.map(col => ({
   key: col.key,
@@ -109,7 +113,8 @@ const emit = defineEmits(['goConfig'])
 
 <template>
   <section class="tab-content">
-    <section class="archive-import-card">
+    <!-- ═══ Sin datos: zona de importación completa ═══ -->
+    <section v-if="!archives.hasData" class="archive-import-card">
       <header class="archive-import-card__header">
         <div class="archive-import-card__identity">
           <div class="archive-import-card__icon">
@@ -132,10 +137,6 @@ const emit = defineEmits(['goConfig'])
             <p>Importa desde Excel los candidatos inscritos para el proceso.</p>
           </div>
         </div>
-        <div class="archive-import-card__status" :class="{ 'archive-import-card__status--ready': archives.hasData }">
-          <strong>{{ archives.totalRows }}</strong>
-          <span>{{ archives.hasData ? 'registros cargados' : 'sin registros' }}</span>
-        </div>
       </header>
 
       <FileUploader
@@ -143,10 +144,6 @@ const emit = defineEmits(['goConfig'])
         accept=".xlsx"
         :is-dragging="archives.isDragging"
         :has-data="archives.hasData"
-        :file-name="archives.lastFileName?.value"
-        :row-count="archives.totalRows"
-        :preview-columns="PREVIEW_COLS"
-        :preview-rows="previewRows"
         title="Arrastra tu archivo Excel aquí"
         subtitle="o selecciónalo desde tu equipo"
         button-text="Seleccionar archivo Excel"
@@ -164,12 +161,39 @@ const emit = defineEmits(['goConfig'])
           </svg>
         </template>
       </FileUploader>
-
-      <footer v-if="!archives.hasData" class="archive-import-card__footer">
-        El archivo puede reemplazarse posteriormente sin cambiar el formato esperado.
-      </footer>
     </section>
 
+    <!-- ═══ Con datos: barra compacta ═══ -->
+    <div v-else class="archive-bar">
+      <div class="archive-bar__main">
+        <div class="archive-bar__icon">
+          <svg viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+          </svg>
+        </div>
+        <div class="archive-bar__text">
+          <div class="archive-bar__title-row">
+            <h2>Padrón de postulantes</h2>
+            <ProcessPathBadge :process-type="processType" :simulacro-scope="simulacroScope" />
+          </div>
+          <span class="archive-bar__meta">
+            <strong>{{ archives.totalRows.toLocaleString('es-PE') }}</strong> registros
+            <template v-if="archives.lastFileName?.value"> · {{ archives.lastFileName.value }}</template>
+          </span>
+        </div>
+      </div>
+      <div class="archive-bar__actions">
+        <input ref="fileInputRef" type="file" accept=".xlsx" class="hidden-file-input" @change="archives.onArchiveFileChange" />
+        <button type="button" class="btn btn--ghost btn--sm" @click="triggerFileInput">
+          <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1z" clip-rule="evenodd"/>
+          </svg>
+          Reemplazar
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ Alerta de errores de importación ═══ -->
     <div v-if="archives.importError" class="alert alert--error">
       <svg class="alert__icon" viewBox="0 0 20 20" fill="currentColor">
         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
@@ -177,49 +201,23 @@ const emit = defineEmits(['goConfig'])
       <span>{{ archives.importError }}</span>
     </div>
 
-    <StepVerificationPanel
-      v-if="archives.hasData"
-      eyebrow="Verificación del padrón"
-      :title="archiveVerificationTitle"
-      :summary="`${archives.totalRows} postulante(s)`"
-    >
-      <template v-if="archives.archiveIssueCount" #actions>
-          <button type="button" class="btn btn--ghost" @click="showOnlyObserved = !showOnlyObserved">
-            {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
-          </button>
-          <button type="button" class="btn btn--primary" @click="archives.exportArchiveIssuesToExcel">
-            Exportar observados
-          </button>
-      </template>
-      <template #chips>
-        <span class="verification-chip verification-chip--ok"><strong>{{ archives.totalRows }}</strong> postulantes</span>
-        <span v-if="simulacroDetection" class="verification-chip verification-chip--info"><strong>{{ simulacroDetection.withArea }}</strong> con área</span>
-        <span v-if="simulacroDetection" class="verification-chip" :class="simulacroDetection.withoutArea ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ simulacroDetection.withoutArea }}</strong> sin área</span>
-        <span class="verification-chip" :class="unknownAreas.length ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ unknownAreas.length }}</strong> áreas no configuradas</span>
-        <span class="verification-chip" :class="archives.archiveIssueCount ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ archives.archiveIssueCount }}</strong> observados</span>
-      </template>
-      <template v-if="archives.archiveIssueCount" #detail>
-        <span v-for="item in archives.archiveIssueSummary" :key="item.label" class="verification-chip verification-chip--warn">
-          <strong>{{ item.count }}</strong> {{ item.label }}
+    <!-- ═══ Resumen de observaciones (solo si hay problemas) ═══ -->
+    <div v-if="archives.hasData && (archives.archiveIssueCount || unknownAreas.length)" class="archive-issues">
+      <div class="archive-issues__chips">
+        <span v-if="archives.archiveIssueCount" class="archive-issues__chip archive-issues__chip--warn">
+          <strong>{{ archives.archiveIssueCount }}</strong> observados
         </span>
-      </template>
-      <template #hint>
-        <span v-if="unknownAreas.length">
-          Hay áreas del padrón que no están configuradas:
-          <strong v-for="(a, i) in unknownAreas" :key="a">{{ a }}<span v-if="i < unknownAreas.length - 1">, </span></strong>.
-          <a class="alert__link" href="#" @click.prevent="$emit('goConfig')">Ir a Configuración</a>.
+        <span v-if="unknownAreas.length" class="archive-issues__chip archive-issues__chip--warn">
+          <strong>{{ unknownAreas.length }}</strong> área(s) no configurada(s)
         </span>
-        <span v-else-if="archives.archiveIssueCount">
-          Puedes corregir el DNI directamente en la tabla con el botón editar. Al guardar, la observación se recalcula automáticamente.
-        </span>
-        <span v-else-if="simulacroDetection?.scope === 'general'">
-          El padrón no trae área. En simulacro general puede calcularse un ranking único para todos los postulantes.
-        </span>
-        <span v-else>
-          El padrón trae áreas y queda listo para vincular identificadores, respuestas y claves.
-        </span>
-      </template>
-    </StepVerificationPanel>
+      </div>
+      <div class="archive-issues__actions">
+        <button type="button" class="btn btn--ghost btn--sm" @click="showOnlyObserved = !showOnlyObserved">
+          {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
+        </button>
+        <a v-if="unknownAreas.length" class="alert__link" href="#" @click.prevent="$emit('goConfig')">Ir a Configuración</a>
+      </div>
+    </div>
 
     <!-- Banner de confirmación inline -->
     <div v-if="pendingAction" class="confirm-banner">
@@ -339,15 +337,15 @@ const emit = defineEmits(['goConfig'])
 .tab-content {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-4);
   animation: slideUp 0.4s ease-out;
   min-width: 0;
 }
 
 .archive-import-card {
-  display: flex; flex-direction: column; gap: var(--space-4);
-  padding: var(--space-5); background: white;
-  border: 1px solid var(--slate-200); border-radius: var(--radius-xl);
+  display: flex; flex-direction: column; gap: var(--space-3);
+  padding: var(--space-4); background: white;
+  border: 1px solid var(--slate-200); border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm); min-width: 0;
 }
 .archive-import-card__header {
@@ -373,15 +371,6 @@ const emit = defineEmits(['goConfig'])
   flex-wrap: wrap;
 }
 .archive-import-card__identity p { margin: 3px 0 0; color: var(--slate-500); font-size: 0.82rem; }
-.archive-import-card__status {
-  display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0;
-  padding: var(--space-2) var(--space-3); border-radius: var(--radius-lg);
-  background: var(--slate-100); color: var(--slate-500);
-}
-.archive-import-card__status strong { color: var(--slate-800); font: 800 1.2rem/1 var(--font-mono); }
-.archive-import-card__status span { margin-top: 3px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; }
-.archive-import-card__status--ready { background: var(--success-50); color: var(--success-600); }
-.archive-import-card__status--ready strong { color: var(--success-600); }
 .archive-import-card__footer {
   color: var(--slate-400); font-size: 0.75rem; text-align: center;
 }
@@ -389,12 +378,47 @@ const emit = defineEmits(['goConfig'])
 .archive-import-card :deep(.uploader__label) { padding: var(--space-6) var(--space-5); gap: var(--space-3); }
 .archive-import-card :deep(.uploader__icon) { width: 54px; height: 54px; }
 
-@media (max-width: 640px) {
-  .archive-import-card { padding: var(--space-4); }
-  .archive-import-card__header { align-items: flex-start; }
-  .archive-import-card__identity { align-items: flex-start; }
-  .archive-import-card__status span { display: none; }
+/* ── Barra compacta (datos cargados) ───────────────────────────────────────── */
+.archive-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: white; border: 1px solid var(--slate-200);
+  border-left: 3px solid var(--success-400);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
 }
+.archive-bar__main { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.archive-bar__icon {
+  width: 36px; height: 36px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-md); background: var(--success-100); color: var(--success-600);
+}
+.archive-bar__icon svg { width: 20px; height: 20px; }
+.archive-bar__text { min-width: 0; }
+.archive-bar__title-row { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.archive-bar h2 { margin: 0; color: var(--slate-900); font-size: 1.1rem; line-height: 1.25; }
+.archive-bar__meta { font-size: 0.78rem; color: var(--slate-500); }
+.archive-bar__meta strong { font-family: var(--font-mono); color: var(--slate-800); font-weight: 700; }
+.archive-bar__actions { flex-shrink: 0; }
+.hidden-file-input { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
+
+/* ── Resumen de observaciones ──────────────────────────────────────────────── */
+.archive-issues {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-3); flex-wrap: wrap;
+  padding: var(--space-2) var(--space-4);
+  background: #fffbeb; border: 1px solid #fde68a;
+  border-radius: var(--radius-md);
+}
+.archive-issues__chips { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.archive-issues__chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px var(--space-2); border-radius: var(--radius-full);
+  font-size: 0.78rem; font-weight: 700; color: #92400e;
+  background: white; border: 1px solid #fde68a;
+}
+.archive-issues__chip strong { font-family: var(--font-mono); color: #78350f; }
+.archive-issues__actions { display: flex; align-items: center; gap: var(--space-3); }
 
 @keyframes slideUp {
   from {
@@ -467,8 +491,8 @@ const emit = defineEmits(['goConfig'])
 .form-card {
   background: white;
   border: 1px solid var(--slate-200);
-  border-radius: var(--radius-xl);
-  padding: var(--space-6);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
   box-shadow: var(--shadow-sm);
 }
 
@@ -570,15 +594,13 @@ const emit = defineEmits(['goConfig'])
 }
 
 .btn--primary {
-  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
+  background: var(--unap-blue-600);
   color: white;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .btn--primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  background: var(--unap-blue-700);
 }
 
 .btn--ghost {
@@ -594,13 +616,12 @@ const emit = defineEmits(['goConfig'])
 }
 
 .btn--danger {
-  background: linear-gradient(135deg, var(--error-500) 0%, var(--error-600) 100%);
+  background: var(--error-500);
   color: white;
 }
 
 .btn--danger:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--error-600) 0%, #b91c1c 100%);
-  transform: translateY(-1px);
+  background: var(--error-600);
 }
 
 .observed-panel {

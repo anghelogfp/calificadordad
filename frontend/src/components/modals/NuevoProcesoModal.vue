@@ -514,8 +514,8 @@ function confirm() {
   border-radius: var(--radius-md); font-size: 0.875rem; font-weight: 600;
   cursor: pointer; transition: all 0.15s;
 }
-.btn--primary { background: linear-gradient(135deg, var(--unap-blue-600), var(--unap-blue-700)); color: white; }
-.btn--primary:hover { background: linear-gradient(135deg, var(--unap-blue-500), var(--unap-blue-600)); }
+.btn--primary { background: var(--unap-blue-600); color: white; }
+.btn--primary:hover { background: var(--unap-blue-700); }
 .btn--ghost { background: transparent; color: var(--slate-600); border: 1px solid var(--slate-200); }
 .btn--ghost:hover { background: var(--slate-50); border-color: var(--slate-300); }
 

@@ -158,7 +158,7 @@ async function handleSubmit() {
 
 /* ── Panel izquierdo — branding ───────────────────────────────────────────── */
 .login-brand {
-  background: linear-gradient(160deg, var(--unap-blue-900) 0%, var(--unap-blue-700) 60%, var(--unap-blue-800) 100%);
+  background: var(--unap-blue-800);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -206,8 +206,8 @@ async function handleSubmit() {
 
 .brand-divider {
   width: 60px;
-  height: 3px;
-  background: linear-gradient(90deg, var(--unap-gold-500), var(--unap-gold-300));
+  height: 2px;
+  background: var(--unap-gold-500);
   border-radius: var(--radius-full);
 }
 
@@ -279,7 +279,7 @@ async function handleSubmit() {
 
 /* Encabezado de la card */
 .card-header {
-  background: linear-gradient(135deg, var(--unap-blue-800) 0%, var(--unap-blue-900) 100%);
+  background: var(--unap-blue-800);
   padding: var(--space-8) var(--space-8) var(--space-6);
   text-align: center;
   position: relative;
@@ -289,8 +289,8 @@ async function handleSubmit() {
   content: '';
   position: absolute;
   bottom: 0; left: 0; right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--unap-gold-600), var(--unap-gold-400), var(--unap-gold-600));
+  height: 2px;
+  background: var(--unap-gold-500);
 }
 
 .card-icon {
@@ -428,7 +428,7 @@ async function handleSubmit() {
 /* Botón principal */
 .btn-login {
   padding: var(--space-3) var(--space-5);
-  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-800) 100%);
+  background: var(--unap-blue-600);
   color: white;
   border: none;
   border-radius: var(--radius-md);
@@ -443,13 +443,11 @@ async function handleSubmit() {
   justify-content: center;
   gap: var(--space-2);
   margin-top: var(--space-1);
-  box-shadow: 0 4px 14px rgba(0, 40, 85, 0.3);
+  box-shadow: none;
 }
 
 .btn-login:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-700) 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(0, 40, 85, 0.4);
+  background: var(--unap-blue-700);
 }
 
 .btn-login:active:not(:disabled) {

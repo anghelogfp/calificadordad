@@ -435,7 +435,7 @@ function handleRename(event) {
 .tab-content {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-4);
   animation: slideUp 0.4s ease-out;
   min-width: 0;
 }
@@ -708,12 +708,12 @@ function handleRename(event) {
 }
 
 .totals--ready {
-  background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-  border-color: #b8dacc; color: #155724;
+  background: #f0fdf4;
+  border-color: #bbf7d0; color: #15803d;
 }
 
 .totals--warning {
-  background: linear-gradient(135deg, var(--unap-blue-50) 0%, var(--slate-50) 100%);
+  background: var(--unap-blue-50);
   border-color: var(--unap-blue-100); color: var(--slate-700);
 }
 
@@ -784,13 +784,14 @@ table { width: 100%; border-collapse: collapse; }
 
 thead {
   position: sticky; top: 0; z-index: 1;
-  background: linear-gradient(135deg, var(--unap-blue-700) 0%, var(--unap-blue-800) 100%);
+  background: var(--slate-50);
+  border-bottom: 2px solid var(--slate-200);
 }
 
 th {
   padding: var(--space-3) var(--space-4); text-align: left;
-  font-size: 0.7rem; font-weight: 600; color: white;
-  text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
+  font-size: 0.7rem; font-weight: 700; color: var(--slate-600);
+  text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap;
 }
 
 td {
@@ -838,12 +839,11 @@ td.col-actions {
 .btn__icon { width: 16px; height: 16px; flex-shrink: 0; }
 
 .btn--primary {
-  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
-  color: white; box-shadow: var(--shadow-sm);
+  background: var(--unap-blue-600);
+  color: white; box-shadow: none;
 }
 .btn--primary:hover {
-  background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%);
-  transform: translateY(-1px);
+  background: var(--unap-blue-700);
 }
 
 .btn--ghost {

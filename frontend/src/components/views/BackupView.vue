@@ -184,11 +184,11 @@ function handleFileChange(e) {
 .btn:disabled { opacity: 0.65; cursor: not-allowed; }
 
 .btn--primary {
-  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
+  background: var(--unap-blue-600);
   color: white;
 }
 .btn--primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%);
+  background: var(--unap-blue-700);
 }
 
 .btn--danger { background: var(--error-600); color: white; }

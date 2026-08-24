@@ -333,10 +333,10 @@ watch([() => sorted.value.length, historyPageSize], () => { historyPage.value = 
 }
 
 .btn--primary {
-  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
+  background: var(--unap-blue-600);
   color: white;
 }
-.btn--primary:hover { background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%); }
+.btn--primary:hover { background: var(--unap-blue-700); }
 
 .btn--danger {
   background: var(--error-600);

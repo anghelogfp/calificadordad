@@ -288,12 +288,12 @@ function onChange(event) {
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-5);
-  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
+  background: var(--unap-blue-600);
   color: white;
   font-weight: 600;
   font-size: 0.9rem;
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: none;
   transition: all var(--transition-fast);
   pointer-events: none;
 }
@@ -304,8 +304,7 @@ function onChange(event) {
 }
 
 .uploader:hover .uploader__button {
-  background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%);
-  transform: translateY(-2px);
+  background: var(--unap-blue-700);
   box-shadow: var(--shadow-lg);
 }
 

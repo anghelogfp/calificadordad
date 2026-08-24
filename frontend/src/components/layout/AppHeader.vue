@@ -60,12 +60,12 @@ const emit = defineEmits(['goHome', 'toggleMobileMenu'])
 .app-header {
   background: linear-gradient(135deg, var(--unap-blue-800) 0%, var(--unap-blue-900) 100%);
   padding: 0 var(--space-6);
-  height: 68px;
+  height: 60px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-6);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-sm);
   position: relative;
   z-index: var(--z-header);
   flex-shrink: 0;
@@ -75,7 +75,7 @@ const emit = defineEmits(['goHome', 'toggleMobileMenu'])
   content: '';
   position: absolute;
   bottom: 0; left: 0; right: 0;
-  height: 2px;
+  height: 1px;
   background: linear-gradient(90deg, transparent, var(--unap-gold-400), transparent);
 }
 
@@ -116,12 +116,12 @@ const emit = defineEmits(['goHome', 'toggleMobileMenu'])
 .header-brand:hover { background: rgba(255,255,255,0.08); }
 
 .brand-logo {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
   flex-shrink: 0;
   object-fit: contain;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
 }
 
 .brand-text {

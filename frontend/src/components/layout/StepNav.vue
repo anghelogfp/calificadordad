@@ -71,8 +71,8 @@ function stepStatusLabel(key) {
 
 <style scoped>
 .step-nav {
-  flex-shrink: 0; padding: var(--space-3) var(--space-6);
-  background: white; border-bottom: 1px solid var(--slate-200);
+  flex-shrink: 0; padding: var(--space-2) var(--space-6);
+  background: white; border-bottom: 1px solid var(--slate-100);
 }
 .step-nav-scroll { overflow-x: auto; scrollbar-width: none; }
 .step-nav-scroll::-webkit-scrollbar { display: none; }
@@ -84,10 +84,10 @@ function stepStatusLabel(key) {
 .step-item {
   position: relative; z-index: 1; display: flex; align-items: flex-start;
   flex-direction: row; justify-content: flex-start; gap: var(--space-2); min-width: 0;
-  min-height: 84px;
-  padding: var(--space-3); border: 1px solid var(--slate-200); border-radius: var(--radius-lg);
-  background: var(--slate-50); color: var(--slate-500); cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+  min-height: 72px;
+  padding: var(--space-2) var(--space-3); border: 1px solid var(--slate-200); border-radius: var(--radius-md);
+  background: white; color: var(--slate-500); cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
 .step-item:hover { background: white; color: var(--slate-700); border-color: var(--slate-300); }
 .step-number {
@@ -109,12 +109,10 @@ function stepStatusLabel(key) {
 }
 .step-item--active {
   background: var(--unap-blue-50);
-  border-color: var(--unap-blue-200);
-  box-shadow: 0 8px 24px rgba(0, 64, 128, 0.08);
+  border-color: var(--unap-blue-300);
 }
 .step-item--active .step-number {
   border-color: var(--unap-blue-600); background: var(--unap-blue-600); color: white;
-  box-shadow: 0 0 0 3px rgba(0, 64, 128, 0.12);
 }
 .step-content { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; text-align: left; gap: 3px; }
 .step-headline {

@@ -43,13 +43,13 @@ defineProps({
 .step-verification-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--slate-200);
-  border-left: 4px solid var(--slate-300);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  box-shadow: var(--shadow-sm);
+  border-left: 3px solid var(--slate-300);
+  border-radius: var(--radius-md);
+  background: white;
+  box-shadow: none;
 }
 
 .step-verification-panel__header {

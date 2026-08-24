@@ -6,6 +6,8 @@ const props = defineProps({
   historyCount: { type: Number, default: 0 },
   activeTab: { type: String, default: '' },
   activeDashboard: { type: Boolean, default: false },
+  activePostulantes: { type: Boolean, default: false },
+  activeCalificacion: { type: Boolean, default: false },
   activePonderations: { type: Boolean, default: false },
   activeHistory: { type: Boolean, default: false },
   activeConfig: { type: Boolean, default: false },
@@ -17,11 +19,11 @@ const props = defineProps({
   lastProcessTab: { type: String, default: '' },
 })
 
-const emit = defineEmits(['newProcess', 'continueProcess', 'openDashboard', 'openPonderations', 'openHistory', 'openConfig', 'openBackup', 'openVerificador', 'openUsuarios', 'closeMobile'])
+const emit = defineEmits(['newProcess', 'continueProcess', 'openDashboard', 'openPostulantes', 'openCalificacion', 'openPonderations', 'openHistory', 'openConfig', 'openBackup', 'openVerificador', 'openUsuarios', 'closeMobile'])
 
-// El proceso está activo cuando el tab es uno de los 5 pasos
-const PROCESS_TABS = ['archives', 'identifiers', 'responses', 'answer_keys', 'results']
-const activeProcess = computed(() => PROCESS_TABS.includes(props.activeTab))
+// El proceso está activo cuando el tab es alguno de los pasos
+const ALL_PROCESS_TABS = ['archives', 'identifiers', 'responses', 'answer_keys', 'results']
+const activeProcess = computed(() => ALL_PROCESS_TABS.includes(props.activeTab))
 
 const STEP_LABELS = {
   archives: 'Padrón',
@@ -103,7 +105,7 @@ function runAction(eventName) {
 
     <nav class="sidebar-nav">
 
-      <!-- Dashboard / Inicio -->
+      <!-- Inicio -->
       <button
         type="button"
         class="sidebar-item"
@@ -118,6 +120,41 @@ function runAction(eventName) {
         </span>
         <span v-if="expanded || mobileOpen" class="sidebar-item__label">Inicio</span>
         <span v-if="!expanded && !mobileOpen" class="sidebar-tooltip">Inicio</span>
+      </button>
+
+      <!-- Postulantes -->
+      <button
+        type="button"
+        class="sidebar-item"
+        :class="{ 'sidebar-item--active': activePostulantes }"
+        @click="runAction('openPostulantes')"
+      >
+        <span class="sidebar-item__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span v-if="expanded || mobileOpen" class="sidebar-item__label">Postulantes</span>
+        <span v-if="!expanded && !mobileOpen" class="sidebar-tooltip">Postulantes</span>
+      </button>
+
+      <!-- Calificación -->
+      <button
+        type="button"
+        class="sidebar-item"
+        :class="{ 'sidebar-item--active': activeCalificacion }"
+        @click="runAction('openCalificacion')"
+      >
+        <span class="sidebar-item__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 11l3 3L22 4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span v-if="expanded || mobileOpen" class="sidebar-item__label">Calificación</span>
+        <span v-if="!expanded && !mobileOpen" class="sidebar-tooltip">Calificación</span>
       </button>
 
       <!-- Ponderaciones -->
@@ -237,7 +274,7 @@ function runAction(eventName) {
 
 <style scoped>
 .app-sidebar {
-  width: 200px;
+  width: 192px;
   background: white;
   border-right: 1px solid var(--slate-200);
   display: flex;
@@ -269,9 +306,9 @@ function runAction(eventName) {
   padding: var(--space-2) var(--space-3);
   background: var(--unap-blue-600);
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   color: white;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
@@ -280,11 +317,11 @@ function runAction(eventName) {
 }
 
 .btn-new-process svg { width: 16px; height: 16px; flex-shrink: 0; }
-.btn-new-process:hover { background: var(--unap-blue-500); }
+.btn-new-process:hover { background: var(--unap-blue-700); }
 
 .btn-new-process--active {
-  background: linear-gradient(135deg, var(--unap-blue-600), var(--unap-blue-700));
-  box-shadow: 0 2px 8px rgba(0, 51, 102, 0.35);
+  background: var(--unap-blue-700);
+  box-shadow: none;
 }
 
 .app-sidebar--collapsed .btn-new-process {

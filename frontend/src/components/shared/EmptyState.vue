@@ -47,17 +47,17 @@ defineProps({
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: var(--space-12) var(--space-6);
-  background: white;
-  border: 2px dashed var(--slate-200);
-  border-radius: var(--radius-xl);
+  padding: var(--space-10) var(--space-6);
+  background: var(--slate-50);
+  border: 1px dashed var(--slate-200);
+  border-radius: var(--radius-md);
 }
 
 .empty-state__icon {
-  width: 80px;
-  height: 80px;
+  width: 64px;
+  height: 64px;
   background: var(--slate-100);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -65,8 +65,8 @@ defineProps({
 }
 
 .empty-state__icon svg {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   color: var(--slate-400);
 }
 

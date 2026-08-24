@@ -58,7 +58,8 @@ defineProps({
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  background: linear-gradient(135deg, var(--unap-blue-700) 0%, var(--unap-blue-800) 100%);
+  background: white;
+  border: 1px solid var(--slate-200);
   padding: var(--space-4) var(--space-5);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
@@ -69,19 +70,17 @@ defineProps({
 .step-info-card::before {
   content: '';
   position: absolute;
-  top: -50%;
-  right: -10%;
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, rgba(212, 175, 55, 0.15) 0%, transparent 70%);
+  top: 0; left: 0; bottom: 0;
+  width: 3px;
+  background: var(--unap-blue-500);
   pointer-events: none;
 }
 
 .step-info-icon {
-  width: 44px;
-  height: 44px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: var(--radius-lg);
+  width: 40px;
+  height: 40px;
+  background: var(--unap-blue-50);
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -89,9 +88,9 @@ defineProps({
 }
 
 .step-info-icon :deep(svg) {
-  width: 24px;
-  height: 24px;
-  color: var(--unap-gold-400);
+  width: 22px;
+  height: 22px;
+  color: var(--unap-blue-600);
 }
 
 .step-info-content {
@@ -101,7 +100,7 @@ defineProps({
 .step-info-content h2 {
   font-size: 1.05rem;
   font-weight: 700;
-  color: white;
+  color: var(--slate-900);
   margin: 0 0 var(--space-1);
 }
 
@@ -114,7 +113,7 @@ defineProps({
 
 .step-info-content p {
   font-size: 0.8rem;
-  color: var(--unap-blue-200);
+  color: var(--slate-500);
   margin: 0;
 }
 
@@ -126,61 +125,63 @@ defineProps({
 .stat-item {
   text-align: center;
   padding: var(--space-2) var(--space-4);
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--slate-50);
+  border: 1px solid var(--slate-100);
   border-radius: var(--radius-md);
-  backdrop-filter: blur(8px);
 }
 
 .stat-value {
   display: block;
   font-size: 1.2rem;
   font-weight: 800;
-  color: var(--unap-gold-400);
+  color: var(--unap-blue-700);
   font-family: var(--font-mono);
 }
 
 .stat-label {
-  font-size: 0.75rem;
-  color: var(--unap-blue-200);
+  font-size: 0.72rem;
+  color: var(--slate-500);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 /* Variante dorada para paso final */
 .step-info-card--gold {
-  background: linear-gradient(135deg, var(--unap-gold-500) 0%, var(--unap-gold-600) 100%);
+  background: linear-gradient(135deg, var(--unap-gold-50) 0%, white 100%);
+  border-color: var(--unap-gold-200);
 }
 
 .step-info-card--gold::before {
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+  background: var(--unap-gold-500);
 }
 
 .step-info-card--gold .step-info-icon {
-  background: rgba(0, 29, 61, 0.2);
+  background: var(--unap-gold-50);
 }
 
 .step-info-card--gold .step-info-icon :deep(svg) {
-  color: var(--unap-blue-900);
+  color: var(--unap-gold-600);
 }
 
 .step-info-card--gold .step-info-content h2 {
-  color: var(--unap-blue-900);
+  color: var(--slate-900);
 }
 
 .step-info-card--gold .step-info-content p {
-  color: var(--unap-blue-800);
+  color: var(--slate-500);
 }
 
 .step-info-card--gold .stat-item {
-  background: rgba(0, 29, 61, 0.15);
+  background: var(--unap-gold-50);
+  border-color: var(--unap-gold-100);
 }
 
 .step-info-card--gold .stat-value {
-  color: var(--unap-blue-900);
+  color: var(--unap-gold-600);
 }
 
 .step-info-card--gold .stat-label {
-  color: var(--unap-blue-800);
+  color: var(--slate-500);
 }
 
 @media (max-width: 768px) {

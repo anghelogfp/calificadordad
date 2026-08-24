@@ -494,8 +494,8 @@ async function handleToggleActivo(user) {
   transition: all var(--transition-fast); padding: var(--space-2) var(--space-4);
 }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn--primary { background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%); color: white; }
-.btn--primary:hover:not(:disabled) { background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%); }
+.btn--primary { background: var(--unap-blue-600); color: white; }
+.btn--primary:hover:not(:disabled) { background: var(--unap-blue-700); }
 .btn--ghost { background: transparent; color: var(--slate-600); border: 1px solid var(--slate-200); }
 .btn--ghost:hover { background: var(--slate-50); border-color: var(--slate-300); }
 

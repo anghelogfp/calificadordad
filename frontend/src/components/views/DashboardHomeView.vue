@@ -279,7 +279,7 @@ onMounted(() => {
 .dash {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-5);
 }
 
 /* ── Bienvenida ──────────────────────────────────────────────────────────────── */
@@ -347,21 +347,21 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-4);
   background: white;
   border: 1px solid var(--slate-200);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   animation: slideUp 0.4s ease-out both;
   animation-delay: var(--delay, 0ms);
 }
 
 .metric-card__icon {
-  width: 44px; height: 44px; flex-shrink: 0;
+  width: 38px; height: 38px; flex-shrink: 0;
   border-radius: var(--radius-md);
   display: flex; align-items: center; justify-content: center;
 }
-.metric-card__icon svg { width: 22px; height: 22px; }
+.metric-card__icon svg { width: 20px; height: 20px; }
 
 .metric-card__icon--blue { background: var(--unap-blue-50); color: var(--unap-blue-600); }
 .metric-card__icon--gold { background: var(--unap-gold-50); color: var(--unap-gold-600); }
@@ -370,7 +370,7 @@ onMounted(() => {
 .metric-card__body { display: flex; flex-direction: column; gap: 2px; }
 
 .metric-card__value {
-  font-size: 1.6rem;
+  font-size: 1.4rem;
   font-weight: 800;
   color: var(--slate-900);
   line-height: 1;
@@ -422,7 +422,7 @@ onMounted(() => {
 }
 
 .quick-btn--continue {
-  background: linear-gradient(135deg, var(--unap-blue-50) 0%, white 100%);
+  background: var(--unap-blue-50);
   border-color: var(--unap-blue-300);
   color: var(--unap-blue-700);
   order: -1;
@@ -444,7 +444,7 @@ onMounted(() => {
 .dash-card {
   background: white;
   border: 1px solid var(--slate-200);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 

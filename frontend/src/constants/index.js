@@ -10,7 +10,20 @@ export const TAB_KEYS = Object.freeze({
   SCORES: 'results',
 })
 
-// Configuración de tabs (pasos del proceso — Ponderaciones vive en el sidebar)
+// Configuración de tabs — Padrón va en su propio layout
+export const archiveTabs = [
+  { key: TAB_KEYS.ARCHIVES, label: 'Padrón de postulantes' },
+]
+
+// Pasos del proceso de calificación (Identificadores → Calificación)
+export const calificationTabs = [
+  { key: TAB_KEYS.IDENTIFIERS, label: 'Identificadores (.dat)' },
+  { key: TAB_KEYS.RESPONSES, label: 'Respuestas (.dat)' },
+  { key: TAB_KEYS.ANSWER_KEYS, label: 'Claves de respuestas' },
+  { key: TAB_KEYS.RESULTS, label: 'Calificación' },
+]
+
+// Compatibilidad — tabs completo (usado por getStepLabel etc.)
 export const tabs = [
   { key: TAB_KEYS.ARCHIVES, label: 'Paso 1 · Padrón Excel' },
   { key: TAB_KEYS.IDENTIFIERS, label: 'Paso 2 · Identificadores (.dat)' },

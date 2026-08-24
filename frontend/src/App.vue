@@ -1,7 +1,7 @@
 <script setup>
 import { onMounted, ref, computed, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
-import { TAB_KEYS, tabs, IDENTIFIER_SUBTABS, RESPONSES_SUBTABS, ANSWER_KEY_SUBTABS } from '@/constants'
+import { TAB_KEYS, tabs, calificationTabs, IDENTIFIER_SUBTABS, RESPONSES_SUBTABS, ANSWER_KEY_SUBTABS } from '@/constants'
 
 // Auth
 import { useAuth } from '@/composables/useAuth'
@@ -31,7 +31,8 @@ import {
 // Layout
 import AppHeader from '@/components/layout/AppHeader.vue'
 import AppSidebar from '@/components/layout/AppSidebar.vue'
-import StepNav from '@/components/layout/StepNav.vue'
+import HomeLayout from '@/components/layout/HomeLayout.vue'
+import ProcessLayout from '@/components/layout/ProcessLayout.vue'
 
 // Tabs
 import ArchivesTab from '@/components/tabs/ArchivesTab.vue'
@@ -66,14 +67,21 @@ const identifierSubTab = useStorage('calificador-identificador-subtab', IDENTIFI
 const responsesSubTab = useStorage('calificador-respuestas-subtab', RESPONSES_SUBTABS.LIST)
 const answerKeySubTab = useStorage('calificador-claves-subtab', ANSWER_KEY_SUBTABS.LIST)
 
-// Vistas del sidebar — history y config renderizan en el área central sin StepNav
-const PROCESS_TABS = [TAB_KEYS.ARCHIVES, TAB_KEYS.IDENTIFIERS, TAB_KEYS.RESPONSES, TAB_KEYS.ANSWER_KEYS, TAB_KEYS.RESULTS]
-const showStepNav = computed(() => PROCESS_TABS.includes(activeTab.value))
+// Tabs de calificación (sin padrón — va en su propio layout)
+const CALIFICATION_TABS = [TAB_KEYS.IDENTIFIERS, TAB_KEYS.RESPONSES, TAB_KEYS.ANSWER_KEYS, TAB_KEYS.RESULTS]
 
-// Último paso del stepper visitado — permite volver desde vistas secundarias
+// Determinar layout: 'home' (inicio + ponderaciones), 'postulantes' (padrón), 'process' (calificación), 'standard' (herramientas)
+const layoutType = computed(() => {
+  if (activeTab.value === 'dashboard' || activeTab.value === TAB_KEYS.PONDERATIONS) return 'home'
+  if (activeTab.value === TAB_KEYS.ARCHIVES) return 'postulantes'
+  if (CALIFICATION_TABS.includes(activeTab.value)) return 'process'
+  return 'standard'
+})
+
+// Último paso visitado — permite volver desde vistas secundarias
 const lastStepperTab = useStorage('calificador-last-stepper-tab', '')
 watch(activeTab, (tab) => {
-  if (PROCESS_TABS.includes(tab)) lastStepperTab.value = tab
+  if (tab === TAB_KEYS.ARCHIVES || CALIFICATION_TABS.includes(tab)) lastStepperTab.value = tab
 }, { immediate: true })
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -389,10 +397,8 @@ function getStepStatus(key) {
 }
 
 function getStepLabel(key) {
-  const tab = tabs.find((t) => t.key === key)
-  const full = tab?.label || key
-  const parts = full.split(' · ')
-  return parts.length > 1 ? parts[1] : full
+  const tab = calificationTabs.find((t) => t.key === key)
+  return tab?.label || key
 }
 
 function getStepDescription(key) {
@@ -521,7 +527,53 @@ watch(
 
   <LoginPage v-else-if="!auth.isAuthenticated.value" />
 
-  <div v-else key="app-layout" class="app-layout">
+  <!-- ═══ LAYOUT 1: INICIO ═══════════════════════════════════════════════════ -->
+  <HomeLayout
+    v-else-if="layoutType === 'home'"
+    :mobile-menu-open="mobileMenuOpen"
+    :history-count="history.historyList.value.length"
+    :active-tab="activeTab"
+    :is-staff="auth.user.value?.is_staff ?? false"
+    :last-process-tab="lastStepperTab"
+    @go-home="activeTab = 'dashboard'; mobileMenuOpen = false"
+    @toggle-mobile-menu="mobileMenuOpen = !mobileMenuOpen"
+    @new-process="startNewProcess"
+    @continue-process="activeTab = lastStepperTab"
+    @open-dashboard="activeTab = 'dashboard'"
+    @open-postulantes="activeTab = TAB_KEYS.ARCHIVES"
+    @open-calificacion="activeTab = TAB_KEYS.IDENTIFIERS"
+    @open-ponderations="activeTab = TAB_KEYS.PONDERATIONS"
+    @open-history="navigateToHistory"
+    @open-config="activeTab = 'config'"
+    @open-backup="activeTab = 'backup'"
+    @open-verificador="activeTab = 'verificador'"
+    @open-usuarios="activeTab = 'usuarios'"
+    @close-mobile="mobileMenuOpen = false"
+  >
+    <DashboardHomeView
+      v-if="activeTab === 'dashboard'"
+      :history="history"
+      :areas="areas"
+      :current-user="auth.user.value?.username ?? ''"
+      :last-process-tab="lastStepperTab"
+      @load-process="handleLoadProcess"
+      @new-process="startNewProcess"
+      @open-verificador="activeTab = 'verificador'"
+      @open-history="navigateToHistory"
+      @continue-process="activeTab = lastStepperTab"
+    />
+
+    <PonderationsTab
+      v-else-if="activeTab === TAB_KEYS.PONDERATIONS"
+      :ponderations="ponderations"
+      :answers-length="datFormat.formatConfig.value?.answersLength ?? 60"
+      :process-type="calification.processType.value"
+      :simulacro-scope="calification.simulacroScope.value"
+    />
+  </HomeLayout>
+
+  <!-- ═══ LAYOUT 2: POSTULANTES (Padrón) ══════════════════════════════════════ -->
+  <div v-else-if="layoutType === 'postulantes'" key="postulantes-layout" class="app-layout">
     <AppHeader
       :mobile-menu-open="mobileMenuOpen"
       @go-home="activeTab = 'dashboard'; mobileMenuOpen = false"
@@ -532,7 +584,155 @@ watch(
       <AppSidebar
         :history-count="history.historyList.value.length"
         :active-tab="activeTab"
-        :active-dashboard="activeTab === 'dashboard'"
+        :active-dashboard="false"
+        :active-postulantes="true"
+        :active-calificacion="false"
+        :active-ponderations="false"
+        :active-history="false"
+        :active-config="false"
+        :active-verificador="false"
+        :active-backup="false"
+        :active-usuarios="false"
+        :is-staff="auth.user.value?.is_staff ?? false"
+        :mobile-open="mobileMenuOpen"
+        :last-process-tab="lastStepperTab"
+        @new-process="startNewProcess"
+        @continue-process="activeTab = lastStepperTab"
+        @open-dashboard="activeTab = 'dashboard'"
+        @open-postulantes="activeTab = TAB_KEYS.ARCHIVES"
+        @open-calificacion="activeTab = TAB_KEYS.IDENTIFIERS"
+        @open-ponderations="activeTab = TAB_KEYS.PONDERATIONS"
+        @open-history="navigateToHistory"
+        @open-config="activeTab = 'config'"
+        @open-backup="activeTab = 'backup'"
+        @open-verificador="activeTab = 'verificador'"
+        @open-usuarios="activeTab = 'usuarios'"
+        @close-mobile="mobileMenuOpen = false"
+      />
+
+      <div class="app-content">
+        <main class="app-main">
+          <nav class="breadcrumb">
+            <button type="button" class="breadcrumb__back" @click="activeTab = 'dashboard'">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M19 12H5M12 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Inicio
+            </button>
+            <span class="breadcrumb__sep">/</span>
+            <span class="breadcrumb__current">Postulantes</span>
+          </nav>
+
+          <ArchivesTab
+            :archives="archives"
+            :area-names="areas.areaNames.value"
+            :process-type="calification.processType.value"
+            :simulacro-scope="calification.simulacroScope.value"
+            @go-config="activeTab = 'config'"
+          />
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ LAYOUT 3: CALIFICACIÓN (Identificadores → Respuestas → Claves → Calificar) -->
+  <ProcessLayout
+    v-else-if="layoutType === 'process'"
+    :tabs="calificationTabs"
+    :active-tab="activeTab"
+    :get-step-status="getStepStatus"
+    :get-step-label="getStepLabel"
+    :get-step-description="getStepDescription"
+    :get-step-action="getStepAction"
+    :process-name="calification.processName.value"
+    :process-type="calification.processType.value"
+    :simulacro-scope="calification.simulacroScope.value"
+    :has-results="calification.calificationHasResults.value"
+    :is-saved-to-history="resultSavedToHistory"
+    :saving-to-history="savingToHistory"
+    :mobile-menu-open="mobileMenuOpen"
+    :history-count="history.historyList.value.length"
+    :is-staff="auth.user.value?.is_staff ?? false"
+    :last-process-tab="lastStepperTab"
+    @go-home="activeTab = 'dashboard'"
+    @new-process="startNewProcess"
+    @update:active-tab="activeTab = $event"
+    @save-to-history="saveToHistory"
+    @toggle-mobile-menu="mobileMenuOpen = !mobileMenuOpen"
+    @open-dashboard="activeTab = 'dashboard'"
+    @open-postulantes="activeTab = TAB_KEYS.ARCHIVES"
+    @open-calificacion="activeTab = TAB_KEYS.IDENTIFIERS"
+    @open-ponderations="activeTab = TAB_KEYS.PONDERATIONS"
+    @open-history="navigateToHistory"
+    @open-config="activeTab = 'config'"
+    @open-backup="activeTab = 'backup'"
+    @open-verificador="activeTab = 'verificador'"
+    @open-usuarios="activeTab = 'usuarios'"
+    @close-mobile="mobileMenuOpen = false"
+  >
+    <IdentifiersTab
+      v-if="activeTab === TAB_KEYS.IDENTIFIERS"
+      :identifiers="identifiers"
+      :sub-tab="identifierSubTab"
+      :reconciliation="identifierReconciliation"
+      :process-type="calification.processType.value"
+      :simulacro-scope="calification.simulacroScope.value"
+      @update:sub-tab="identifierSubTab = $event"
+    />
+
+    <ResponsesTab
+      v-else-if="activeTab === TAB_KEYS.RESPONSES"
+      :responses="responses"
+      :sub-tab="responsesSubTab"
+      :identifiers-loaded="identifiers.rows.value.length > 0"
+      :linked-count="linkedResponsesCount"
+      :reconciliation="responseReconciliation"
+      :process-type="calification.processType.value"
+      :simulacro-scope="calification.simulacroScope.value"
+      @update:sub-tab="responsesSubTab = $event"
+    />
+
+    <AnswerKeysTab
+      v-else-if="activeTab === TAB_KEYS.ANSWER_KEYS"
+      :answer-keys="answerKeys"
+      :sub-tab="answerKeySubTab"
+      :reconciliation="answerKeyReconciliation"
+      :process-type="calification.processType.value"
+      :simulacro-scope="calification.simulacroScope.value"
+      @update:sub-tab="answerKeySubTab = $event"
+    />
+
+    <ScoresTab
+      v-else-if="activeTab === TAB_KEYS.SCORES"
+      :calification="calification"
+      :ponderations="ponderations"
+      :dashboard="dashboard"
+      :exporter="exporter"
+      :vacantes-programa="vacantesPrograma"
+      :convocatoria-name="calification.processName.value"
+      :on-save-to-history="saveToHistory"
+      :is-saved-to-history="resultSavedToHistory"
+      :saving-to-history="savingToHistory"
+      @open-modal="calification.openCalificationModal"
+      @open-dashboard="showDashboardPanel = true"
+    />
+  </ProcessLayout>
+
+  <!-- ═══ LAYOUT 4: HERRAMIENTAS (Historial, Config, Verificador, Backup, Usuarios, Ponderaciones) -->
+  <div v-else key="tools-layout" class="app-layout">
+    <AppHeader
+      :mobile-menu-open="mobileMenuOpen"
+      @go-home="activeTab = 'dashboard'; mobileMenuOpen = false"
+      @toggle-mobile-menu="mobileMenuOpen = !mobileMenuOpen"
+    />
+
+    <div class="app-body">
+      <AppSidebar
+        :history-count="history.historyList.value.length"
+        :active-tab="activeTab"
+        :active-dashboard="false"
+        :active-postulantes="false"
+        :active-calificacion="false"
         :active-ponderations="activeTab === TAB_KEYS.PONDERATIONS"
         :active-history="activeTab === 'history'"
         :active-config="activeTab === 'config'"
@@ -545,6 +745,8 @@ watch(
         @new-process="startNewProcess"
         @continue-process="activeTab = lastStepperTab"
         @open-dashboard="activeTab = 'dashboard'"
+        @open-postulantes="activeTab = TAB_KEYS.ARCHIVES"
+        @open-calificacion="activeTab = TAB_KEYS.IDENTIFIERS"
         @open-ponderations="activeTab = TAB_KEYS.PONDERATIONS"
         @open-history="navigateToHistory"
         @open-config="activeTab = 'config'"
@@ -555,21 +757,8 @@ watch(
       />
 
       <div class="app-content">
-        <StepNav
-          v-if="showStepNav"
-          :tabs="tabs"
-          :active-tab="activeTab"
-          :get-step-status="getStepStatus"
-          :get-step-label="getStepLabel"
-          :get-step-description="getStepDescription"
-          :get-step-action="getStepAction"
-          @update:active-tab="activeTab = $event"
-        />
-
         <main class="app-main">
-
-          <!-- Breadcrumb — aparece en todas las vistas excepto dashboard -->
-          <nav v-if="activeTab !== 'dashboard'" class="breadcrumb">
+          <nav class="breadcrumb">
             <button type="button" class="breadcrumb__back" @click="activeTab = 'dashboard'">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="M19 12H5M12 5l-7 7 7 7" stroke-linecap="round" stroke-linejoin="round"/>
@@ -578,12 +767,6 @@ watch(
             </button>
             <span class="breadcrumb__sep">/</span>
             <span class="breadcrumb__current">{{
-              activeTab === TAB_KEYS.ARCHIVES    ? 'Padrón de postulantes' :
-              activeTab === TAB_KEYS.IDENTIFIERS ? 'Identificadores' :
-              activeTab === TAB_KEYS.RESPONSES   ? 'Respuestas' :
-              activeTab === TAB_KEYS.ANSWER_KEYS ? 'Claves de respuestas' :
-              activeTab === TAB_KEYS.SCORES      ? 'Resultados' :
-              activeTab === TAB_KEYS.PONDERATIONS ? 'Ponderaciones' :
               activeTab === 'history'    ? 'Historial de procesos' :
               activeTab === 'config'     ? 'Configuración' :
               activeTab === 'verificador' ? 'Verificador' :
@@ -592,85 +775,8 @@ watch(
             }}</span>
           </nav>
 
-          <DashboardHomeView
-            v-if="activeTab === 'dashboard'"
-            :history="history"
-            :areas="areas"
-            :current-user="auth.user.value?.username ?? ''"
-            :last-process-tab="lastStepperTab"
-            @load-process="handleLoadProcess"
-            @new-process="startNewProcess"
-            @open-verificador="activeTab = 'verificador'"
-            @open-history="navigateToHistory"
-            @continue-process="activeTab = lastStepperTab"
-          />
-
-          <ArchivesTab
-            v-else-if="activeTab === TAB_KEYS.ARCHIVES"
-            :archives="archives"
-            :area-names="areas.areaNames.value"
-            :process-type="calification.processType.value"
-            :simulacro-scope="calification.simulacroScope.value"
-            @go-config="activeTab = 'config'"
-          />
-
-          <IdentifiersTab
-            v-else-if="activeTab === TAB_KEYS.IDENTIFIERS"
-            :identifiers="identifiers"
-            :sub-tab="identifierSubTab"
-            :reconciliation="identifierReconciliation"
-            :process-type="calification.processType.value"
-            :simulacro-scope="calification.simulacroScope.value"
-            @update:sub-tab="identifierSubTab = $event"
-          />
-
-          <ResponsesTab
-            v-else-if="activeTab === TAB_KEYS.RESPONSES"
-            :responses="responses"
-            :sub-tab="responsesSubTab"
-            :identifiers-loaded="identifiers.rows.value.length > 0"
-            :linked-count="linkedResponsesCount"
-            :reconciliation="responseReconciliation"
-            :process-type="calification.processType.value"
-            :simulacro-scope="calification.simulacroScope.value"
-            @update:sub-tab="responsesSubTab = $event"
-          />
-
-          <AnswerKeysTab
-            v-else-if="activeTab === TAB_KEYS.ANSWER_KEYS"
-            :answer-keys="answerKeys"
-            :sub-tab="answerKeySubTab"
-            :reconciliation="answerKeyReconciliation"
-            :process-type="calification.processType.value"
-            :simulacro-scope="calification.simulacroScope.value"
-            @update:sub-tab="answerKeySubTab = $event"
-          />
-
-          <PonderationsTab
-            v-else-if="activeTab === TAB_KEYS.PONDERATIONS"
-            :ponderations="ponderations"
-            :answers-length="datFormat.formatConfig.value?.answersLength ?? 60"
-            :process-type="calification.processType.value"
-            :simulacro-scope="calification.simulacroScope.value"
-          />
-
-          <ScoresTab
-            v-else-if="activeTab === TAB_KEYS.SCORES"
-            :calification="calification"
-            :ponderations="ponderations"
-            :dashboard="dashboard"
-            :exporter="exporter"
-            :vacantes-programa="vacantesPrograma"
-            :convocatoria-name="calification.processName.value"
-            :on-save-to-history="saveToHistory"
-            :is-saved-to-history="resultSavedToHistory"
-            :saving-to-history="savingToHistory"
-            @open-modal="calification.openCalificationModal"
-            @open-dashboard="showDashboardPanel = true"
-          />
-
           <HistoryView
-            v-else-if="activeTab === 'history'"
+            v-if="activeTab === 'history'"
             :history="history"
             @load-process="handleLoadProcess"
           />
@@ -700,30 +806,31 @@ watch(
         </main>
       </div>
     </div>
-
-    <NuevoProcesoModal
-      :show="showNuevoProcesoModal"
-      :has-data="hasProcessData"
-      :areas-count="areas.areas.value.length"
-      :plantillas-count="ponderations.plantillas.value.length"
-      @confirm="confirmNewProcess"
-      @close="showNuevoProcesoModal = false"
-    />
-
-    <CalificationModal
-      :show="calification.showCalificationModal.value"
-      :calification="calification"
-      :vacantes-programa="vacantesPrograma"
-      @close="calification.closeCalificationModal"
-    />
-
-    <DashboardPanel
-      :show="showDashboardPanel"
-      :dashboard="dashboard"
-      @close="showDashboardPanel = false"
-    />
-
   </div>
+
+  <!-- Modals compartidos entre layouts -->
+  <NuevoProcesoModal
+    :show="showNuevoProcesoModal"
+    :has-data="hasProcessData"
+    :areas-count="areas.areas.value.length"
+    :plantillas-count="ponderations.plantillas.value.length"
+    @confirm="confirmNewProcess"
+    @close="showNuevoProcesoModal = false"
+  />
+
+  <CalificationModal
+    :show="calification.showCalificationModal.value"
+    :calification="calification"
+    :vacantes-programa="vacantesPrograma"
+    @close="calification.closeCalificationModal"
+  />
+
+  <DashboardPanel
+    :show="showDashboardPanel"
+    :dashboard="dashboard"
+    @close="showDashboardPanel = false"
+  />
+
 </template>
 
 <style scoped>
@@ -779,7 +886,7 @@ watch(
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: var(--space-8);
+  padding: var(--space-5) var(--space-6);
   max-width: none;
   min-width: 0;
   width: 100%;
@@ -835,6 +942,6 @@ watch(
 }
 
 @media (max-width: 1024px) {
-  .app-main { padding: var(--space-5); }
+  .app-main { padding: var(--space-4); }
 }
 </style>

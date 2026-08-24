@@ -10,6 +10,7 @@ import SourcesPanel from '@/components/shared/SourcesPanel.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import StepVerificationPanel from '@/components/shared/StepVerificationPanel.vue'
 import AnswerSheetPreviewModal from '@/components/shared/AnswerSheetPreviewModal.vue'
+import ProcessPathBadge from '@/components/shared/ProcessPathBadge.vue'
 
 const props = defineProps({
   responses:         { type: Object,  required: true },
@@ -47,6 +48,11 @@ const sheetModalTitle = ref('Cartilla de respuestas')
 const sheetModalSubtitle = ref('')
 const sheetModalAnswers = ref('')
 const sheetModalMode = ref('inspect-answers')
+const fileInputRef = ref(null)
+
+function triggerFileInput() {
+  fileInputRef.value?.click()
+}
 
 const displayedRows = computed(() => (
   showOnlyObserved.value ? responses.actionableObservations : responses.pagedRows
@@ -209,7 +215,9 @@ function closeSheetPreview() {
 
 <template>
   <section class="tab-content">
+    <!-- ═══ Sin datos: zona de importación completa ═══ -->
     <WorkflowIntroCard
+      v-if="!responses.responsesHasData"
       eyebrow="Paso 3 · Respuestas"
       title="Hojas de respuestas"
       description="Importa las respuestas marcadas por los postulantes para vincularlas con sus identificadores."
@@ -229,7 +237,7 @@ function closeSheetPreview() {
       accept=".dat,.txt"
       :multiple="true"
       :is-dragging="responses.isDragging"
-      :has-data="responses.responsesHasData"
+      :has-data="false"
       title="Arrastra tus archivos de respuestas aquí"
       subtitle="o haz clic para seleccionar desde tu equipo"
       button-text="Seleccionar archivos .dat"
@@ -251,6 +259,36 @@ function closeSheetPreview() {
       </template>
     </FileUploader>
     </WorkflowIntroCard>
+
+    <!-- ═══ Con datos: barra compacta ═══ -->
+    <div v-else class="data-bar">
+      <div class="data-bar__main">
+        <div class="data-bar__icon">
+          <svg viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+          </svg>
+        </div>
+        <div class="data-bar__text">
+          <div class="data-bar__title-row">
+            <h2>Hojas de respuestas</h2>
+            <ProcessPathBadge :process-type="processType" :simulacro-scope="simulacroScope" />
+          </div>
+          <span class="data-bar__meta">
+            <strong>{{ responses.totalRows.toLocaleString('es-PE') }}</strong> registros
+            · {{ responses.sources.length }} archivo(s)
+          </span>
+        </div>
+      </div>
+      <div class="data-bar__actions">
+        <input ref="fileInputRef" type="file" accept=".dat,.txt" multiple class="hidden-file-input" @change="responses.onResponseFileChange" />
+        <button type="button" class="btn btn--primary btn--sm" @click="triggerFileInput">
+          <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+          </svg>
+          Cargar más archivos
+        </button>
+      </div>
+    </div>
 
     <div v-if="responses.importError" class="alert alert--error">
       {{ responses.importError }}
@@ -487,7 +525,7 @@ function closeSheetPreview() {
 .tab-content {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-4);
   animation: slideUp 0.4s ease-out;
   min-width: 0;
 }
@@ -580,15 +618,13 @@ function closeSheetPreview() {
 }
 
 .btn--primary {
-  background: linear-gradient(135deg, var(--unap-blue-600) 0%, var(--unap-blue-700) 100%);
+  background: var(--unap-blue-600);
   color: white;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .btn--primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--unap-blue-500) 0%, var(--unap-blue-600) 100%);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
+  background: var(--unap-blue-700);
 }
 
 .step-state-panel,
@@ -1152,4 +1188,28 @@ function closeSheetPreview() {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* ── Barra compacta (datos cargados) ───────────────────────────────────────── */
+.data-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: white; border: 1px solid var(--slate-200);
+  border-left: 3px solid var(--success-400);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-sm);
+}
+.data-bar__main { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.data-bar__icon {
+  width: 36px; height: 36px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-md); background: var(--success-100); color: var(--success-600);
+}
+.data-bar__icon svg { width: 20px; height: 20px; }
+.data-bar__text { min-width: 0; }
+.data-bar__title-row { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.data-bar h2 { margin: 0; color: var(--slate-900); font-size: 1.1rem; line-height: 1.25; }
+.data-bar__meta { font-size: 0.78rem; color: var(--slate-500); }
+.data-bar__meta strong { font-family: var(--font-mono); color: var(--slate-800); font-weight: 700; }
+.data-bar__actions { flex-shrink: 0; }
+.hidden-file-input { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
 </style>

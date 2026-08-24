@@ -126,8 +126,8 @@ function getCellValue(source, column) {
 .sources-panel {
   background: white;
   border: 1px solid var(--slate-200);
-  border-radius: var(--radius-xl);
-  padding: var(--space-6);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
   box-shadow: var(--shadow-sm);
   min-width: 0;
   max-width: 100%;
@@ -138,19 +138,19 @@ function getCellValue(source, column) {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
-  margin-bottom: var(--space-5);
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 .sources-header h3 {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--slate-800);
   margin: 0;
 }
 
 .sources-header p {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--slate-500);
   margin: var(--space-1) 0 0;
 }
@@ -180,13 +180,16 @@ function getCellValue(source, column) {
 
 .sources-table th {
   background: var(--slate-50);
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   color: var(--slate-600);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .sources-table th,
 .sources-table td {
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-4);
   text-align: left;
   border-bottom: 1px solid var(--slate-100);
 }
@@ -208,9 +211,9 @@ function getCellValue(source, column) {
   text-align: center;
   color: var(--slate-500);
   padding: var(--space-8);
-  border: 2px dashed var(--slate-200);
-  border-radius: var(--radius-xl);
-  background: white;
+  border: 1px dashed var(--slate-200);
+  border-radius: var(--radius-md);
+  background: var(--slate-50);
 }
 
 .badge {
@@ -233,12 +236,12 @@ function getCellValue(source, column) {
 }
 
 .icon-button {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--slate-200);
-  background: white;
-  color: var(--slate-600);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--slate-400);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -247,18 +250,12 @@ function getCellValue(source, column) {
 }
 
 .icon-button svg {
-  width: 18px;
-  height: 18px;
-}
-
-.icon-button--danger {
-  border-color: var(--error-100);
-  color: var(--error-500);
+  width: 16px;
+  height: 16px;
 }
 
 .icon-button--danger:hover {
   background: var(--error-50);
-  border-color: var(--error-200);
   color: var(--error-600);
 }
 

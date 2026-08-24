@@ -66,10 +66,10 @@ function clearSearch() { emit('update:searchValue', '') }
 
 <style scoped>
 .toolbar {
-  display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: center;
-  justify-content: space-between; background: white;
-  border: 1px solid var(--slate-200); border-radius: var(--radius-lg);
-  padding: var(--space-3) var(--space-4); box-shadow: var(--shadow-sm);
+  display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center;
+  justify-content: space-between; background: transparent;
+  border: none; border-radius: 0;
+  padding: 0; box-shadow: none;
 }
 
 .toolbar__actions { display: flex; gap: var(--space-2); flex-wrap: wrap; order: 2; }
