@@ -1,0 +1,6 @@
+# Calificador del Concurso Público de Cátedra — dependencias del script standalone
+openpyxl>=3.1
+reportlab>=4.0
+# solo para tests:
+pytest>=8.0
+pypdf>=4.0
