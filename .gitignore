@@ -22,3 +22,6 @@ frontend/dist/
 .idea/
 .vscode/
 
+# Respaldo local previo al cambio de version de BMAD
+.bmad-backups/
+
