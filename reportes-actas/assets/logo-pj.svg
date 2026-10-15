@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="100%" height="100%">
+  <!-- Fondo y Escudo Institucional Poder Judicial del Perú -->
+  <circle cx="60" cy="60" r="56" fill="#7f1d1d" stroke="#b91c1c" stroke-width="2"/>
+  <circle cx="60" cy="60" r="50" fill="none" stroke="#fef08a" stroke-width="1.5" stroke-dasharray="3,2"/>
+  
+  <!-- Balanza de la Justicia -->
+  <path d="M60 25 L60 85 M45 85 L75 85" stroke="#fef08a" stroke-width="3" stroke-linecap="round"/>
+  <!-- Barra horizontal -->
+  <path d="M35 38 L85 38" stroke="#fef08a" stroke-width="2.5" stroke-linecap="round"/>
+  
+  <!-- Platillo Izquierdo -->
+  <path d="M35 38 L25 55 M35 38 L45 55" stroke="#fde047" stroke-width="1.2"/>
+  <path d="M22 55 Q35 64 48 55 Z" fill="#fde047"/>
+  
+  <!-- Platillo Derecho -->
+  <path d="M85 38 L75 55 M85 38 L95 55" stroke="#fde047" stroke-width="1.2"/>
+  <path d="M72 55 Q85 64 98 55 Z" fill="#fde047"/>
+
+  <!-- Texto Circular PODER JUDICIAL DEL PERÚ -->
+  <path id="curve" d="M20,60 A40,40 0 1,1 100,60" fill="none"/>
+  <text font-family="Arial, sans-serif" font-size="8.5" font-weight="bold" fill="#ffffff" text-anchor="middle">
+    <textPath href="#curve" startOffset="50%">PODER JUDICIAL</textPath>
+  </text>
+  
+  <text x="60" y="103" font-family="Arial, sans-serif" font-size="7.5" font-weight="bold" fill="#fef08a" text-anchor="middle">CORTE DE PUNO</text>
+</svg>

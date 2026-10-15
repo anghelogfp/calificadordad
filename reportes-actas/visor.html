@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visor de Actas y Reportes — UNA-PUNO / Poder Judicial</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      background-color: #1e293b;
+      border-bottom: 2px solid #ddab44;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .titulo-nav {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .titulo-nav h1 {
+      font-size: 14pt;
+      font-weight: 800;
+      color: #f8fafc;
+    }
+    .badge {
+      background-color: #0284c7;
+      color: #fff;
+      font-size: 8pt;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: bold;
+    }
+    .tabs-nav {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      background-color: #334155;
+      color: #cbd5e1;
+      border: 1px solid #475569;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 8.5pt;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover {
+      background-color: #475569;
+      color: #fff;
+    }
+    .tab-btn.active {
+      background-color: #0284c7;
+      border-color: #38bdf8;
+      color: #fff;
+    }
+    .btn-print {
+      background-color: #15803d;
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 9pt;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    .btn-print:hover {
+      background-color: #16a34a;
+    }
+    main {
+      flex: 1;
+      background-color: #334155;
+      overflow: hidden;
+      position: relative;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #e2e8f0;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="titulo-nav">
+      <h1>Documentación de Calificación</h1>
+      <span class="badge">UNA-PUNO &bull; PODER JUDICIAL</span>
+    </div>
+
+    <div class="tabs-nav">
+      <button class="tab-btn active" onclick="cargarDoc('01-acta-inicio-apertura.html', this)">01. Inicio y Apertura</button>
+      <button class="tab-btn" onclick="cargarDoc('02-acta-recepcion-digital.html', this)">02. Recepción Digital</button>
+      <button class="tab-btn" onclick="cargarDoc('03-acta-recepcion-fisica.html', this)">03. Recepción Física</button>
+      <button class="tab-btn" onclick="cargarDoc('04-acta-conformidad-claves.html', this)">04. Conformidad Claves</button>
+      <button class="tab-btn" onclick="cargarDoc('05-informe-tecnico.html', this)">05. Informe Técnico</button>
+      <button class="tab-btn" onclick="cargarDoc('06-acta-cierre.html', this)">06. Cierre y Conformidad</button>
+    </div>
+
+    <button class="btn-print" onclick="imprimirActual()">
+      🖨️ Imprimir / Guardar en PDF
+    </button>
+  </header>
+
+  <main>
+    <iframe id="visor-frame" src="01-acta-inicio-apertura.html"></iframe>
+  </main>
+
+  <script>
+    function cargarDoc(url, btn) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('visor-frame').src = url;
+    }
+
+    function imprimirActual() {
+      const frame = document.getElementById('visor-frame');
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,364 @@
+/* ==========================================================================
+   ESTILOS GENERALES Y DE IMPRESIÓN PARA ACTAS Y REPORTES TÉCNICOS (A4)
+   UNA-PUNO - Dirección de Admisión / Poder Judicial (Convenio Interinstitucional)
+   ========================================================================== */
+
+:root {
+  --color-primario: #0a2446;
+  --color-secundario: #1e3a5f;
+  --color-acento: #ddab44;
+  --color-texto: #1e293b;
+  --color-texto-muted: #64748b;
+  --color-borde: #cbd5e1;
+  --color-borde-fuerte: #334155;
+  --color-fondo-suave: #f8fafc;
+  --color-fondo-header: #f1f5f9;
+  --fuente-principal: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --fuente-mono: "SF Mono", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--fuente-principal);
+  font-size: 9.5pt;
+  line-height: 1.35;
+  color: var(--color-texto);
+  background-color: #e2e8f0;
+}
+
+/* Contenedor A4 en pantalla (Previsualización fiel) */
+.hoja-a4 {
+  background: #ffffff;
+  width: 210mm;
+  min-height: 297mm;
+  margin: 20px auto;
+  padding: 14mm 15mm 15mm 15mm;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
+  position: relative;
+}
+
+/* Reglas de Impresión Real */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm 12mm 15mm;
+  }
+
+  body {
+    background: none !important;
+  }
+
+  .hoja-a4 {
+    width: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .salto-pagina {
+    page-break-before: always;
+    break-before: page;
+  }
+}
+
+/* Encabezado Institucional Doble */
+.encabezado-institucional {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--color-primario);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  position: relative;
+}
+
+.encabezado-institucional::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: var(--color-acento);
+}
+
+.logo-entidad {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+}
+
+.texto-encabezado {
+  text-align: center;
+  flex: 1;
+  padding: 0 10px;
+}
+
+.texto-encabezado .universidad {
+  font-size: 11pt;
+  font-weight: 800;
+  color: var(--color-primario);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.texto-encabezado .area-rectora {
+  font-size: 9pt;
+  font-weight: 700;
+  color: var(--color-secundario);
+}
+
+.texto-encabezado .subtitulo-convenio {
+  font-size: 8pt;
+  font-style: italic;
+  color: var(--color-texto-muted);
+}
+
+/* Título del Documento y Meta */
+.titulo-documento-box {
+  text-align: center;
+  margin: 14px 0 12px 0;
+}
+
+.titulo-documento {
+  font-size: 12pt;
+  font-weight: 900;
+  color: var(--color-primario);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.meta-documento {
+  display: flex;
+  justify-content: space-between;
+  font-size: 8.5pt;
+  font-weight: 600;
+  color: var(--color-texto-muted);
+  margin-top: 4px;
+  border-bottom: 1px dashed var(--color-borde);
+  padding-bottom: 4px;
+}
+
+/* Secciones y Párrafos */
+.seccion {
+  margin-bottom: 11px;
+}
+
+.seccion-titulo {
+  font-size: 9.5pt;
+  font-weight: 800;
+  color: var(--color-primario);
+  background-color: var(--color-fondo-header);
+  border-left: 3.5px solid var(--color-secundario);
+  padding: 3px 6px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.texto-cuerpo {
+  text-align: justify;
+  font-size: 9pt;
+  line-height: 1.4;
+  margin-bottom: 6px;
+}
+
+/* Tablas Formales */
+table.tabla-formal {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.5pt;
+  margin: 6px 0 10px 0;
+}
+
+table.tabla-formal th,
+table.tabla-formal td {
+  border: 1px solid var(--color-borde);
+  padding: 4px 6px;
+  vertical-align: middle;
+}
+
+table.tabla-formal th {
+  background-color: var(--color-fondo-header);
+  color: var(--color-primario);
+  font-weight: 700;
+  text-align: center;
+  font-size: 8pt;
+  text-transform: uppercase;
+}
+
+table.tabla-formal tr:nth-child(even) {
+  background-color: var(--color-fondo-suave);
+}
+
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-left { text-align: left; }
+.font-mono { font-family: var(--fuente-mono); }
+.font-bold { font-weight: bold; }
+
+/* Grid de Datos Clave / Valor */
+.grid-dos-columnas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+
+.campo-dato {
+  font-size: 8.5pt;
+}
+
+.campo-etiqueta {
+  font-weight: 700;
+  color: var(--color-secundario);
+}
+
+.campo-valor {
+  color: var(--color-texto);
+}
+
+/* Casillas de Verificación de Estado */
+.casilla-estado {
+  display: inline-block;
+  border: 1px solid var(--color-borde-fuerte);
+  padding: 2px 5px;
+  font-size: 7.5pt;
+  font-weight: 600;
+  margin-right: 4px;
+  border-radius: 2px;
+}
+
+.casilla-estado.checked {
+  background-color: #e0f2fe;
+  border-color: #0284c7;
+  color: #0369a1;
+}
+
+/* Huellas y Hashes */
+.caja-hash {
+  background-color: #f8fafc;
+  border: 1px dashed #94a3b8;
+  padding: 6px 8px;
+  font-family: var(--fuente-mono);
+  font-size: 8pt;
+  color: #0f172a;
+  word-break: break-all;
+  border-radius: 3px;
+  margin: 4px 0;
+}
+
+/* Cuadrícula de Claves (60 preguntas) */
+.matriz-claves {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  margin: 8px 0;
+}
+
+.columna-clave {
+  border: 1px solid var(--color-borde);
+  font-size: 8pt;
+}
+
+.columna-clave-header {
+  background-color: var(--color-secundario);
+  color: #fff;
+  font-weight: bold;
+  text-align: center;
+  padding: 2px 0;
+}
+
+.fila-pregunta {
+  display: flex;
+  justify-content: space-between;
+  padding: 1.5px 6px;
+  border-bottom: 1px dotted var(--color-borde);
+  font-family: var(--fuente-mono);
+}
+
+.fila-pregunta:last-child {
+  border-bottom: none;
+}
+
+.fila-pregunta .num {
+  color: var(--color-texto-muted);
+}
+
+.fila-pregunta .res {
+  font-weight: bold;
+  color: var(--color-primario);
+}
+
+/* Bloque de Firmas Blindado */
+.bloque-firmas {
+  margin-top: 24px;
+  page-break-inside: avoid;
+  break-inside: avoid;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 30px;
+}
+
+.bloque-firmas.tres-firmas {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.cuadro-firma {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.espacio-sello-firma {
+  height: 52px;
+  width: 100%;
+}
+
+.linea-firma {
+  width: 85%;
+  border-top: 1.2px solid #000;
+  padding-top: 4px;
+  font-size: 8pt;
+  line-height: 1.25;
+}
+
+.linea-firma .nombre {
+  font-weight: 700;
+  color: #000;
+}
+
+.linea-firma .cargo {
+  color: var(--color-texto-muted);
+  font-size: 7.5pt;
+}
+
+.linea-firma .entidad {
+  font-size: 7pt;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* Pie de Página Institucional */
+.pie-pagina {
+  position: absolute;
+  bottom: 8mm;
+  left: 15mm;
+  right: 15mm;
+  display: flex;
+  justify-content: space-between;
+  font-size: 7pt;
+  color: #94a3b8;
+  border-top: 1px solid var(--color-borde);
+  padding-top: 3px;
+}

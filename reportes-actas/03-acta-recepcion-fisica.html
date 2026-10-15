@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Acta 03 - Recepción Física de Fichas Ópticas y Material</title>
+  <link rel="stylesheet" href="assets/print.css">
+  <style>
+    /* Estilos específicos para el Anexo de Control de Tarjetas (Formato modelo.jpeg) */
+    .tabla-control-aulas {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8pt;
+    }
+    .tabla-control-aulas th,
+    .tabla-control-aulas td {
+      border: 1px solid #475569;
+      padding: 3px 5px;
+      text-align: center;
+    }
+    .tabla-control-aulas th {
+      background-color: #f1f5f9;
+      color: #0f172a;
+      font-weight: 700;
+    }
+    .casilla-conteo {
+      font-weight: bold;
+      color: #0369a1;
+      font-family: var(--fuente-mono);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- PÁGINA 1: ACTA FORMAL DE RECEPCIÓN FÍSICA -->
+  <div class="hoja-a4">
+    <!-- Encabezado Institucional Doble -->
+    <header class="encabezado-institucional">
+      <img src="assets/logo-unap.png" alt="UNA-PUNO" class="logo-entidad">
+      <div class="texto-encabezado">
+        <div class="universidad">Universidad Nacional del Altiplano de Puno</div>
+        <div class="area-rectora">Dirección de Admisión — Centro de Cómputo y Calificación</div>
+        <div class="subtitulo-convenio">Convenio de Cooperación Interinstitucional con la Corte Superior de Justicia de Puno</div>
+      </div>
+      <img src="assets/logo-pj.svg" alt="Poder Judicial" class="logo-entidad">
+    </header>
+
+    <!-- Título y Metadatos -->
+    <div class="titulo-documento-box">
+      <h1 class="titulo-documento">Acta de Recepción Física de Fichas Ópticas y Material</h1>
+      <div class="meta-documento">
+        <span>CÓDIGO: ACTA-03-FISICO-2026</span>
+        <span>OFICIO REF: OFICIO N.° 003-2025-AP-UAF-GAD-CSJPU-PJ</span>
+        <span>VERSIÓN: 1.0</span>
+      </div>
+    </div>
+
+    <!-- 1. Datos Generales -->
+    <section class="seccion">
+      <div class="seccion-titulo">1. Datos Generales</div>
+      <div class="grid-dos-columnas">
+        <div class="campo-dato"><span class="campo-etiqueta">Proceso:</span> <span class="campo-valor">Proceso de Selección D.L. 728 N.° 001-2026-UE-PUNO</span></div>
+        <div class="campo-dato"><span class="campo-etiqueta">Fecha de Recepción:</span> <span class="campo-valor">16 de septiembre de 2026</span></div>
+        <div class="campo-dato"><span class="campo-etiqueta">Hora de Llegada de Fichas:</span> <span class="campo-valor">12:15 horas (Fichas ID) / 13:40 horas (Fichas RESP)</span></div>
+        <div class="campo-dato"><span class="campo-etiqueta">Lugar de Recepción:</span> <span class="campo-valor">Mesa de Control de Entrada — Centro de Cómputo UNA-PUNO</span></div>
+      </div>
+    </section>
+
+    <!-- 2. Personas que Intervienen -->
+    <section class="seccion">
+      <div class="seccion-titulo">2. Intervinientes en la Custodia y Entrega Física</div>
+      <table class="tabla-formal">
+        <thead>
+          <tr>
+            <th style="width: 25%;">Rol</th>
+            <th style="width: 35%;">Nombres y Apellidos</th>
+            <th style="width: 15%;">DNI</th>
+            <th style="width: 25%;">Cargo / Entidad</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="font-bold">ENTREGA (Comisión Externa)</td>
+            <td>Ing. Cristian Denegri Mendoza</td>
+            <td class="text-center font-mono">92504008</td>
+            <td>Coordinador Técnico — CSJ Puno</td>
+          </tr>
+          <tr>
+            <td class="font-bold">RECIBE (Custodia Cómputo)</td>
+            <td>Ing. Responsable de Cómputo</td>
+            <td class="text-center font-mono">40218765</td>
+            <td>Responsable Técnico — UNA-PUNO</td>
+          </tr>
+          <tr>
+            <td class="font-bold">TESTIGO (Fiscalización)</td>
+            <td>Abog. Veedor Institucional</td>
+            <td class="text-center font-mono">29481023</td>
+            <td>Órgano de Control Institucional</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 3. Relación del Material Recibido -->
+    <section class="seccion">
+      <div class="seccion-titulo">3. Relación General del Material Físico Recibido</div>
+      <table class="tabla-formal">
+        <thead>
+          <tr>
+            <th style="width: 8%;">N.°</th>
+            <th style="width: 42%;">Descripción del Material</th>
+            <th style="width: 15%;">Cant. Declarada</th>
+            <th style="width: 15%;">Cant. Verificada</th>
+            <th style="width: 20%;">Estado Físico</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="text-center font-bold">01</td>
+            <td>Fichas Ópticas de Identificación (ID) por Aulas</td>
+            <td class="text-center font-mono">1,982</td>
+            <td class="text-center font-mono font-bold">1,945</td>
+            <td class="text-center">Conforme / Íntegro</td>
+          </tr>
+          <tr>
+            <td class="text-center font-bold">02</td>
+            <td>Fichas Ópticas de Respuestas (RESP) por Aulas</td>
+            <td class="text-center font-mono">1,982</td>
+            <td class="text-center font-mono font-bold">1,945</td>
+            <td class="text-center">Conforme / Íntegro</td>
+          </tr>
+          <tr>
+            <td class="text-center font-bold">03</td>
+            <td>Sobre Lacrado con Claves Oficiales de Calificación</td>
+            <td class="text-center font-mono">1 sobre</td>
+            <td class="text-center font-mono font-bold">1 sobre</td>
+            <td class="text-center">Lacrado Intacto (#LC-091)</td>
+          </tr>
+          <tr>
+            <td class="text-center font-bold">04</td>
+            <td>Padrón de Firmas y Control de Asistencia en Aulas</td>
+            <td class="text-center font-mono">50 sobres</td>
+            <td class="text-center font-mono font-bold">50 sobres</td>
+            <td class="text-center">Conforme</td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="font-size: 8pt; color: #475569; margin-top: 2px;">
+        * Nota: La diferencia de 37 fichas respecto al padrón inicial (1,982) corresponde a postulantes ausentes reportados por los docentes de aula.
+      </p>
+    </section>
+
+    <!-- 4. Constancia de Recepción -->
+    <section class="seccion">
+      <div class="seccion-titulo">4. Constancia de Entrega y Verificación de Entrada</div>
+      <p class="texto-cuerpo">
+        Se deja constancia de que los paquetes y sobres correspondientes a las 50 aulas fueron recibidos, contados manualmente en el pórtico de control y confrontados con la relación oficial de postulantes programados. La recepción física no prejuzga la validez técnica de las marcas interiores (las cuales serán dictaminadas durante el escaneo óptico).
+      </p>
+    </section>
+
+    <!-- 5. Firmas -->
+    <div class="bloque-firmas tres-firmas" style="margin-top: 30px;">
+      <div class="cuadro-firma">
+        <div class="espacio-sello-firma"></div>
+        <div class="linea-firma">
+          <div class="nombre">Ing. Cristian Denegri Mendoza</div>
+          <div class="cargo">Coordinador Técnico (ENTREGA)</div>
+          <div class="entidad">Corte Superior de Justicia de Puno</div>
+        </div>
+      </div>
+      <div class="cuadro-firma">
+        <div class="espacio-sello-firma"></div>
+        <div class="linea-firma">
+          <div class="nombre">Ing. Responsable de Cómputo</div>
+          <div class="cargo">Responsable Técnico (RECIBE)</div>
+          <div class="entidad">Dirección de Admisión — UNA-PUNO</div>
+        </div>
+      </div>
+      <div class="cuadro-firma">
+        <div class="espacio-sello-firma"></div>
+        <div class="linea-firma">
+          <div class="nombre">Abog. Veedor Institucional</div>
+          <div class="cargo">Control Institucional (VEEDOR)</div>
+          <div class="entidad">Poder Judicial / UNA-PUNO</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pie de Página -->
+    <footer class="pie-pagina">
+      <span>Sistema de Calificación Óptica — Dirección de Admisión UNA-PUNO</span>
+      <span>Página 1 de 2</span>
+      <span>Generado: 16/09/2026 13:45</span>
+    </footer>
+  </div>
+
+  <!-- PÁGINA 2: ANEXO OPERATIVO - HOJA DE CONTROL DE RECEPCIÓN POR AULAS (modelo.jpeg) -->
+  <div class="hoja-a4 salto-pagina">
+    <!-- Encabezado Institucional -->
+    <header class="encabezado-institucional">
+      <img src="assets/logo-unap.png" alt="UNA-PUNO" class="logo-entidad">
+      <div class="texto-encabezado">
+        <div class="universidad">Universidad Nacional del Altiplano de Puno</div>
+        <div class="area-rectora">Dirección de Admisión — Coordinación de Operaciones</div>
+        <div class="subtitulo-convenio">EVALUACIÓN TÉCNICA CSJ PUNO — CONVOCATORIA D.L. 728</div>
+      </div>
+      <img src="assets/logo-pj.svg" alt="Poder Judicial" class="logo-entidad">
+    </header>
+
+    <div class="titulo-documento-box">
+      <h2 class="titulo-documento" style="font-size: 11pt;">ANEXO 01: RECEPCIÓN DE TARJETAS POR AULA</h2>
+      <div class="meta-documento">
+        <span>DOCUMENTO DE CONTROL DE ENTRADA (MESA DE CÓMPUTO)</span>
+        <span>FECHA: 16/09/2026</span>
+      </div>
+    </div>
+
+    <p style="font-size: 8pt; margin-bottom: 8px; color: #334155;">
+      Planilla operativa de control manual de paquetes ingresados desde las aulas de evaluación. Formato oficial UNA-PUNO (Anexo de cotejo físico):
+    </p>
+
+    <!-- Tabla a doble cuerpo simulando el formato de modelo.jpeg -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+      <!-- Columna 1 -->
+      <div>
+        <table class="tabla-control-aulas">
+          <thead>
+            <tr>
+              <th style="width: 42%;">Aula</th>
+              <th style="width: 18%;">Cantidad</th>
+              <th style="width: 20%;"># Ident.</th>
+              <th style="width: 20%;"># Resp.</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>100 (C-ING-AZA)</td><td class="font-mono">1</td><td class="casilla-conteo">✓ [1]</td><td class="casilla-conteo">✓ [1]</td></tr>
+            <tr><td>101 (ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>102 (ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>103 (ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>104 (ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>105 (ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>106 (ING-AZA)</td><td class="font-mono">32</td><td class="casilla-conteo">✓ [32]</td><td class="casilla-conteo">✓ [32]</td></tr>
+            <tr><td>107 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [39]</td><td class="casilla-conteo">✓ [39]</td></tr>
+            <tr><td>108 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>109 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [38]</td><td class="casilla-conteo">✓ [38]</td></tr>
+            <tr><td>110 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Columna 2 -->
+      <div>
+        <table class="tabla-control-aulas">
+          <thead>
+            <tr>
+              <th style="width: 42%;">Aula</th>
+              <th style="width: 18%;">Cantidad</th>
+              <th style="width: 20%;"># Ident.</th>
+              <th style="width: 20%;"># Resp.</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>111 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>112 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>113 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [39]</td><td class="casilla-conteo">✓ [39]</td></tr>
+            <tr><td>114 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>115 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>116 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>117 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>118 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>119 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [37]</td><td class="casilla-conteo">✓ [37]</td></tr>
+            <tr><td>120 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr style="background-color: #f1f5f9; font-weight: bold;">
+              <td>TOTAL SUB</td>
+              <td class="font-mono">393</td>
+              <td class="casilla-conteo font-mono">386</td>
+              <td class="casilla-conteo font-mono">386</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Firmas al pie del anexo -->
+    <div class="bloque-firmas" style="margin-top: 35px;">
+      <div class="cuadro-firma">
+        <div class="espacio-sello-firma"></div>
+        <div class="linea-firma">
+          <div class="nombre">Ing. Cristian Denegri Mendoza</div>
+          <div class="cargo">Coordinador de Recepción (PJ)</div>
+        </div>
+      </div>
+      <div class="cuadro-firma">
+        <div class="espacio-sello-firma"></div>
+        <div class="linea-firma">
+          <div class="nombre">Operador de Recepción y Conteo</div>
+          <div class="cargo">Mesa de Entrada — Dirección de Admisión UNA-PUNO</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pie de Página -->
+    <footer class="pie-pagina">
+      <span>Sistema de Calificación Óptica — Dirección de Admisión UNA-PUNO</span>
+      <span>Página 2 de 2</span>
+      <span>Generado: 16/09/2026 13:50</span>
+    </footer>
+  </div>
+
+</body>
+</html>
