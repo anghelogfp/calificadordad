@@ -9,18 +9,20 @@
     .tabla-control-aulas {
       width: 100%;
       border-collapse: collapse;
-      font-size: 8pt;
+      font-size: 6.8pt;
+      line-height: 1.15;
     }
     .tabla-control-aulas th,
     .tabla-control-aulas td {
       border: 1px solid #475569;
-      padding: 3px 5px;
+      padding: 1.2px 3px;
       text-align: center;
     }
     .tabla-control-aulas th {
       background-color: #f1f5f9;
       color: #0f172a;
       font-weight: 700;
+      font-size: 6.8pt;
     }
     .casilla-conteo {
       font-weight: bold;
@@ -41,7 +43,7 @@
         <div class="area-rectora">Dirección de Admisión — Centro de Cómputo y Calificación</div>
         <div class="subtitulo-convenio">Convenio de Cooperación Interinstitucional con la Corte Superior de Justicia de Puno</div>
       </div>
-      <img src="assets/logo-pj.svg" alt="Poder Judicial" class="logo-entidad">
+      <img src="assets/logo-pj.jpg" alt="Poder Judicial" class="logo-entidad">
     </header>
 
     <!-- Título y Metadatos -->
@@ -60,7 +62,7 @@
       <div class="grid-dos-columnas">
         <div class="campo-dato"><span class="campo-etiqueta">Proceso:</span> <span class="campo-valor">Proceso de Selección D.L. 728 N.° 001-2026-UE-PUNO</span></div>
         <div class="campo-dato"><span class="campo-etiqueta">Fecha de Recepción:</span> <span class="campo-valor">16 de septiembre de 2026</span></div>
-        <div class="campo-dato"><span class="campo-etiqueta">Hora de Llegada de Fichas:</span> <span class="campo-valor">12:15 horas (Fichas ID) / 13:40 horas (Fichas RESP)</span></div>
+        <div class="campo-dato"><span class="campo-etiqueta">Distribución:</span> <span class="campo-valor">2 Bloques de Evaluación (Grupo 1 y Grupo 2) — 25 Aulas</span></div>
         <div class="campo-dato"><span class="campo-etiqueta">Lugar de Recepción:</span> <span class="campo-valor">Mesa de Control de Entrada — Centro de Cómputo UNA-PUNO</span></div>
       </div>
     </section>
@@ -79,22 +81,16 @@
         </thead>
         <tbody>
           <tr>
-            <td class="font-bold">ENTREGA (Comisión Externa)</td>
-            <td>Ing. Cristian Denegri Mendoza</td>
-            <td class="text-center font-mono">92504008</td>
-            <td>Coordinador Técnico — CSJ Puno</td>
+            <td class="font-bold">ENTREGA (Comisión)</td>
+            <td>Abog. Benny José Álvarez Quiñonez</td>
+            <td class="text-center font-mono">01234567</td>
+            <td>Presidente CSJ Puno / Comité</td>
           </tr>
           <tr>
             <td class="font-bold">RECIBE (Custodia Cómputo)</td>
-            <td>Ing. Responsable de Cómputo</td>
-            <td class="text-center font-mono">40218765</td>
-            <td>Responsable Técnico — UNA-PUNO</td>
-          </tr>
-          <tr>
-            <td class="font-bold">TESTIGO (Fiscalización)</td>
-            <td>Abog. Veedor Institucional</td>
-            <td class="text-center font-mono">29481023</td>
-            <td>Órgano de Control Institucional</td>
+            <td>Dr. Bladimiro Centeno Herrera</td>
+            <td class="text-center font-mono">01893412</td>
+            <td>Director de Admisión — UNA-PUNO</td>
           </tr>
         </tbody>
       </table>
@@ -102,7 +98,7 @@
 
     <!-- 3. Relación del Material Recibido -->
     <section class="seccion">
-      <div class="seccion-titulo">3. Relación General del Material Físico Recibido</div>
+      <div class="seccion-titulo">3. Relación General del Material Físico Recibido (2 Grupos)</div>
       <table class="tabla-formal">
         <thead>
           <tr>
@@ -116,14 +112,14 @@
         <tbody>
           <tr>
             <td class="text-center font-bold">01</td>
-            <td>Fichas Ópticas de Identificación (ID) por Aulas</td>
+            <td>Fichas Ópticas ID (Grupo 1: 998 / Grupo 2: 984)</td>
             <td class="text-center font-mono">1,982</td>
             <td class="text-center font-mono font-bold">1,945</td>
             <td class="text-center">Conforme / Íntegro</td>
           </tr>
           <tr>
             <td class="text-center font-bold">02</td>
-            <td>Fichas Ópticas de Respuestas (RESP) por Aulas</td>
+            <td>Fichas Ópticas RESP (Grupo 1: 998 / Grupo 2: 984)</td>
             <td class="text-center font-mono">1,982</td>
             <td class="text-center font-mono font-bold">1,945</td>
             <td class="text-center">Conforme / Íntegro</td>
@@ -138,14 +134,14 @@
           <tr>
             <td class="text-center font-bold">04</td>
             <td>Padrón de Firmas y Control de Asistencia en Aulas</td>
-            <td class="text-center font-mono">50 sobres</td>
-            <td class="text-center font-mono font-bold">50 sobres</td>
+            <td class="text-center font-mono">50 paquetes</td>
+            <td class="text-center font-mono font-bold">50 paquetes</td>
             <td class="text-center">Conforme</td>
           </tr>
         </tbody>
       </table>
       <p style="font-size: 8pt; color: #475569; margin-top: 2px;">
-        * Nota: La diferencia de 37 fichas respecto al padrón inicial (1,982) corresponde a postulantes ausentes reportados por los docentes de aula.
+        * Nota: La diferencia de 37 fichas respecto al padrón inicial (1,982) corresponde a postulantes ausentes reportados en las 25 aulas por ambos turnos.
       </p>
     </section>
 
@@ -153,34 +149,26 @@
     <section class="seccion">
       <div class="seccion-titulo">4. Constancia de Entrega y Verificación de Entrada</div>
       <p class="texto-cuerpo">
-        Se deja constancia de que los paquetes y sobres correspondientes a las 50 aulas fueron recibidos, contados manualmente en el pórtico de control y confrontados con la relación oficial de postulantes programados. La recepción física no prejuzga la validez técnica de las marcas interiores (las cuales serán dictaminadas durante el escaneo óptico).
+        Se deja constancia de que los paquetes y sobres correspondientes a las 25 aulas en sus dos grupos (50 paquetes de aula) fueron recibidos, contados manualmente en el pórtico de control y confrontados con la relación oficial de postulantes programados.
       </p>
     </section>
 
-    <!-- 5. Firmas -->
-    <div class="bloque-firmas tres-firmas" style="margin-top: 30px;">
+    <!-- 5. Firmas (2 Firmas) -->
+    <div class="bloque-firmas" style="margin-top: 30px;">
       <div class="cuadro-firma">
         <div class="espacio-sello-firma"></div>
         <div class="linea-firma">
-          <div class="nombre">Ing. Cristian Denegri Mendoza</div>
-          <div class="cargo">Coordinador Técnico (ENTREGA)</div>
-          <div class="entidad">Corte Superior de Justicia de Puno</div>
+          <div class="nombre">Dr. Bladimiro Centeno Herrera</div>
+          <div class="cargo">Director de la Dirección de Admisión (RECIBE)</div>
+          <div class="entidad">Universidad Nacional del Altiplano</div>
         </div>
       </div>
       <div class="cuadro-firma">
         <div class="espacio-sello-firma"></div>
         <div class="linea-firma">
-          <div class="nombre">Ing. Responsable de Cómputo</div>
-          <div class="cargo">Responsable Técnico (RECIBE)</div>
-          <div class="entidad">Dirección de Admisión — UNA-PUNO</div>
-        </div>
-      </div>
-      <div class="cuadro-firma">
-        <div class="espacio-sello-firma"></div>
-        <div class="linea-firma">
-          <div class="nombre">Abog. Veedor Institucional</div>
-          <div class="cargo">Control Institucional (VEEDOR)</div>
-          <div class="entidad">Poder Judicial / UNA-PUNO</div>
+          <div class="nombre">Abog. Benny José Álvarez Quiñonez</div>
+          <div class="cargo">Presidente de la Corte Superior de Justicia de Puno (ENTREGA)</div>
+          <div class="entidad">Comité de Selección — Poder Judicial</div>
         </div>
       </div>
     </div>
@@ -203,97 +191,141 @@
         <div class="area-rectora">Dirección de Admisión — Coordinación de Operaciones</div>
         <div class="subtitulo-convenio">EVALUACIÓN TÉCNICA CSJ PUNO — CONVOCATORIA D.L. 728</div>
       </div>
-      <img src="assets/logo-pj.svg" alt="Poder Judicial" class="logo-entidad">
+      <img src="assets/logo-pj.jpg" alt="Poder Judicial" class="logo-entidad">
     </header>
 
     <div class="titulo-documento-box">
-      <h2 class="titulo-documento" style="font-size: 11pt;">ANEXO 01: RECEPCIÓN DE TARJETAS POR AULA</h2>
+      <h2 class="titulo-documento" style="font-size: 10.5pt;">ANEXO 01: RECEPCIÓN DE TARJETAS POR AULA Y GRUPO (2 BLOQUES)</h2>
       <div class="meta-documento">
-        <span>DOCUMENTO DE CONTROL DE ENTRADA (MESA DE CÓMPUTO)</span>
+        <span>CONTROL DE ENTRADA — MESA DE CÓMPUTO UNA-PUNO</span>
         <span>FECHA: 16/09/2026</span>
+        <span>TOTAL POSTULANTES: 1,982</span>
       </div>
     </div>
 
-    <p style="font-size: 8pt; margin-bottom: 8px; color: #334155;">
-      Planilla operativa de control manual de paquetes ingresados desde las aulas de evaluación. Formato oficial UNA-PUNO (Anexo de cotejo físico):
-    </p>
-
-    <!-- Tabla a doble cuerpo simulando el formato de modelo.jpeg -->
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-      <!-- Columna 1 -->
+    <!-- Tabla a doble cuerpo: Grupo 1 (Mañana) y Grupo 2 (Tarde) -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px;">
+      <!-- Columna 1: GRUPO 1 -->
       <div>
         <table class="tabla-control-aulas">
           <thead>
+            <tr style="background-color: #0a2446; color: #fff;">
+              <th colspan="4" style="padding: 2px 4px; font-size: 7.2pt; background-color: #0a2446; color: #fff;">GRUPO 1 — TURNO MAÑANA (998 Postulantes)</th>
+            </tr>
             <tr>
-              <th style="width: 42%;">Aula</th>
-              <th style="width: 18%;">Cantidad</th>
-              <th style="width: 20%;"># Ident.</th>
-              <th style="width: 20%;"># Resp.</th>
+              <th style="width: 34%;">Aula</th>
+              <th style="width: 22%;">Prog.</th>
+              <th style="width: 22%;"># Ident.</th>
+              <th style="width: 22%;"># Resp.</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td>100 (C-ING-AZA)</td><td class="font-mono">1</td><td class="casilla-conteo">✓ [1]</td><td class="casilla-conteo">✓ [1]</td></tr>
-            <tr><td>101 (ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
-            <tr><td>102 (ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
-            <tr><td>103 (ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
-            <tr><td>104 (ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
-            <tr><td>105 (ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
-            <tr><td>106 (ING-AZA)</td><td class="font-mono">32</td><td class="casilla-conteo">✓ [32]</td><td class="casilla-conteo">✓ [32]</td></tr>
-            <tr><td>107 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [39]</td><td class="casilla-conteo">✓ [39]</td></tr>
-            <tr><td>108 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
-            <tr><td>109 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [38]</td><td class="casilla-conteo">✓ [38]</td></tr>
-            <tr><td>110 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Columna 2 -->
-      <div>
-        <table class="tabla-control-aulas">
-          <thead>
-            <tr>
-              <th style="width: 42%;">Aula</th>
-              <th style="width: 18%;">Cantidad</th>
-              <th style="width: 20%;"># Ident.</th>
-              <th style="width: 20%;"># Resp.</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td>111 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
-            <tr><td>112 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
-            <tr><td>113 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [39]</td><td class="casilla-conteo">✓ [39]</td></tr>
-            <tr><td>114 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
-            <tr><td>115 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
-            <tr><td>116 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
-            <tr><td>117 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
-            <tr><td>118 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
-            <tr><td>119 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [37]</td><td class="casilla-conteo">✓ [37]</td></tr>
-            <tr><td>120 (C-ING-AZA)</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>Aula A01</td><td class="font-mono">53</td><td class="casilla-conteo">✓ [53]</td><td class="casilla-conteo">✓ [53]</td></tr>
+            <tr><td>Aula A02</td><td class="font-mono">53</td><td class="casilla-conteo">✓ [53]</td><td class="casilla-conteo">✓ [53]</td></tr>
+            <tr><td>Aula A03</td><td class="font-mono">53</td><td class="casilla-conteo">✓ [53]</td><td class="casilla-conteo">✓ [53]</td></tr>
+            <tr><td>Aula A04</td><td class="font-mono">53</td><td class="casilla-conteo">✓ [53]</td><td class="casilla-conteo">✓ [53]</td></tr>
+            <tr><td>Aula A05</td><td class="font-mono">53</td><td class="casilla-conteo">✓ [53]</td><td class="casilla-conteo">✓ [53]</td></tr>
+            <tr><td>Aula A06</td><td class="font-mono">54</td><td class="casilla-conteo">✓ [54]</td><td class="casilla-conteo">✓ [54]</td></tr>
+            <tr><td>Aula A07</td><td class="font-mono">50</td><td class="casilla-conteo">✓ [50]</td><td class="casilla-conteo">✓ [50]</td></tr>
+            <tr><td>Aula A08</td><td class="font-mono">49</td><td class="casilla-conteo">✓ [49]</td><td class="casilla-conteo">✓ [49]</td></tr>
+            <tr><td>Aula A09</td><td class="font-mono">54</td><td class="casilla-conteo">✓ [54]</td><td class="casilla-conteo">✓ [54]</td></tr>
+            <tr><td>Aula A10</td><td class="font-mono">51</td><td class="casilla-conteo">✓ [51]</td><td class="casilla-conteo">✓ [51]</td></tr>
+            <tr><td>Aula A11</td><td class="font-mono">50</td><td class="casilla-conteo">✓ [50]</td><td class="casilla-conteo">✓ [50]</td></tr>
+            <tr><td>Aula A12</td><td class="font-mono">39</td><td class="casilla-conteo">✓ [39]</td><td class="casilla-conteo">✓ [39]</td></tr>
+            <tr><td>Aula A13</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>Aula A14</td><td class="font-mono">39</td><td class="casilla-conteo">✓ [39]</td><td class="casilla-conteo">✓ [39]</td></tr>
+            <tr><td>Aula A15</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>Aula A16</td><td class="font-mono">40</td><td class="casilla-conteo">✓ [40]</td><td class="casilla-conteo">✓ [40]</td></tr>
+            <tr><td>Aula A17</td><td class="font-mono">39</td><td class="casilla-conteo">✓ [39]</td><td class="casilla-conteo">✓ [39]</td></tr>
+            <tr><td>Aula A18</td><td class="font-mono">35</td><td class="casilla-conteo">✓ [35]</td><td class="casilla-conteo">✓ [35]</td></tr>
+            <tr><td>Aula A19</td><td class="font-mono">13</td><td class="casilla-conteo">✓ [13]</td><td class="casilla-conteo">✓ [13]</td></tr>
+            <tr><td>Aula A20</td><td class="font-mono">27</td><td class="casilla-conteo">✓ [27]</td><td class="casilla-conteo">✓ [27]</td></tr>
+            <tr><td>Aula A21</td><td class="font-mono">30</td><td class="casilla-conteo">✓ [30]</td><td class="casilla-conteo">✓ [30]</td></tr>
+            <tr><td>Aula A22</td><td class="font-mono">30</td><td class="casilla-conteo">✓ [30]</td><td class="casilla-conteo">✓ [30]</td></tr>
+            <tr><td>Aula A23</td><td class="font-mono">26</td><td class="casilla-conteo">✓ [26]</td><td class="casilla-conteo">✓ [26]</td></tr>
+            <tr><td>Aula A24</td><td class="font-mono">19</td><td class="casilla-conteo">✓ [19]</td><td class="casilla-conteo">✓ [19]</td></tr>
+            <tr><td>Aula A25</td><td class="font-mono">8</td><td class="casilla-conteo">✓ [8]</td><td class="casilla-conteo">✓ [8]</td></tr>
             <tr style="background-color: #f1f5f9; font-weight: bold;">
-              <td>TOTAL SUB</td>
-              <td class="font-mono">393</td>
-              <td class="casilla-conteo font-mono">386</td>
-              <td class="casilla-conteo font-mono">386</td>
+              <td>TOTAL G1</td>
+              <td class="font-mono">998</td>
+              <td class="casilla-conteo font-mono">✓ [979]</td>
+              <td class="casilla-conteo font-mono">✓ [979]</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Columna 2: GRUPO 2 -->
+      <div>
+        <table class="tabla-control-aulas">
+          <thead>
+            <tr style="background-color: #1e3a5f; color: #fff;">
+              <th colspan="4" style="padding: 2px 4px; font-size: 7.2pt; background-color: #1e3a5f; color: #fff;">GRUPO 2 — TURNO TARDE (984 Postulantes)</th>
+            </tr>
+            <tr>
+              <th style="width: 34%;">Aula</th>
+              <th style="width: 22%;">Prog.</th>
+              <th style="width: 22%;"># Ident.</th>
+              <th style="width: 22%;"># Resp.</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Aula A01</td><td class="font-mono">52</td><td class="casilla-conteo">✓ [52]</td><td class="casilla-conteo">✓ [52]</td></tr>
+            <tr><td>Aula A02</td><td class="font-mono">52</td><td class="casilla-conteo">✓ [52]</td><td class="casilla-conteo">✓ [52]</td></tr>
+            <tr><td>Aula A03</td><td class="font-mono">52</td><td class="casilla-conteo">✓ [52]</td><td class="casilla-conteo">✓ [52]</td></tr>
+            <tr><td>Aula A04</td><td class="font-mono">55</td><td class="casilla-conteo">✓ [55]</td><td class="casilla-conteo">✓ [55]</td></tr>
+            <tr><td>Aula A05</td><td class="font-mono">54</td><td class="casilla-conteo">✓ [54]</td><td class="casilla-conteo">✓ [54]</td></tr>
+            <tr><td>Aula A06</td><td class="font-mono">52</td><td class="casilla-conteo">✓ [52]</td><td class="casilla-conteo">✓ [52]</td></tr>
+            <tr><td>Aula A07</td><td class="font-mono">51</td><td class="casilla-conteo">✓ [51]</td><td class="casilla-conteo">✓ [51]</td></tr>
+            <tr><td>Aula A08</td><td class="font-mono">46</td><td class="casilla-conteo">✓ [46]</td><td class="casilla-conteo">✓ [46]</td></tr>
+            <tr><td>Aula A09</td><td class="font-mono">51</td><td class="casilla-conteo">✓ [51]</td><td class="casilla-conteo">✓ [51]</td></tr>
+            <tr><td>Aula A10</td><td class="font-mono">50</td><td class="casilla-conteo">✓ [50]</td><td class="casilla-conteo">✓ [50]</td></tr>
+            <tr><td>Aula A11</td><td class="font-mono">44</td><td class="casilla-conteo">✓ [44]</td><td class="casilla-conteo">✓ [44]</td></tr>
+            <tr><td>Aula A12</td><td class="font-mono">37</td><td class="casilla-conteo">✓ [37]</td><td class="casilla-conteo">✓ [37]</td></tr>
+            <tr><td>Aula A13</td><td class="font-mono">38</td><td class="casilla-conteo">✓ [38]</td><td class="casilla-conteo">✓ [38]</td></tr>
+            <tr><td>Aula A14</td><td class="font-mono">35</td><td class="casilla-conteo">✓ [35]</td><td class="casilla-conteo">✓ [35]</td></tr>
+            <tr><td>Aula A15</td><td class="font-mono">39</td><td class="casilla-conteo">✓ [39]</td><td class="casilla-conteo">✓ [39]</td></tr>
+            <tr><td>Aula A16</td><td class="font-mono">37</td><td class="casilla-conteo">✓ [37]</td><td class="casilla-conteo">✓ [37]</td></tr>
+            <tr><td>Aula A17</td><td class="font-mono">37</td><td class="casilla-conteo">✓ [37]</td><td class="casilla-conteo">✓ [37]</td></tr>
+            <tr><td>Aula A18</td><td class="font-mono">32</td><td class="casilla-conteo">✓ [32]</td><td class="casilla-conteo">✓ [32]</td></tr>
+            <tr><td>Aula A19</td><td class="font-mono">32</td><td class="casilla-conteo">✓ [32]</td><td class="casilla-conteo">✓ [32]</td></tr>
+            <tr><td>Aula A20</td><td class="font-mono">29</td><td class="casilla-conteo">✓ [29]</td><td class="casilla-conteo">✓ [29]</td></tr>
+            <tr><td>Aula A21</td><td class="font-mono">27</td><td class="casilla-conteo">✓ [27]</td><td class="casilla-conteo">✓ [27]</td></tr>
+            <tr><td>Aula A22</td><td class="font-mono">26</td><td class="casilla-conteo">✓ [26]</td><td class="casilla-conteo">✓ [26]</td></tr>
+            <tr><td>Aula A23</td><td class="font-mono">22</td><td class="casilla-conteo">✓ [22]</td><td class="casilla-conteo">✓ [22]</td></tr>
+            <tr><td>Aula A24</td><td class="font-mono">17</td><td class="casilla-conteo">✓ [17]</td><td class="casilla-conteo">✓ [17]</td></tr>
+            <tr><td>Aula A25</td><td class="font-mono">17</td><td class="casilla-conteo">✓ [17]</td><td class="casilla-conteo">✓ [17]</td></tr>
+            <tr style="background-color: #f1f5f9; font-weight: bold;">
+              <td>TOTAL G2</td>
+              <td class="font-mono">984</td>
+              <td class="casilla-conteo font-mono">✓ [966]</td>
+              <td class="casilla-conteo font-mono">✓ [966]</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- Firmas al pie del anexo -->
-    <div class="bloque-firmas" style="margin-top: 35px;">
+    <!-- Banner Consolidado -->
+    <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; padding: 4px 10px; margin-top: 6px; display: flex; justify-content: space-between; font-size: 7.5pt; font-weight: bold;">
+      <span>TOTAL GENERAL: 50 PAQUETES (25 AULAS × 2 GRUPOS)</span>
+      <span class="font-mono">PROGRAMADOS: 1,982 &nbsp;|&nbsp; VERIFICADOS ID: 1,945 &nbsp;|&nbsp; VERIFICADOS RESP: 1,945 &nbsp;|&nbsp; AUSENTES: 37</span>
+    </div>
+
+    <!-- Firmas al pie del anexo (2 Firmas) -->
+    <div class="bloque-firmas" style="margin-top: 14px;">
       <div class="cuadro-firma">
-        <div class="espacio-sello-firma"></div>
+        <div class="espacio-sello-firma" style="height: 30px;"></div>
         <div class="linea-firma">
-          <div class="nombre">Ing. Cristian Denegri Mendoza</div>
-          <div class="cargo">Coordinador de Recepción (PJ)</div>
+          <div class="nombre">Dr. Bladimiro Centeno Herrera</div>
+          <div class="cargo">Director de Admisión — UNA-PUNO</div>
         </div>
       </div>
       <div class="cuadro-firma">
-        <div class="espacio-sello-firma"></div>
+        <div class="espacio-sello-firma" style="height: 30px;"></div>
         <div class="linea-firma">
-          <div class="nombre">Operador de Recepción y Conteo</div>
-          <div class="cargo">Mesa de Entrada — Dirección de Admisión UNA-PUNO</div>
+          <div class="nombre">Abog. Benny José Álvarez Quiñonez</div>
+          <div class="cargo">Presidente CSJ Puno / Comité D.L. 728</div>
         </div>
       </div>
     </div>

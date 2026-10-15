@@ -17,7 +17,7 @@
         <div class="area-rectora">Dirección de Admisión — Centro de Cómputo y Calificación</div>
         <div class="subtitulo-convenio">Convenio de Cooperación Interinstitucional con la Corte Superior de Justicia de Puno</div>
       </div>
-      <img src="assets/logo-pj.svg" alt="Poder Judicial" class="logo-entidad">
+      <img src="assets/logo-pj.jpg" alt="Poder Judicial" class="logo-entidad">
     </header>
 
     <div class="titulo-documento-box">
@@ -35,8 +35,8 @@
       <div class="grid-dos-columnas">
         <div class="campo-dato"><span class="campo-etiqueta">Convocatoria:</span> <span class="campo-valor">Proceso D.L. 728 N.° 001-2026-UE-PUNO (65 Vacantes)</span></div>
         <div class="campo-dato"><span class="campo-etiqueta">Entidad Solicitante:</span> <span class="campo-valor">Corte Superior de Justicia de Puno</span></div>
-        <div class="campo-dato"><span class="campo-etiqueta">Sistema Informático:</span> <span class="campo-valor">Motor de Calificación Automatizada UNA-PUNO v2.4 (Dominio Auditado)</span></div>
-        <div class="campo-dato"><span class="campo-etiqueta">Dispositivos Ópticos:</span> <span class="campo-valor">Lectores OMR Scantron iNSIGHT 4ES / Dual Reader</span></div>
+        <div class="campo-dato"><span class="campo-etiqueta">Modalidad de Turnos:</span> <span class="campo-valor">2 Grupos Evaluados (G1: 998 post. / G2: 984 post. — 25 Aulas)</span></div>
+        <div class="campo-dato"><span class="campo-etiqueta">Sistema Informático:</span> <span class="campo-valor">Motor de Calificación Automatizada UNA-PUNO v2.4 (Auditado)</span></div>
       </div>
     </section>
 
@@ -44,20 +44,20 @@
     <section class="seccion">
       <div class="seccion-titulo">2. Parámetros de Calificación y Huella Vinculada</div>
       <p class="texto-cuerpo">
-        El proceso se ejecutó bajo la configuración aprobada mediante el <strong>Acta n.° 04 de Conformidad de Claves</strong>: 60 preguntas, 10.000 pts por acierto, 0.000 pts por error, 0.000 pts en blanco y 0.000 pts por doble marca (*).
+        El proceso se ejecutó bajo la configuración aprobada mediante el <strong>Acta n.° 04 de Conformidad de Claves</strong>: 30 preguntas por cartilla, 10.000 pts por acierto, 0.000 pts por error, 0.000 pts en blanco y 0.000 pts por doble marca (*). Puntaje máximo: 300.000 puntos.
       </p>
       <div style="font-size: 8pt; margin-bottom: 2px;">
-        <span class="font-bold">Huella SHA-256 de Configuración Auditada:</span>
-        <span class="font-mono" style="color: #0369a1;">e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</span>
+        <span class="font-bold">Huella SHA-256 de Configuración Auditada (30 Preguntas):</span>
+        <span class="font-mono" style="color: #0369a1;">1157033efdf632a759d0c77f282e8481cb185a836a52e61bf54a3edcb63907f4</span>
         <span class="font-bold" style="color: #15803d;">(COINCIDENCIA VERIFICADA 100%)</span>
       </div>
     </section>
 
     <!-- 3. Pruebas Previas Sintéticas (Test Cases) -->
     <section class="seccion">
-      <div class="seccion-titulo">3. Batería de Pruebas Previas al Procesamiento (Test Cases)</div>
+      <div class="seccion-titulo">3. Batería de Pruebas Previas al Procesamiento (Test Cases de 30 Preguntas)</div>
       <p class="texto-cuerpo">
-        Previo al ingreso de los datos reales, se inyectaron 5 fichas patrón sintéticas para validar la exactitud algorítmica del motor de calificación:
+        Previo al ingreso de los datos reales, se inyectaron 5 fichas patrón sintéticas para validar la exactitud algorítmica del motor de calificación sobre la escala de 30 preguntas:
       </p>
       <table class="tabla-formal">
         <thead>
@@ -70,13 +70,13 @@
         </thead>
         <tbody>
           <tr>
-            <td>Ficha con 60 respuestas correctas (Patrón Tipo P)</td>
-            <td class="text-center font-mono">600.000 pts</td>
-            <td class="text-center font-mono font-bold">600.000 pts</td>
+            <td>Ficha con 30 respuestas correctas (Patrón Tipo P / Tipo R)</td>
+            <td class="text-center font-mono">300.000 pts</td>
+            <td class="text-center font-mono font-bold">300.000 pts</td>
             <td class="text-center font-bold" style="color: #15803d;">CONFORME</td>
           </tr>
           <tr>
-            <td>Ficha con 60 respuestas incorrectas (Patrón Tipo P)</td>
+            <td>Ficha con 30 respuestas incorrectas</td>
             <td class="text-center font-mono">0.000 pts</td>
             <td class="text-center font-mono font-bold">0.000 pts</td>
             <td class="text-center font-bold" style="color: #15803d;">CONFORME</td>
@@ -88,7 +88,7 @@
             <td class="text-center font-bold" style="color: #15803d;">CONFORME</td>
           </tr>
           <tr>
-            <td>Ficha con marcas múltiples/anuladas (*) en las 60 preguntas</td>
+            <td>Ficha con marcas múltiples/anuladas (*) en las 30 preguntas</td>
             <td class="text-center font-mono">0.000 pts</td>
             <td class="text-center font-mono font-bold">0.000 pts</td>
             <td class="text-center font-bold" style="color: #15803d;">CONFORME</td>
@@ -156,7 +156,7 @@
         <div class="area-rectora">Dirección de Admisión — Centro de Cómputo y Calificación</div>
         <div class="subtitulo-convenio">EVALUACIÓN TÉCNICA CSJ PUNO — CONVOCATORIA D.L. 728</div>
       </div>
-      <img src="assets/logo-pj.svg" alt="Poder Judicial" class="logo-entidad">
+      <img src="assets/logo-pj.jpg" alt="Poder Judicial" class="logo-entidad">
     </header>
 
     <div class="titulo-documento-box">
@@ -168,9 +168,9 @@
       </div>
     </div>
 
-    <!-- 5. Resumen Estadístico de Calificación -->
+    <!-- 5. Resumen Estadístico de Calificación (30 Preguntas) -->
     <section class="seccion">
-      <div class="seccion-titulo">5. Cuadro Estadístico de la Calificación</div>
+      <div class="seccion-titulo">5. Cuadro Estadístico de la Calificación (Escala 30 Preguntas / 300 Pts Máx.)</div>
       <table class="tabla-formal">
         <thead>
           <tr>
@@ -182,22 +182,22 @@
         </thead>
         <tbody>
           <tr>
-            <td>Postulantes en Padrón Oficial:</td>
-            <td class="text-center font-bold font-mono">1,982</td>
+            <td>Postulantes en Padrón (2 Grupos):</td>
+            <td class="text-center font-bold font-mono">1,982 (G1: 998 / G2: 984)</td>
             <td>Puntaje Máximo Obtenido:</td>
-            <td class="text-center font-bold font-mono" style="color: #15803d;">570.000 pts</td>
+            <td class="text-center font-bold font-mono" style="color: #15803d;">290.000 pts</td>
           </tr>
           <tr>
             <td>Postulantes Presentes (Evaluados):</td>
-            <td class="text-center font-bold font-mono">1,945</td>
+            <td class="text-center font-bold font-mono">1,945 (G1: 979 / G2: 966)</td>
             <td>Puntaje Mínimo Obtenido:</td>
-            <td class="text-center font-bold font-mono" style="color: #b91c1c;">80.000 pts</td>
+            <td class="text-center font-bold font-mono" style="color: #b91c1c;">40.000 pts</td>
           </tr>
           <tr>
             <td>Postulantes Ausentes:</td>
-            <td class="text-center font-mono">37</td>
+            <td class="text-center font-mono">37 (G1: 19 / G2: 18)</td>
             <td>Puntaje Promedio General:</td>
-            <td class="text-center font-bold font-mono">384.250 pts</td>
+            <td class="text-center font-bold font-mono">192.500 pts</td>
           </tr>
           <tr>
             <td>Postulantes Calificados Válidos:</td>
@@ -222,6 +222,11 @@
         </thead>
         <tbody>
           <tr>
+            <td class="font-bold">Padrón Oficial Recibido (Excel)</td>
+            <td class="font-mono" style="font-size: 7.5pt;">PLANTILLA_PARTICIPANTES_001-2026-UE-PUNO.xlsx</td>
+            <td class="font-mono text-center" style="font-size: 6.5pt;">decf800172efcfdbbc15090eb5dbc67bebacd9303e3ef93a45cd4180db4dff92</td>
+          </tr>
+          <tr>
             <td class="font-bold">Padrón General con Puntajes Oficiales</td>
             <td class="font-mono" style="font-size: 7.5pt;">RESULTADOS_FINAL_PJ_728_2026.xlsx</td>
             <td class="font-mono text-center" style="font-size: 6.5pt;">c8f5b12a9e0d3c4b5a6f7e8d9c0b1a2f3e4d5c6b7a8f9e0d1c2b3a4f5e6d7c8b</td>
@@ -244,28 +249,28 @@
     <section class="seccion">
       <div class="seccion-titulo">7. Conclusiones y Certificación Técnica</div>
       <p class="texto-cuerpo">
-        1. Las lecturas ópticas de identificación y respuestas se ejecutaron al 100% bajo estándares internacionales OMR sin anomalías en el hardware lector.<br>
+        1. Las lecturas ópticas de identificación y respuestas se ejecutaron al 100% bajo estándares internacionales OMR sobre la matriz de 30 preguntas.<br>
         2. Los puntajes y posiciones en orden de mérito fueron calculados con estricta sujeción a la matriz de ponderación aprobada sin intervención manual.<br>
         3. Todos los productos digitales generados cuentan con huella SHA-256 no repudiable, garantizando su inmutabilidad para los fines de ley.
       </p>
     </section>
 
-    <!-- 8. Firmas de los Responsables del Informe -->
-    <div class="bloque-firmas" style="margin-top: 30px;">
+    <!-- 8. Firmas de los Responsables del Informe (2 Firmas) -->
+    <div class="bloque-firmas" style="margin-top: 25px;">
       <div class="cuadro-firma">
         <div class="espacio-sello-firma"></div>
         <div class="linea-firma">
-          <div class="nombre">Ing. Responsable de Cómputo</div>
-          <div class="cargo">Responsable Técnico de Calificación (ELABORÓ)</div>
-          <div class="entidad">Dirección de Admisión — UNA-PUNO</div>
+          <div class="nombre">Dr. Bladimiro Centeno Herrera</div>
+          <div class="cargo">Director de la Dirección de Admisión (APROBÓ)</div>
+          <div class="entidad">Universidad Nacional del Altiplano</div>
         </div>
       </div>
       <div class="cuadro-firma">
         <div class="espacio-sello-firma"></div>
         <div class="linea-firma">
-          <div class="nombre">Dr. Bladimiro Centeno Herrera</div>
-          <div class="cargo">Director de la Dirección de Admisión (REVISÓ Y APROBÓ)</div>
-          <div class="entidad">Universidad Nacional del Altiplano</div>
+          <div class="nombre">Abog. Benny José Álvarez Quiñonez</div>
+          <div class="cargo">Presidente de la Corte Superior de Justicia de Puno (RECIBE)</div>
+          <div class="entidad">Comité de Selección D.L. 728 — Poder Judicial</div>
         </div>
       </div>
     </div>
