@@ -1,5 +1,6 @@
 <script setup>
-import { ref, reactive, computed, unref } from 'vue'
+import { ref, reactive, computed, unref, watch } from 'vue'
+import { useStorage } from '@vueuse/core'
 import { computeFileSha256, formatHashBlocks, sha256Hex } from '@/utils/cryptoHash'
 import { stripDigits, normalize } from '@/utils/helpers'
 import { computeConfigurationSha256 } from '@/domain/calification/configHash'
@@ -98,6 +99,7 @@ const DEFAULT_EXAM_CODES_27 = [
 // ═══════════════════════════════════════════════════════════════════════════
 
 const showConfigPanel = ref(true)
+const configTab = ref('general') // 'general' | 'horarios' | 'firmas' | 'apertura' | 'hashes'
 const activeDocKey = ref('doc-01')
 const printAllMode = ref(false)
 const showOpticalCountsIn03A = ref(true)
@@ -111,11 +113,19 @@ const localContainerMeta = reactive({
   size: 0,
 })
 
-const actaConfig = reactive({
+const DEFAULT_ACTA_CONFIG = Object.freeze({
   procesoNombre: 'Proceso de Selección de Personal D.L. 728 N.° 001-2026-UE-PUNO',
   oficioReferencia: 'OFICIO N.° 003-2025-AP-UAF-GAD-CSJPU-PJ',
   entidadSolicitante: 'Corte Superior de Justicia de Puno — Poder Judicial',
   entidadEjecutora: 'Universidad Nacional del Altiplano de Puno — Dirección de Admisión',
+  modalidadTexto: 'Evaluación Técnica Presencial',
+  codigoActa01: 'ACTA-01-INICIO-2026',
+  codigoActa02: 'ACTA-02-DIGITAL-2026',
+  codigoActa03A: 'DOC-03-A-RECEPCION-AULAS',
+  codigoActa03B: 'DOC-03-B-LECTURA-ERRORES',
+  codigoActa04: 'ACTA-04-CLAVES-PRUEBAS-2026',
+  codigoActa05: 'DOC-05-INFORME-TECNICO-2026',
+  codigoActa06: 'ACTA-06-CIERRE-CONFORMIDAD-2026',
   fecha: '16 de octubre de 2026',
   horaInicio: '08:30 horas',
   horaRecepcionDigital: '08:45 horas',
@@ -124,8 +134,9 @@ const actaConfig = reactive({
   lugar: 'Centro de Convenciones UNA-PUNO — Ciudad Universitaria',
   ambiente: 'Sala de Calificación Óptica (Acceso Restringido)',
   precintoUsb: 'USB Kingston — Precinto de Seguridad N.° #004512',
-  sobreLacradoClaves: 'LC-091',
+  sobreLacradoClaves: 'Sobre Lacrado N.° LC-091',
   vacantesTotales: 65,
+  espacioFirmaPx: 75,
   observacionesGenerales:
     'Procesamiento óptico realizado en circuito cerrado sin conexión a red externa, bajo supervisión conjunta de la Dirección de Admisión UNA-PUNO y la Comisión de Selección de la CSJ Puno.',
   firmanteUnap: {
@@ -168,6 +179,44 @@ const actaConfig = reactive({
     },
   ],
 })
+
+const storedActaConfig = useStorage('calificador-actas-pj-config-v3', DEFAULT_ACTA_CONFIG)
+const actaConfig = reactive({
+  ...DEFAULT_ACTA_CONFIG,
+  ...(storedActaConfig.value || {}),
+  firmanteUnap: { ...DEFAULT_ACTA_CONFIG.firmanteUnap, ...(storedActaConfig.value?.firmanteUnap || {}) },
+  firmantePj: { ...DEFAULT_ACTA_CONFIG.firmantePj, ...(storedActaConfig.value?.firmantePj || {}) },
+  verificacionesApertura: (storedActaConfig.value?.verificacionesApertura?.length
+    ? storedActaConfig.value.verificacionesApertura
+    : DEFAULT_ACTA_CONFIG.verificacionesApertura
+  ).map((item) => ({ ...item })),
+})
+
+watch(
+  actaConfig,
+  (val) => {
+    storedActaConfig.value = JSON.parse(JSON.stringify(val))
+  },
+  { deep: true },
+)
+
+function addVerificacionApertura() {
+  actaConfig.verificacionesApertura.push({
+    item: 'Nuevo aspecto técnico verificado por la comisión',
+    conforme: true,
+    obs: 'Conforme',
+  })
+}
+
+function removeVerificacionApertura(idx) {
+  if (actaConfig.verificacionesApertura.length > 1) {
+    actaConfig.verificacionesApertura.splice(idx, 1)
+  }
+}
+
+function resetActaConfigToDefaults() {
+  Object.assign(actaConfig, JSON.parse(JSON.stringify(DEFAULT_ACTA_CONFIG)))
+}
 
 const DOCUMENTS_TABS = [
   { key: 'doc-01', code: '01', title: 'Acta de Inicio y Apertura', short: '01. Apertura' },
@@ -1024,22 +1073,440 @@ function isDocVisible(docKey) {
   return printAllMode.value || activeDocKey.value === docKey
 }
 
+function printElementCleanly(targetMode, title) {
+  let contentHtml = ''
+  if (targetMode === 'all') {
+    const sheets = document.querySelectorAll('.actas-a4-canvas .hoja-a4')
+    sheets.forEach((sheet) => {
+      contentHtml += `<div class="salto-pagina">${sheet.outerHTML}</div>`
+    })
+  } else {
+    const currentDocEl =
+      document.querySelector(`.actas-a4-canvas [data-doc="${targetMode}"]`) ||
+      document.querySelector('.actas-a4-canvas .hoja-a4')
+    if (currentDocEl) {
+      contentHtml = currentDocEl.outerHTML
+    }
+  }
+
+  if (!contentHtml) {
+    window.print()
+    return
+  }
+
+  let iframe = document.getElementById('pj-print-iframe')
+  if (iframe) iframe.remove()
+
+  iframe = document.createElement('iframe')
+  iframe.id = 'pj-print-iframe'
+  iframe.style.position = 'fixed'
+  iframe.style.right = '0'
+  iframe.style.bottom = '0'
+  iframe.style.width = '0'
+  iframe.style.height = '0'
+  iframe.style.border = '0'
+  document.body.appendChild(iframe)
+
+  const doc = iframe.contentWindow.document
+  doc.open()
+  doc.write(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8">
+      <title>${title || 'Acta Oficial'}</title>
+      <style>
+        @page {
+          size: A4 portrait;
+          margin: 10mm 12mm 10mm 12mm;
+        }
+        * {
+          box-sizing: border-box;
+          margin: 0;
+          padding: 0;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        body {
+          font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          font-size: 8.8pt;
+          line-height: 1.35;
+          color: #1e293b;
+          background: #ffffff;
+        }
+        .hoja-a4 {
+          width: 100% !important;
+          max-width: 100% !important;
+          min-height: 0 !important;
+          margin: 0 auto !important;
+          padding: 4mm 6mm !important;
+          background: #ffffff !important;
+          box-shadow: none !important;
+          border: none !important;
+        }
+        .salto-pagina {
+          page-break-before: always;
+          break-before: page;
+        }
+        .salto-pagina:first-child {
+          page-break-before: avoid;
+          break-before: avoid;
+        }
+        .encabezado-institucional {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border-bottom: 2.2px solid #0a2446;
+          padding-bottom: 6px;
+          margin-bottom: 10px;
+          position: relative;
+        }
+        .encabezado-institucional::after {
+          content: "";
+          position: absolute;
+          bottom: -4px;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background-color: #ddab44;
+        }
+        .logo-entidad {
+          width: 52px;
+          height: 52px;
+          object-fit: contain;
+        }
+        .logo-entidad--pj {
+          border-radius: 4px;
+        }
+        .texto-encabezado {
+          text-align: center;
+          flex: 1;
+          padding: 0 10px;
+        }
+        .texto-encabezado .universidad {
+          font-size: 11pt;
+          font-weight: 800;
+          color: #0a2446;
+          text-transform: uppercase;
+          letter-spacing: 0.4px;
+        }
+        .texto-encabezado .area-rectora {
+          font-size: 8.8pt;
+          font-weight: 700;
+          color: #1e3a5f;
+        }
+        .texto-encabezado .subtitulo-convenio {
+          font-size: 8pt;
+          font-style: italic;
+          color: #64748b;
+        }
+        .titulo-documento-box {
+          text-align: center;
+          margin: 10px 0 10px 0;
+        }
+        .titulo-documento {
+          font-size: 11.5pt;
+          font-weight: 900;
+          color: #0a2446;
+          text-transform: uppercase;
+          letter-spacing: 0.4px;
+        }
+        .meta-documento {
+          display: flex;
+          justify-content: space-between;
+          font-size: 8pt;
+          font-weight: 600;
+          color: #64748b;
+          margin-top: 4px;
+          border-bottom: 1px dashed #cbd5e1;
+          padding-bottom: 4px;
+        }
+        .seccion {
+          margin-bottom: 10px;
+        }
+        .seccion-titulo {
+          font-size: 9pt;
+          font-weight: 800;
+          color: #0a2446;
+          background-color: #f1f5f9;
+          border-left: 3.5px solid #1e3a5f;
+          padding: 3px 6px;
+          margin-bottom: 6px;
+          text-transform: uppercase;
+        }
+        .texto-cuerpo {
+          text-align: justify;
+          font-size: 8.8pt;
+          line-height: 1.4;
+          margin-bottom: 6px;
+        }
+        table.tabla-formal {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 8.2pt;
+          margin: 6px 0 8px 0;
+          page-break-inside: auto;
+        }
+        table.tabla-formal th,
+        table.tabla-formal td {
+          border: 1px solid #cbd5e1;
+          padding: 3.5px 5.5px;
+          vertical-align: middle;
+        }
+        table.tabla-formal th {
+          background-color: #f1f5f9;
+          color: #0a2446;
+          font-weight: 700;
+          text-align: center;
+          font-size: 7.8pt;
+          text-transform: uppercase;
+        }
+        table.tabla-formal tr:nth-child(even) {
+          background-color: #f8fafc;
+        }
+        tr {
+          page-break-inside: avoid;
+        }
+        .grid-dos-columnas {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 6px 14px;
+          margin-bottom: 8px;
+        }
+        .campo-dato {
+          font-size: 8.3pt;
+        }
+        .campo-etiqueta {
+          font-weight: 700;
+          color: #1e3a5f;
+        }
+        .campo-valor {
+          color: #1e293b;
+        }
+        .caja-hash {
+          background-color: #f8fafc;
+          border: 1px dashed #94a3b8;
+          padding: 6px 8px;
+          margin: 6px 0 10px 0;
+        }
+        .caja-hash__label {
+          font-size: 7.5pt;
+          font-weight: 700;
+          color: #475569;
+          text-transform: uppercase;
+          margin-bottom: 2px;
+        }
+        .caja-hash__value {
+          font-family: "SF Mono", Consolas, Menlo, monospace;
+          font-size: 8.2pt;
+          font-weight: 700;
+          color: #0a2446;
+          word-break: break-all;
+          letter-spacing: 0.5px;
+        }
+        .bloque-firmas {
+          margin-top: 26px;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px 28px;
+        }
+        .cuadro-firma {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+        }
+        .espacio-sello-firma {
+          height: ${actaConfig.espacioFirmaPx || 75}px;
+          width: 100%;
+        }
+        .linea-firma {
+          width: 88%;
+          border-top: 1.5px solid #000000;
+          padding-top: 5px;
+          font-size: 7.8pt;
+          line-height: 1.25;
+        }
+        .linea-firma .nombre {
+          font-weight: 800;
+          color: #000000;
+          font-size: 8.5pt;
+        }
+        .linea-firma .cargo {
+          color: #475569;
+          font-size: 7.5pt;
+        }
+        .linea-firma .entidad {
+          font-size: 7pt;
+          font-weight: 700;
+          text-transform: uppercase;
+          color: #1e3a5f;
+        }
+        .pie-pagina {
+          display: flex;
+          justify-content: space-between;
+          font-size: 7pt;
+          color: #94a3b8;
+          border-top: 1px solid #cbd5e1;
+          padding-top: 4px;
+          margin-top: 14px;
+        }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .font-mono { font-family: "SF Mono", Consolas, monospace; }
+        .font-bold { font-weight: bold; }
+        .recepcion-tarjetas-header {
+          text-align: center;
+          margin: 6px 0 10px 0;
+        }
+        .recepcion-tarjetas-header h1 {
+          font-size: 13pt;
+          font-weight: 900;
+          text-decoration: underline;
+          color: #0a2446;
+          letter-spacing: 0.8px;
+        }
+        .recepcion-aulas-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+          margin-bottom: 8px;
+        }
+        .tabla-recepcion-aula {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 7.2pt;
+        }
+        .tabla-recepcion-aula th,
+        .tabla-recepcion-aula td {
+          border: 1px solid #334155;
+          padding: 2.2px 3.5px;
+          text-align: center;
+        }
+        .tabla-recepcion-aula th {
+          background-color: #f1f5f9;
+          font-weight: 800;
+          font-size: 7pt;
+        }
+        .recepcion-resumen-bar {
+          display: flex;
+          justify-content: space-between;
+          background: #f8fafc;
+          border: 1px solid #cbd5e1;
+          padding: 4px 8px;
+          font-size: 7.2pt;
+          font-weight: 700;
+          color: #0a2446;
+          margin: 6px 0;
+        }
+        .matriz-claves-pj {
+          display: grid;
+          grid-template-columns: repeat(6, 1fr);
+          gap: 4px;
+          margin: 8px 0;
+        }
+        .columna-clave-pj {
+          border: 1px solid #cbd5e1;
+          font-size: 7.5pt;
+        }
+        .columna-clave-pj__header {
+          background-color: #1e3a5f;
+          color: #ffffff;
+          font-weight: 800;
+          text-align: center;
+          padding: 2px 0;
+        }
+        .fila-pregunta-pj {
+          display: flex;
+          justify-content: space-between;
+          padding: 1.5px 5px;
+          border-bottom: 1px dotted #cbd5e1;
+          font-family: "SF Mono", Consolas, monospace;
+        }
+        .fila-pregunta-pj:last-child {
+          border-bottom: none;
+        }
+        .fila-pregunta-pj .num {
+          color: #64748b;
+        }
+        .fila-pregunta-pj .res {
+          font-weight: 800;
+          color: #0a2446;
+        }
+      </style>
+    </head>
+    <body>
+      ${contentHtml}
+    </body>
+    </html>
+  `)
+  doc.close()
+
+  setTimeout(() => {
+    iframe.contentWindow.focus()
+    iframe.contentWindow.print()
+  }, 350)
+}
+
 function handlePrintActiveDoc() {
   printAllMode.value = false
-  setTimeout(() => {
-    window.print()
-  }, 80)
+  printElementCleanly(activeDocKey.value, `Acta Oficial — ${activeDocKey.value.toUpperCase()}`)
 }
 
 function handlePrintAllDocs() {
-  const prev = printAllMode.value
   printAllMode.value = true
-  setTimeout(() => {
-    window.print()
-    setTimeout(() => {
-      printAllMode.value = prev
-    }, 400)
-  }, 120)
+  printElementCleanly('all', 'Paquete Completo de Actas Oficiales (01–06) — CSJ PUNO / UNA-PUNO')
+}
+
+function handleOpenCleanWindow() {
+  const targetMode = printAllMode.value ? 'all' : activeDocKey.value
+  let contentHtml = ''
+  if (targetMode === 'all') {
+    const sheets = document.querySelectorAll('.actas-a4-canvas .hoja-a4')
+    sheets.forEach((sheet) => {
+      contentHtml += `<div class="salto-pagina">${sheet.outerHTML}</div>`
+    })
+  } else {
+    const currentDocEl =
+      document.querySelector(`.actas-a4-canvas [data-doc="${targetMode}"]`) ||
+      document.querySelector('.actas-a4-canvas .hoja-a4')
+    if (currentDocEl) {
+      contentHtml = currentDocEl.outerHTML
+    }
+  }
+
+  const printWindow = window.open('', '_blank', 'width=950,height=1000')
+  if (!printWindow) {
+    handlePrintActiveDoc()
+    return
+  }
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8">
+      <title>Vista de Impresión Limpia A4 — UNA-PUNO / CSJ PUNO</title>
+      <link rel="stylesheet" href="/actas-static/assets/print.css">
+      <style>
+        body { background: #cbd5e1; padding: 20px; }
+        .hoja-a4 { box-shadow: 0 4px 15px rgba(0,0,0,0.15); margin: 0 auto 20px auto; }
+        @media print { body { background: #fff; padding: 0; } }
+      </style>
+    </head>
+    <body>
+      ${contentHtml}
+      <script>
+        window.onload = function() {
+          window.focus();
+        };
+      <\/script>
+    </body>
+    </html>
+  `)
+  printWindow.document.close()
 }
 </script>
 
@@ -1050,8 +1517,8 @@ function handlePrintAllDocs() {
          ═══════════════════════════════════════════════════════════════════════ -->
     <header class="actas-toolbar no-print">
       <div class="actas-toolbar__title">
-        <span class="actas-toolbar__badge">UNA-PUNO • PODER JUDICIAL (CSJ PUNO)</span>
-        <h1>Actas e Informe Técnico Oficial (01 a 06)</h1>
+        <span class="actas-toolbar__badge">UNA-PUNO • CORTE SUPERIOR DE JUSTICIA DE PUNO</span>
+        <h1>Actas Oficiales e Informe Técnico (01 a 06)</h1>
       </div>
 
       <div class="actas-toolbar__actions">
@@ -1060,7 +1527,7 @@ function handlePrintAllDocs() {
           class="actas-btn actas-btn--ghost"
           @click="showConfigPanel = !showConfigPanel"
         >
-          ⚙️ {{ showConfigPanel ? 'Ocultar Configuración' : 'Configurar Firmantes y Hashes' }}
+          ⚙️ {{ showConfigPanel ? 'Ocultar Configuración' : 'Configurar Datos, Horarios y Firmas' }}
         </button>
 
         <button
@@ -1078,7 +1545,7 @@ function handlePrintAllDocs() {
           :disabled="!calificationResults.length"
           @click="handleGenerateOfficialPdf"
         >
-          📄 Exportar PDF Publicación por Puesto
+          📄 Exportar PDF Publicación
         </button>
 
         <button
@@ -1086,7 +1553,7 @@ function handlePrintAllDocs() {
           class="actas-btn actas-btn--primary"
           @click="handlePrintActiveDoc"
         >
-          🖨️ Imprimir / Guardar en PDF (A4)
+          🖨️ Imprimir Acta Actual (A4)
         </button>
 
         <button
@@ -1094,117 +1561,359 @@ function handlePrintAllDocs() {
           class="actas-btn actas-btn--gold"
           @click="handlePrintAllDocs"
         >
-          📚 Imprimir Paquete Completo (Todas las Actas)
+          📚 Imprimir Paquete Completo (01–06)
+        </button>
+
+        <button
+          type="button"
+          class="actas-btn actas-btn--clean"
+          title="Abre el acta en una pestaña limpia e independiente"
+          @click="handleOpenCleanWindow"
+        >
+          🔍 Vista Previa Limpia
         </button>
       </div>
     </header>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
-         PANEL DE CONFIGURACIÓN EN VIVO (FIRMANTES, FECHA/HORA Y HASH .RAR)
+         PANEL DE CONFIGURACIÓN MODULAR CON SUBPESTAÑAS
          ═══════════════════════════════════════════════════════════════════════ -->
     <section v-if="showConfigPanel" class="actas-config-panel no-print">
-      <div class="actas-config-grid">
-        <!-- Firmante 1: UNA-PUNO -->
-        <div class="actas-config-card">
-          <h3>Firmante Oficial 1 (UNA-PUNO)</h3>
-          <div class="actas-field-row">
-            <label>Nombre y Grado</label>
-            <input v-model="actaConfig.firmanteUnap.nombre" type="text" />
-          </div>
-          <div class="actas-field-row actas-field-row--2col">
-            <div>
-              <label>DNI</label>
-              <input v-model="actaConfig.firmanteUnap.dni" type="text" maxlength="8" />
-            </div>
-            <div>
-              <label>Cargo</label>
-              <input v-model="actaConfig.firmanteUnap.cargo" type="text" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Firmante 2: Poder Judicial -->
-        <div class="actas-config-card">
-          <h3>Firmante Oficial 2 (Poder Judicial / CSJ Puno)</h3>
-          <div class="actas-field-row">
-            <label>Nombre y Grado</label>
-            <input v-model="actaConfig.firmantePj.nombre" type="text" />
-          </div>
-          <div class="actas-field-row actas-field-row--2col">
-            <div>
-              <label>DNI</label>
-              <input v-model="actaConfig.firmantePj.dni" type="text" maxlength="8" />
-            </div>
-            <div>
-              <label>Cargo</label>
-              <input v-model="actaConfig.firmantePj.cargo" type="text" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Datos Operativos -->
-        <div class="actas-config-card">
-          <h3>Datos de Sesión, Ambiente y Lacrado</h3>
-          <div class="actas-field-row actas-field-row--3col">
-            <div>
-              <label>Fecha Oficial</label>
-              <input v-model="actaConfig.fecha" type="text" />
-            </div>
-            <div>
-              <label>Hora Inicio</label>
-              <input v-model="actaConfig.horaInicio" type="text" />
-            </div>
-            <div>
-              <label>Hora Cierre</label>
-              <input v-model="actaConfig.horaCierre" type="text" />
-            </div>
-          </div>
-          <div class="actas-field-row actas-field-row--2col">
-            <div>
-              <label>Lugar / Sede</label>
-              <input v-model="actaConfig.lugar" type="text" />
-            </div>
-            <div>
-              <label>Ambiente</label>
-              <input v-model="actaConfig.ambiente" type="text" />
-            </div>
-          </div>
-          <div class="actas-field-row actas-field-row--2col">
-            <div>
-              <label>Medio / Precinto USB</label>
-              <input v-model="actaConfig.precintoUsb" type="text" />
-            </div>
-            <div>
-              <label>Sobre Claves / Observaciones</label>
-              <input v-model="actaConfig.sobreLacradoClaves" type="text" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Verificador SHA-256 de Contenedor (.rar / .zip) -->
-        <div class="actas-config-card actas-config-card--hash">
-          <h3>Verificación SHA-256 de Contenedor (.rar / .zip)</h3>
-          <p class="actas-config-hint">
-            Selecciona <code>calificacionPoderJudicial.rar</code> para calcular su huella SHA-256 en el navegador e inyectarla en el Acta 02.
-          </p>
-          <input
-            ref="containerFileInput"
-            type="file"
-            accept=".rar,.zip,.7z,*/*"
-            style="display: none"
-            @change="handleSelectContainerFile"
-          />
+      <div class="actas-config-header">
+        <div class="actas-config-tabs">
           <button
             type="button"
-            class="actas-btn actas-btn--hash"
-            :disabled="containerHashing"
-            @click="triggerContainerFilePicker"
+            class="actas-cfg-tab"
+            :class="{ 'actas-cfg-tab--active': configTab === 'general' }"
+            @click="configTab = 'general'"
           >
-            🔐 {{ containerHashing ? 'Calculando SHA-256...' : 'Calcular Hash SHA-256 de contenedor (.rar / .zip)' }}
+            🏢 Convocatoria & Oficios
           </button>
-          <div class="actas-hash-preview">
-            <div><strong>Archivo:</strong> {{ rarFileName }}</div>
-            <div class="actas-hash-mono">{{ formatHashBlocks(rarFileSha256, 8) }}</div>
+          <button
+            type="button"
+            class="actas-cfg-tab"
+            :class="{ 'actas-cfg-tab--active': configTab === 'horarios' }"
+            @click="configTab = 'horarios'"
+          >
+            🕒 Horarios y Sede
+          </button>
+          <button
+            type="button"
+            class="actas-cfg-tab"
+            :class="{ 'actas-cfg-tab--active': configTab === 'firmas' }"
+            @click="configTab = 'firmas'"
+          >
+            ✍️ Firmantes y Espacio
+          </button>
+          <button
+            type="button"
+            class="actas-cfg-tab"
+            :class="{ 'actas-cfg-tab--active': configTab === 'apertura' }"
+            @click="configTab = 'apertura'"
+          >
+            🔍 Verificaciones Apertura (Acta 01)
+          </button>
+          <button
+            type="button"
+            class="actas-cfg-tab"
+            :class="{ 'actas-cfg-tab--active': configTab === 'hashes' }"
+            @click="configTab = 'hashes'"
+          >
+            🔐 Hashes SHA-256
+          </button>
+        </div>
+
+        <button
+          type="button"
+          class="actas-btn-reset"
+          title="Restablecer todos los datos a sus valores originales"
+          @click="resetActaConfigToDefaults"
+        >
+          ↺ Restablecer Valores por Defecto
+        </button>
+      </div>
+
+      <!-- TAB 1: Convocatoria y Oficios -->
+      <div v-if="configTab === 'general'" class="actas-config-body">
+        <div class="actas-config-grid">
+          <div class="actas-config-card">
+            <h3>Datos del Concurso</h3>
+            <div class="actas-field-row">
+              <label>Nombre Oficial del Proceso</label>
+              <input v-model="actaConfig.procesoNombre" type="text" />
+            </div>
+            <div class="actas-field-row">
+              <label>Oficio de Referencia</label>
+              <input v-model="actaConfig.oficioReferencia" type="text" />
+            </div>
+            <div class="actas-field-row actas-field-row--2col">
+              <div>
+                <label>Modalidad de Evaluación</label>
+                <input v-model="actaConfig.modalidadTexto" type="text" />
+              </div>
+              <div>
+                <label>Vacantes en Concurso</label>
+                <input v-model.number="actaConfig.vacantesTotales" type="number" min="1" />
+              </div>
+            </div>
+          </div>
+
+          <div class="actas-config-card">
+            <h3>Entidades del Convenio</h3>
+            <div class="actas-field-row">
+              <label>Entidad Solicitante</label>
+              <input v-model="actaConfig.entidadSolicitante" type="text" />
+            </div>
+            <div class="actas-field-row">
+              <label>Entidad Ejecutora</label>
+              <input v-model="actaConfig.entidadEjecutora" type="text" />
+            </div>
+            <div class="actas-field-row">
+              <label>Observaciones Generales de las Actas</label>
+              <textarea v-model="actaConfig.observacionesGenerales" rows="2"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: Horarios y Sede -->
+      <div v-if="configTab === 'horarios'" class="actas-config-body">
+        <div class="actas-config-grid">
+          <div class="actas-config-card">
+            <h3>Horarios Oficiales de las Actas</h3>
+            <div class="actas-field-row actas-field-row--2col">
+              <div>
+                <label>Fecha Oficial</label>
+                <input v-model="actaConfig.fecha" type="text" />
+              </div>
+              <div>
+                <label>Hora Inicio (Acta 01)</label>
+                <input v-model="actaConfig.horaInicio" type="text" />
+              </div>
+            </div>
+            <div class="actas-field-row actas-field-row--3col">
+              <div>
+                <label>Hora Recep. Digital (Acta 02)</label>
+                <input v-model="actaConfig.horaRecepcionDigital" type="text" />
+              </div>
+              <div>
+                <label>Hora Claves (Acta 04)</label>
+                <input v-model="actaConfig.horaAperturaClaves" type="text" />
+              </div>
+              <div>
+                <label>Hora Cierre (Acta 06)</label>
+                <input v-model="actaConfig.horaCierre" type="text" />
+              </div>
+            </div>
+          </div>
+
+          <div class="actas-config-card">
+            <h3>Lugar, Ambiente y Precintos</h3>
+            <div class="actas-field-row actas-field-row--2col">
+              <div>
+                <label>Lugar / Sede de Calificación</label>
+                <input v-model="actaConfig.lugar" type="text" />
+              </div>
+              <div>
+                <label>Ambiente de Cómputo</label>
+                <input v-model="actaConfig.ambiente" type="text" />
+              </div>
+            </div>
+            <div class="actas-field-row actas-field-row--2col">
+              <div>
+                <label>Precinto / Medio USB (Acta 02)</label>
+                <input v-model="actaConfig.precintoUsb" type="text" />
+              </div>
+              <div>
+                <label>Sobre Lacrado Claves (Acta 04)</label>
+                <input v-model="actaConfig.sobreLacradoClaves" type="text" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Firmantes y Espacio de Firma -->
+      <div v-if="configTab === 'firmas'" class="actas-config-body">
+        <div class="actas-config-grid">
+          <div class="actas-config-card">
+            <h3>Firmante 1 (UNA-PUNO)</h3>
+            <div class="actas-field-row">
+              <label>Nombres y Grado Académico</label>
+              <input v-model="actaConfig.firmanteUnap.nombre" type="text" />
+            </div>
+            <div class="actas-field-row actas-field-row--2col">
+              <div>
+                <label>DNI</label>
+                <input v-model="actaConfig.firmanteUnap.dni" type="text" maxlength="8" />
+              </div>
+              <div>
+                <label>Cargo / Función</label>
+                <input v-model="actaConfig.firmanteUnap.cargo" type="text" />
+              </div>
+            </div>
+            <div class="actas-field-row">
+              <label>Entidad / Institución</label>
+              <input v-model="actaConfig.firmanteUnap.entidad" type="text" />
+            </div>
+          </div>
+
+          <div class="actas-config-card">
+            <h3>Firmante 2 (Poder Judicial / CSJ Puno)</h3>
+            <div class="actas-field-row">
+              <label>Nombres y Grado Profesional</label>
+              <input v-model="actaConfig.firmantePj.nombre" type="text" />
+            </div>
+            <div class="actas-field-row actas-field-row--2col">
+              <div>
+                <label>DNI</label>
+                <input v-model="actaConfig.firmantePj.dni" type="text" maxlength="8" />
+              </div>
+              <div>
+                <label>Cargo / Función</label>
+                <input v-model="actaConfig.firmantePj.cargo" type="text" />
+              </div>
+            </div>
+            <div class="actas-field-row">
+              <label>Entidad / Institución</label>
+              <input v-model="actaConfig.firmantePj.entidad" type="text" />
+            </div>
+          </div>
+
+          <div class="actas-config-card actas-config-card--signature-space">
+            <h3>Espacio para Firma y Sello Físico</h3>
+            <p class="actas-config-hint">
+              Ajusta la altura del área en blanco arriba de la línea de firma para que haya espacio holgado para el sello oficial de posfirma y la rúbrica manual.
+            </p>
+            <div class="actas-slider-row">
+              <label>Altura del espacio: <strong>{{ actaConfig.espacioFirmaPx || 75 }} px</strong></label>
+              <input
+                v-model.number="actaConfig.espacioFirmaPx"
+                type="range"
+                min="45"
+                max="120"
+                step="5"
+                class="actas-slider"
+              />
+            </div>
+            <div class="firma-preview-box">
+              <div class="firma-preview-space" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }">
+                <span class="firma-preview-tag">[ Espacio reservado para sello y firma ]</span>
+              </div>
+              <div class="firma-preview-line">
+                <strong>{{ actaConfig.firmanteUnap.nombre }}</strong>
+                <div>{{ actaConfig.firmanteUnap.cargo }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: Verificaciones de Apertura (Acta 01) -->
+      <div v-if="configTab === 'apertura'" class="actas-config-body">
+        <div class="actas-config-card actas-config-card--full">
+          <div class="actas-card-header-action">
+            <div>
+              <h3>Checklist de Constatación Inicial (Acta 01 — Inicio y Apertura)</h3>
+              <p class="actas-config-hint">
+                Marca el estado de conformidad de cada aspecto técnico verificado por la comisión y edita las observaciones que se imprimirán en el Acta 01.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="actas-btn actas-btn--primary actas-btn--sm"
+              @click="addVerificacionApertura"
+            >
+              + Agregar Aspecto
+            </button>
+          </div>
+
+          <div class="verif-table-wrapper">
+            <table class="verif-edit-table">
+              <thead>
+                <tr>
+                  <th style="width: 44%">Aspecto Técnico Inspeccionado</th>
+                  <th style="width: 20%">Estado</th>
+                  <th style="width: 30%">Observaciones</th>
+                  <th style="width: 6%">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(verif, idx) in actaConfig.verificacionesApertura" :key="idx">
+                  <td>
+                    <input v-model="verif.item" type="text" class="verif-input" />
+                  </td>
+                  <td class="text-center">
+                    <button
+                      type="button"
+                      class="verif-toggle-btn"
+                      :class="verif.conforme ? 'verif-toggle-btn--ok' : 'verif-toggle-btn--obs'"
+                      @click="verif.conforme = !verif.conforme"
+                    >
+                      {{ verif.conforme ? '✓ CONFORME' : '⚠️ OBSERVADO' }}
+                    </button>
+                  </td>
+                  <td>
+                    <input v-model="verif.obs" type="text" class="verif-input" placeholder="Detalle de observación..." />
+                  </td>
+                  <td class="text-center">
+                    <button
+                      type="button"
+                      class="verif-del-btn"
+                      title="Eliminar aspecto"
+                      :disabled="actaConfig.verificacionesApertura.length <= 1"
+                      @click="removeVerificacionApertura(idx)"
+                    >
+                      🗑️
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: Hashes SHA-256 -->
+      <div v-if="configTab === 'hashes'" class="actas-config-body">
+        <div class="actas-config-grid">
+          <div class="actas-config-card actas-config-card--hash">
+            <h3>Verificación SHA-256 de Contenedor (.rar / .zip)</h3>
+            <p class="actas-config-hint">
+              Selecciona <code>calificacionPoderJudicial.rar</code> para calcular su huella SHA-256 en el navegador e inyectarla en el Acta 02.
+            </p>
+            <input
+              ref="containerFileInput"
+              type="file"
+              accept=".rar,.zip,.7z,*/*"
+              style="display: none"
+              @change="handleSelectContainerFile"
+            />
+            <button
+              type="button"
+              class="actas-btn actas-btn--hash"
+              :disabled="containerHashing"
+              @click="triggerContainerFilePicker"
+            >
+              🔐 {{ containerHashing ? 'Calculando SHA-256...' : 'Calcular Hash SHA-256 de contenedor (.rar / .zip)' }}
+            </button>
+            <div class="actas-hash-preview">
+              <div><strong>Archivo contenedor:</strong> {{ rarFileName }}</div>
+              <div class="actas-hash-mono">{{ formatHashBlocks(rarFileSha256, 8) }}</div>
+            </div>
+          </div>
+
+          <div class="actas-config-card">
+            <h3>Padrón Oficial y Huella Canónica</h3>
+            <div class="actas-field-row">
+              <label>Padrón Oficial:</label>
+              <div class="font-bold">{{ padFileName }}</div>
+              <div class="actas-hash-mono" style="font-size: 0.72rem">{{ formatHashBlocks(padFileSha256, 8) }}</div>
+            </div>
+            <div class="actas-field-row" style="margin-top: 10px">
+              <label>Huella Canónica de Configuración (Acta 04):</label>
+              <div class="actas-hash-mono" style="font-size: 0.72rem">{{ canonicalConfigHash.formatted || 'Calculando...' }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -1241,7 +1950,7 @@ function handlePrintAllDocs() {
       <!-- ─────────────────────────────────────────────────────────────────────
            DOC 01: ACTA DE INICIO Y APERTURA DEL AMBIENTE DE CALIFICACIÓN
            ───────────────────────────────────────────────────────────────────── -->
-      <article v-if="isDocVisible('doc-01')" class="hoja-a4">
+      <article v-if="isDocVisible('doc-01')" class="hoja-a4" data-doc="doc-01">
         <header class="encabezado-institucional">
           <img src="/unap.png" alt="UNA-PUNO" class="logo-entidad" />
           <div class="texto-encabezado">
@@ -1251,10 +1960,7 @@ function handlePrintAllDocs() {
               Convenio de Cooperación Interinstitucional con la Corte Superior de Justicia de Puno
             </div>
           </div>
-          <div class="logo-pj-emblem">
-            <span class="logo-pj-emblem__acronym">PJ</span>
-            <span class="logo-pj-emblem__sub">CSJ PUNO</span>
-          </div>
+          <img src="/logo-pj.jpg" alt="Poder Judicial - CSJ Puno" class="logo-entidad logo-entidad--pj" />
         </header>
 
         <div class="titulo-documento-box">
@@ -1361,7 +2067,7 @@ function handlePrintAllDocs() {
 
         <div class="bloque-firmas">
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmanteUnap.nombre }}</div>
               <div class="cargo">DNI {{ actaConfig.firmanteUnap.dni }} — {{ actaConfig.firmanteUnap.cargo }}</div>
@@ -1369,7 +2075,7 @@ function handlePrintAllDocs() {
             </div>
           </div>
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmantePj.nombre }}</div>
               <div class="cargo">DNI {{ actaConfig.firmantePj.dni }} — {{ actaConfig.firmantePj.cargo }}</div>
@@ -1392,6 +2098,7 @@ function handlePrintAllDocs() {
         v-if="isDocVisible('doc-02')"
         class="hoja-a4"
         :class="{ 'salto-pagina': printAllMode }"
+        data-doc="doc-02"
       >
         <header class="encabezado-institucional">
           <img src="/unap.png" alt="UNA-PUNO" class="logo-entidad" />
@@ -1402,10 +2109,7 @@ function handlePrintAllDocs() {
               Convenio de Cooperación Interinstitucional con la Corte Superior de Justicia de Puno
             </div>
           </div>
-          <div class="logo-pj-emblem">
-            <span class="logo-pj-emblem__acronym">PJ</span>
-            <span class="logo-pj-emblem__sub">CSJ PUNO</span>
-          </div>
+          <img src="/logo-pj.jpg" alt="Poder Judicial - CSJ Puno" class="logo-entidad logo-entidad--pj" />
         </header>
 
         <div class="titulo-documento-box">
@@ -1523,7 +2227,7 @@ function handlePrintAllDocs() {
 
         <div class="bloque-firmas">
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmanteUnap.nombre }}</div>
               <div class="cargo">DNI {{ actaConfig.firmanteUnap.dni }} — RECIBE CONFORME</div>
@@ -1531,7 +2235,7 @@ function handlePrintAllDocs() {
             </div>
           </div>
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmantePj.nombre }}</div>
               <div class="cargo">DNI {{ actaConfig.firmantePj.dni }} — ENTREGA CONFORME</div>
@@ -1554,6 +2258,7 @@ function handlePrintAllDocs() {
         v-if="isDocVisible('doc-03a')"
         class="hoja-a4"
         :class="{ 'salto-pagina': printAllMode }"
+        data-doc="doc-03a"
       >
         <header class="encabezado-institucional">
           <img src="/unap.png" alt="UNA-PUNO" class="logo-entidad" />
@@ -1564,10 +2269,7 @@ function handlePrintAllDocs() {
               Corte Superior de Justicia de Puno — {{ actaConfig.procesoNombre }}
             </div>
           </div>
-          <div class="logo-pj-emblem">
-            <span class="logo-pj-emblem__acronym">PJ</span>
-            <span class="logo-pj-emblem__sub">CSJ PUNO</span>
-          </div>
+          <img src="/logo-pj.jpg" alt="Poder Judicial - CSJ Puno" class="logo-entidad logo-entidad--pj" />
         </header>
 
         <div class="recepcion-tarjetas-header">
@@ -1686,14 +2388,14 @@ function handlePrintAllDocs() {
 
         <div class="bloque-firmas" style="margin-top: 14px">
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma" style="height: 28px"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmanteUnap.nombre }}</div>
               <div class="cargo">Director de Admisión — UNA-PUNO (RECIBE)</div>
             </div>
           </div>
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma" style="height: 28px"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmantePj.nombre }}</div>
               <div class="cargo">Presidente CSJ Puno / Comisión (ENTREGA)</div>
@@ -1715,6 +2417,7 @@ function handlePrintAllDocs() {
         v-if="isDocVisible('doc-03b')"
         class="hoja-a4"
         :class="{ 'salto-pagina': printAllMode }"
+        data-doc="doc-03b"
       >
         <header class="encabezado-institucional">
           <img src="/unap.png" alt="UNA-PUNO" class="logo-entidad" />
@@ -1725,10 +2428,7 @@ function handlePrintAllDocs() {
               Convenio de Cooperación Interinstitucional con la Corte Superior de Justicia de Puno
             </div>
           </div>
-          <div class="logo-pj-emblem">
-            <span class="logo-pj-emblem__acronym">PJ</span>
-            <span class="logo-pj-emblem__sub">CSJ PUNO</span>
-          </div>
+          <img src="/logo-pj.jpg" alt="Poder Judicial - CSJ Puno" class="logo-entidad logo-entidad--pj" />
         </header>
 
         <div class="titulo-documento-box">
@@ -1896,14 +2596,14 @@ function handlePrintAllDocs() {
 
         <div class="bloque-firmas">
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmanteUnap.nombre }}</div>
               <div class="cargo">Director de Admisión — UNA-PUNO</div>
             </div>
           </div>
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmantePj.nombre }}</div>
               <div class="cargo">Presidente CSJ Puno / Comisión D.L. 728</div>
@@ -1925,6 +2625,7 @@ function handlePrintAllDocs() {
         v-if="isDocVisible('doc-04')"
         class="hoja-a4"
         :class="{ 'salto-pagina': printAllMode }"
+        data-doc="doc-04"
       >
         <header class="encabezado-institucional">
           <img src="/unap.png" alt="UNA-PUNO" class="logo-entidad" />
@@ -1935,10 +2636,7 @@ function handlePrintAllDocs() {
               Convenio de Cooperación Interinstitucional con la Corte Superior de Justicia de Puno
             </div>
           </div>
-          <div class="logo-pj-emblem">
-            <span class="logo-pj-emblem__acronym">PJ</span>
-            <span class="logo-pj-emblem__sub">CSJ PUNO</span>
-          </div>
+          <img src="/logo-pj.jpg" alt="Poder Judicial - CSJ Puno" class="logo-entidad logo-entidad--pj" />
         </header>
 
         <div class="titulo-documento-box">
@@ -2105,14 +2803,14 @@ function handlePrintAllDocs() {
 
         <div class="bloque-firmas" style="margin-top: 14px">
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma" style="height: 30px"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmanteUnap.nombre }}</div>
               <div class="cargo">Director de Admisión — UNA-PUNO (CONFORMIDAD TÉCNICA)</div>
             </div>
           </div>
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma" style="height: 30px"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmantePj.nombre }}</div>
               <div class="cargo">Presidente CSJ Puno / Comisión (AUTORIZA CLAVES Y REGLAS)</div>
@@ -2134,6 +2832,7 @@ function handlePrintAllDocs() {
         v-if="isDocVisible('doc-05')"
         class="hoja-a4"
         :class="{ 'salto-pagina': printAllMode }"
+        data-doc="doc-05"
       >
         <header class="encabezado-institucional">
           <img src="/unap.png" alt="UNA-PUNO" class="logo-entidad" />
@@ -2144,10 +2843,7 @@ function handlePrintAllDocs() {
               Convenio de Cooperación Interinstitucional con la Corte Superior de Justicia de Puno
             </div>
           </div>
-          <div class="logo-pj-emblem">
-            <span class="logo-pj-emblem__acronym">PJ</span>
-            <span class="logo-pj-emblem__sub">CSJ PUNO</span>
-          </div>
+          <img src="/logo-pj.jpg" alt="Poder Judicial - CSJ Puno" class="logo-entidad logo-entidad--pj" />
         </header>
 
         <div class="titulo-documento-box">
@@ -2304,14 +3000,14 @@ function handlePrintAllDocs() {
 
         <div class="bloque-firmas" style="margin-top: 14px">
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma" style="height: 28px"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmanteUnap.nombre }}</div>
               <div class="cargo">Director de Admisión — UNA-PUNO (EMITE INFORME)</div>
             </div>
           </div>
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma" style="height: 28px"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmantePj.nombre }}</div>
               <div class="cargo">Presidente CSJ Puno / Comisión (RECEPCIONA CONFORME)</div>
@@ -2333,6 +3029,7 @@ function handlePrintAllDocs() {
         v-if="isDocVisible('doc-06')"
         class="hoja-a4"
         :class="{ 'salto-pagina': printAllMode }"
+        data-doc="doc-06"
       >
         <header class="encabezado-institucional">
           <img src="/unap.png" alt="UNA-PUNO" class="logo-entidad" />
@@ -2343,10 +3040,7 @@ function handlePrintAllDocs() {
               Convenio de Cooperación Interinstitucional con la Corte Superior de Justicia de Puno
             </div>
           </div>
-          <div class="logo-pj-emblem">
-            <span class="logo-pj-emblem__acronym">PJ</span>
-            <span class="logo-pj-emblem__sub">CSJ PUNO</span>
-          </div>
+          <img src="/logo-pj.jpg" alt="Poder Judicial - CSJ Puno" class="logo-entidad logo-entidad--pj" />
         </header>
 
         <div class="titulo-documento-box">
@@ -2456,7 +3150,7 @@ function handlePrintAllDocs() {
 
         <div class="bloque-firmas" style="margin-top: 28px">
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmanteUnap.nombre }}</div>
               <div class="cargo">DNI {{ actaConfig.firmanteUnap.dni }} — {{ actaConfig.firmanteUnap.cargo }} (ENTREGA)</div>
@@ -2464,7 +3158,7 @@ function handlePrintAllDocs() {
             </div>
           </div>
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmantePj.nombre }}</div>
               <div class="cargo">DNI {{ actaConfig.firmantePj.dni }} — {{ actaConfig.firmantePj.cargo }} (RECIBE CONFORME)</div>
@@ -2570,6 +3264,16 @@ function handlePrintAllDocs() {
   color: #ffffff;
 }
 
+.actas-btn--clean {
+  background: #334155;
+  color: #f8fafc;
+  border-color: #64748b;
+}
+
+.actas-btn--clean:hover {
+  background: #475569;
+}
+
 .actas-btn--hash {
   background: #0a2446;
   color: #ffffff;
@@ -2584,6 +3288,186 @@ function handlePrintAllDocs() {
   border-radius: 10px;
   padding: 14px;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.actas-config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.actas-config-header h2 {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #0a2446;
+  margin: 0;
+}
+
+.actas-btn-reset {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.actas-btn-reset:hover {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+.actas-config-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.actas-cfg-tab {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.actas-cfg-tab:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.actas-cfg-tab--active {
+  background: #0a2446;
+  border-color: #0a2446;
+  color: #ffffff;
+}
+
+.actas-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.actas-slider {
+  flex: 1;
+  height: 6px;
+  accent-color: #0284c7;
+  cursor: pointer;
+}
+
+.firma-preview-box {
+  margin-top: 10px;
+  padding: 10px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+}
+
+.firma-preview-space {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 1px dotted #94a3b8;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  transition: height 0.1s ease;
+}
+
+.firma-preview-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.firma-preview-line {
+  border-top: 1.5px solid #0f172a;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #475569;
+  padding-top: 3px;
+}
+
+.verif-table-wrapper {
+  overflow-x: auto;
+  margin-bottom: 10px;
+}
+
+.verif-edit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.verif-edit-table th,
+.verif-edit-table td {
+  border: 1px solid #e2e8f0;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.verif-edit-table th {
+  background: #f8fafc;
+  font-weight: 700;
+  color: #334155;
+}
+
+.verif-input {
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.verif-toggle-btn {
+  border: none;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.verif-toggle-btn--ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.verif-toggle-btn--obs {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.verif-del-btn {
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.verif-del-btn:hover {
+  background: #fee2e2;
 }
 
 .actas-config-grid {
@@ -3010,7 +3894,7 @@ table.tabla-claves-compacta td {
 
 /* Firmas y Pie de Página */
 .bloque-firmas {
-  margin-top: 22px;
+  margin-top: 26px;
   page-break-inside: avoid;
   break-inside: avoid;
   display: grid;
@@ -3026,7 +3910,8 @@ table.tabla-claves-compacta td {
 }
 
 .espacio-sello-firma {
-  height: 44px;
+  height: 75px;
+  min-height: 70px;
   width: 100%;
 }
 
