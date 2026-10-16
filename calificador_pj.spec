@@ -58,7 +58,6 @@ hiddenimports = (
         'resultados.urls',
         'usuarios',
         'usuarios.apps',
-        'usuarios.serializers',
         'usuarios.views',
         'usuarios.urls',
     ]

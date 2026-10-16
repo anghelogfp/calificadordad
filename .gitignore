@@ -25,3 +25,6 @@ frontend/dist/
 # Respaldo local previo al cambio de version de BMAD
 .bmad-backups/
 
+# PyInstaller builds
+build/
+dist/
