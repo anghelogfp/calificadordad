@@ -92,6 +92,27 @@ function resetDatFormat() {
   editableDatConfig.value = { ...DEFAULT_DAT_FORMAT }
 }
 
+async function applyPoderJudicialPreset() {
+  datFormatUnlocked.value = true
+  editableDatConfig.value = {
+    ...DEFAULT_DAT_FORMAT,
+    headerLength: 21,
+    answersLength: 30,
+    lithoOffset: 0,
+    lithoLength: 6,
+    tipoOffset: 6,
+    tipoLength: 1,
+    dniOffset: 7,
+    dniLength: 8,
+    aulaOffset: 15,
+    aulaLength: 3,
+    answersOffset: 18,
+    responseAnswersOffset: 7,
+  }
+  await saveDatFormat()
+  showToast('Preset Poder Judicial (30 preguntas) aplicado y guardado', 'success')
+}
+
 // ── Gestión de áreas ─────────────────────────────────────────────────────
 const areaForm = reactive({ name: '', question_count: 60 })
 const areaFormError = ref('')
@@ -412,13 +433,22 @@ function getDatField(key) {
               ? 'Edición desbloqueada. Cambia estos valores solo si el lector óptico cambió de formato.'
               : 'Bloqueado para proteger el formato que está funcionando actualmente.' }}
           </span>
-          <button
-            type="button"
-            class="btn btn--ghost btn--xs"
-            @click="toggleDatFormatLock"
-          >
-            {{ datFormatUnlocked ? 'Bloquear' : 'Desbloquear edición' }}
-          </button>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button
+              type="button"
+              class="btn btn--primary btn--xs"
+              @click="applyPoderJudicialPreset"
+            >
+              Aplicar Preset Poder Judicial (30 preguntas)
+            </button>
+            <button
+              type="button"
+              class="btn btn--ghost btn--xs"
+              @click="toggleDatFormatLock"
+            >
+              {{ datFormatUnlocked ? 'Bloquear' : 'Desbloquear edición' }}
+            </button>
+          </div>
         </div>
 
         <div class="dat-groups">

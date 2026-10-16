@@ -1,10 +1,66 @@
+import { ref } from 'vue'
 import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
-import { canonicalAreaName } from '@/utils/helpers'
+import { canonicalAreaName, stripDigits } from '@/utils/helpers'
+import { sha256Hex, formatHashBlocks } from '@/utils/cryptoHash'
+import { computeConfigurationSha256 } from '@/domain/calification/configHash'
+import { runPreCalificationSyntheticSuite } from '@/domain/calification/syntheticTests'
+
+const sharedExportedArtifacts = ref([])
 
 /**
  * Composable para exportar resultados a Excel y PDF
  */
 export function useExport() {
+  const exportedArtifacts = sharedExportedArtifacts
+
+  function registerExportedArtifact({ name, type, label = '', buffer = null }) {
+    let bytes = buffer
+    if (!bytes && bytes !== '') {
+      bytes = new Uint8Array(0)
+    }
+    const size = Number(bytes?.byteLength ?? bytes?.length ?? 0)
+    const sha256 = sha256Hex(bytes)
+    const entry = {
+      id: `${name}-${Date.now()}`,
+      name,
+      type,
+      label:
+        label ||
+        (type === 'excel'
+          ? 'Padrón y Ranking Oficial de Resultados (Excel)'
+          : 'Publicación Oficial en Orden de Mérito (PDF)'),
+      timestamp: new Date().toISOString(),
+      size,
+      sha256,
+      sha256Formatted: formatHashBlocks(sha256, 8),
+    }
+    const existingIndex = exportedArtifacts.value.findIndex((item) => item.name === name)
+    if (existingIndex >= 0) {
+      const updated = [...exportedArtifacts.value]
+      updated[existingIndex] = entry
+      exportedArtifacts.value = updated
+    } else {
+      exportedArtifacts.value = [...exportedArtifacts.value, entry]
+    }
+    return entry
+  }
+
+  function clearExportedArtifacts() {
+    exportedArtifacts.value = []
+  }
+
+  function _extractPdfBuffer(doc) {
+    try {
+      if (doc && typeof doc.output === 'function') {
+        const ab = doc.output('arraybuffer')
+        if (ab) return ab
+      }
+    } catch {
+      // Fallback en entornos de test o mocks de jsPDF
+    }
+    return ''
+  }
+
   function buildFilename(prefix, convocatoriaName, area, ext) {
     const date = new Date().toISOString().slice(0, 10)
     const safeName = (convocatoriaName || 'resultados').replace(/[^a-z0-9_-]/gi, '_')
@@ -378,18 +434,782 @@ export function useExport() {
     )
 
     const buffer = await workbook.xlsx.writeBuffer()
+    const filename = buildFilename('simulacro-resultados-todo', convocatoriaName, 'todas', 'xlsx')
     const blob = new Blob([buffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     })
-    saveAs(blob, buildFilename('simulacro-resultados-todo', convocatoriaName, 'todas', 'xlsx'))
+    saveAs(blob, filename)
+    return registerExportedArtifact({
+      name: filename,
+      type: 'excel',
+      label: 'Consolidado General de Simulacro (Excel)',
+      buffer,
+    })
+  }
+
+  async function exportPjResultsToExcel(rankedResults = [], convocatoriaName = '', options = {}) {
+    const summary = options.areaSummary || options.summary || {}
+    const noCalificados = Array.isArray(options.noCalificados)
+      ? options.noCalificados
+      : Array.isArray(summary.noCalificados)
+        ? summary.noCalificados
+        : []
+    const anuladosComision = Array.isArray(options.anuladosComision)
+      ? options.anuladosComision
+      : Array.isArray(summary.anuladosComision)
+        ? summary.anuladosComision
+        : noCalificados.filter((r) => String(r.motivo || '').toLowerCase().includes('anulada'))
+    const archiveRows = Array.isArray(options.archiveRows) ? options.archiveRows : []
+    const answerKeyRows = Array.isArray(options.answerKeyRows) ? options.answerKeyRows : []
+    const questionExceptions = Array.isArray(options.questionExceptions)
+      ? options.questionExceptions
+      : Array.isArray(summary.questionExceptions)
+        ? summary.questionExceptions
+        : []
+    const candidateExceptions = Array.isArray(options.candidateExceptions)
+      ? options.candidateExceptions
+      : Array.isArray(summary.candidateExceptions)
+        ? summary.candidateExceptions
+        : []
+    const scoringOptions = options.scoringOptions || summary.scoringOptions || {}
+    const correctValue = Number(options.correctValue ?? summary.correctValue ?? 1)
+    const incorrectValue = Number(options.incorrectValue ?? summary.incorrectValue ?? 0)
+    const blankValue = Number(options.blankValue ?? summary.blankValue ?? 0)
+    const answersLength = Number(options.answersLength ?? summary.answersLength ?? 30)
+
+    if (!rankedResults?.length && !noCalificados.length && !archiveRows.length) return null
+
+    const { ExcelJS, saveAs } = await loadExcelExportDeps()
+    const workbook = new ExcelJS.Workbook()
+
+    const configHashObj = computeConfigurationSha256({
+      answersLength,
+      correctValue,
+      incorrectValue,
+      blankValue,
+      plantillaItems: summary.plantillaSnapshot || [{ subject: 'Conocimientos', questionCount: answersLength, ponderation: 1 }],
+      answerKeyRows,
+      questionExceptions,
+      candidateExceptions,
+      scoringOptions,
+    })
+    const configSha256 = options.configSha256 || summary.configSha256 || configHashObj.sha256
+
+    const syntheticSuite =
+      options.syntheticTests && Array.isArray(options.syntheticTests.cases)
+        ? options.syntheticTests
+        : runPreCalificationSyntheticSuite({
+            answerKeyRows,
+            correctValue,
+            incorrectValue,
+            blankValue,
+            answersLength,
+            questionExceptions,
+          })
+
+    const fullNameOf = (r) =>
+      [r?.paterno, r?.materno, r?.nombres]
+        .map((v) => String(v || '').trim())
+        .filter(Boolean)
+        .join(' ')
+
+    const sortedByPuestoAndRank = [...(rankedResults || [])].sort((a, b) => {
+      const pA = String(a.codPuesto || a.cod_puesto || a.programa || '')
+      const pB = String(b.codPuesto || b.cod_puesto || b.programa || '')
+      const cmp = pA.localeCompare(pB, 'es', { numeric: true, sensitivity: 'base' })
+      if (cmp !== 0) return cmp
+      const rankDiff = Number(a.positionInPrograma || a.position || 0) - Number(b.positionInPrograma || b.position || 0)
+      if (rankDiff !== 0) return rankDiff
+      return Number(b.score || 0) - Number(a.score || 0)
+    })
+
+    // ── HOJA 1: Resumen PJ ──────────────────────────────────────────────────
+    const sheetResumen = workbook.addWorksheet('Resumen PJ')
+    sheetResumen.mergeCells('A1:H1')
+    sheetResumen.getCell('A1').value =
+      'UNIVERSIDAD NACIONAL DEL ALTIPLANO DE PUNO — CORTE SUPERIOR DE JUSTICIA DE PUNO'
+    sheetResumen.getCell('A1').font = { bold: true, size: 13, color: { argb: 'FF0A2446' } }
+    sheetResumen.getCell('A1').alignment = { horizontal: 'center' }
+
+    sheetResumen.mergeCells('A2:H2')
+    sheetResumen.getCell('A2').value = `RESUMEN EJECUTIVO DE CALIFICACIÓN — ${convocatoriaName || 'PROCESO DE SELECCIÓN D.L. 728 N.° 001-2026-UE-PUNO'}`
+    sheetResumen.getCell('A2').font = { bold: true, size: 11, color: { argb: 'FF1E3A5F' } }
+    sheetResumen.getCell('A2').alignment = { horizontal: 'center' }
+    sheetResumen.addRow([])
+
+    const totalPadron = archiveRows.length || summary.totalCandidates || rankedResults.length + noCalificados.length
+    const totalGanadores = rankedResults.filter((r) => r.isIngresante).length
+    const totalAptos = rankedResults.filter((r) => r.isApto !== false).length
+    const totalTied = rankedResults.filter((r) => r.isTied).length
+    const scoresList = rankedResults.map((r) => Number(r.score || 0))
+    const maxScore = scoresList.length ? Math.max(...scoresList) : 0
+    const minScore = scoresList.length ? Math.min(...scoresList) : 0
+    const avgScore = scoresList.length ? scoresList.reduce((a, b) => a + b, 0) / scoresList.length : 0
+
+    const metaRows = [
+      ['Proceso / Convocatoria', convocatoriaName || 'PROCESO DE SELECCIÓN D.L. 728 N.° 001-2026-UE-PUNO'],
+      ['Modalidad', 'Concurso Poder Judicial (Por Código de Examen y Puesto)'],
+      ['Fecha y Hora de Procesamiento', summary.timestamp ? new Date(summary.timestamp).toLocaleString('es-PE') : new Date().toLocaleString('es-PE')],
+      ['Total de Preguntas por Examen', answersLength],
+      ['Valor Respuesta Correcta', correctValue],
+      ['Valor Respuesta Incorrecta', incorrectValue],
+      ['Valor Respuesta en Blanco', blankValue],
+      ['Valor Marca Múltiple (*)', 0],
+      ['Criterio de Nota Mínima', scoringOptions.useMinPassingScore ? `Sí (${scoringOptions.minPassingScore} pts)` : 'No aplica (Ranking por vacante)'],
+      ['Regla de Desempate', scoringOptions.tieBreakerMode || 'shared_rank'],
+      ['Total Postulantes en Padrón', totalPadron],
+      ['Postulantes Calificados Válidos', rankedResults.length],
+      ['Postulantes Ganadores / Alcanzaron Vacante', totalGanadores],
+      ['Postulantes Aptos', totalAptos],
+      ['Postulantes con Empate Detectado', totalTied],
+      ['Postulantes No Calificados / Ausentes', noCalificados.length],
+      ['Participaciones Anuladas por Comisión', anuladosComision.length],
+      ['Puntaje Máximo Obtenido', Number(maxScore.toFixed(3))],
+      ['Puntaje Mínimo Obtenido', Number(minScore.toFixed(3))],
+      ['Puntaje Promedio General', Number(avgScore.toFixed(3))],
+      ['Huella Criptográfica SHA-256 Configuración', configSha256],
+      ['Huella SHA-256 (Bloques de 8)', formatHashBlocks(configSha256, 8)],
+    ]
+
+    metaRows.forEach(([k, v]) => {
+      const r = sheetResumen.addRow([k, v])
+      r.getCell(1).font = { bold: true, color: { argb: 'FF1E3A5F' } }
+      r.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF4F7FB' } }
+    })
+
+    sheetResumen.addRow([])
+    const examSectionTitle = sheetResumen.addRow(['RESUMEN POR CÓDIGO DE EXAMEN (COD_EXAMEN)'])
+    examSectionTitle.getCell(1).font = { bold: true, size: 11, color: { argb: 'FF0A2446' } }
+
+    const examHeader = sheetResumen.addRow([
+      'COD_EXAMEN',
+      'CALIFICADOS',
+      'AUSENTES / NO CALIF.',
+      'GANADORES / VACANTE',
+      'EMPATES',
+      'PUNTAJE MÁX',
+      'PUNTAJE MÍN',
+      'PROMEDIO',
+    ])
+    styleHeaderRow(examHeader)
+
+    const byExam = new Map()
+    rankedResults.forEach((r) => {
+      const code = r.codExamen || r.cod_examen || r.area || 'S/C'
+      if (!byExam.has(code)) byExam.set(code, { calificados: [], noCalif: 0 })
+      byExam.get(code).calificados.push(r)
+    })
+    noCalificados.forEach((r) => {
+      const code = r.codExamen || r.cod_examen || r.area || 'S/C'
+      if (!byExam.has(code)) byExam.set(code, { calificados: [], noCalif: 0 })
+      byExam.get(code).noCalif += 1
+    })
+
+    Array.from(byExam.entries())
+      .sort(([a], [b]) => a.localeCompare(b, 'es', { numeric: true }))
+      .forEach(([code, data]) => {
+        const list = data.calificados
+        const sc = list.map((x) => Number(x.score || 0))
+        const mx = sc.length ? Math.max(...sc) : 0
+        const mn = sc.length ? Math.min(...sc) : 0
+        const av = sc.length ? sc.reduce((a, b) => a + b, 0) / sc.length : 0
+        sheetResumen.addRow([
+          code,
+          list.length,
+          data.noCalif,
+          list.filter((x) => x.isIngresante).length,
+          list.filter((x) => x.isTied).length,
+          sc.length ? Number(mx.toFixed(3)) : '-',
+          sc.length ? Number(mn.toFixed(3)) : '-',
+          sc.length ? Number(av.toFixed(3)) : '-',
+        ])
+      })
+
+    sheetResumen.addRow([])
+    const puestoSectionTitle = sheetResumen.addRow(['RESUMEN POR PUESTO Y UNIDAD'])
+    puestoSectionTitle.getCell(1).font = { bold: true, size: 11, color: { argb: 'FF0A2446' } }
+
+    const puestoHeader = sheetResumen.addRow([
+      'COD_PUESTO',
+      'PUESTO',
+      'UNIDAD',
+      'COD_EXAMEN',
+      'CALIFICADOS',
+      'GANADORES',
+      'EMPATES',
+      'PUNTAJE MÁX',
+    ])
+    styleHeaderRow(puestoHeader)
+
+    const byPuestoSummary = new Map()
+    sortedByPuestoAndRank.forEach((r) => {
+      const key = r.codPuesto || r.cod_puesto || r.puesto || r.programa || 'S/P'
+      if (!byPuestoSummary.has(key)) {
+        byPuestoSummary.set(key, {
+          codPuesto: key,
+          puesto: r.puesto || r.programa || key,
+          unidad: r.unidad || '',
+          codExamen: r.codExamen || r.area || '',
+          rows: [],
+        })
+      }
+      byPuestoSummary.get(key).rows.push(r)
+    })
+
+    Array.from(byPuestoSummary.values()).forEach((grp) => {
+      const sc = grp.rows.map((x) => Number(x.score || 0))
+      const mx = sc.length ? Math.max(...sc) : 0
+      sheetResumen.addRow([
+        grp.codPuesto,
+        grp.puesto,
+        grp.unidad,
+        grp.codExamen,
+        grp.rows.length,
+        grp.rows.filter((x) => x.isIngresante).length,
+        grp.rows.filter((x) => x.isTied).length,
+        sc.length ? Number(mx.toFixed(3)) : '-',
+      ])
+    })
+
+    sheetResumen.columns = [
+      { width: 32 },
+      { width: 38 },
+      { width: 34 },
+      { width: 16 },
+      { width: 16 },
+      { width: 18 },
+      { width: 16 },
+      { width: 16 },
+    ]
+
+    // ── HOJA 2: Ranking por Puesto ──────────────────────────────────────────
+    const sheetRanking = workbook.addWorksheet('Ranking por Puesto')
+    sheetRanking.mergeCells('A1:P1')
+    sheetRanking.getCell('A1').value =
+      'CUADRO OFICIAL DE MÉRITOS POR PUESTO Y UNIDAD — CORTE SUPERIOR DE JUSTICIA DE PUNO'
+    sheetRanking.getCell('A1').font = { bold: true, size: 13, color: { argb: 'FF0A2446' } }
+    sheetRanking.getCell('A1').alignment = { horizontal: 'center' }
+    sheetRanking.addRow([])
+
+    const rankingHeader = sheetRanking.addRow([
+      'N°',
+      'COD_PUESTO',
+      'PUESTO',
+      'UNIDAD',
+      'COD_EXAMEN',
+      'GRUPO',
+      'AULA',
+      'DNI',
+      'APELLIDOS Y NOMBRES',
+      'ACIERTOS',
+      'ERRORES',
+      'BLANCOS',
+      'PUNTAJE',
+      'ORDEN MÉRITO PUESTO',
+      'CONDICIÓN',
+      'EMPATE',
+    ])
+    styleHeaderRow(rankingHeader)
+
+    sortedByPuestoAndRank.forEach((row, idx) => {
+      const stats =
+        row.correctCount !== undefined
+          ? {
+              correct: row.correctCount,
+              incorrect: row.incorrectCount,
+              blank: row.blankCount,
+            }
+          : answerStats(row)
+      const condicion =
+        row.condicion ||
+        (row.isCutoffTie
+          ? 'EMPATE EN CORTE'
+          : row.isIngresante
+            ? 'GANADOR / ALCANZÓ VACANTE'
+            : row.isApto === false
+              ? 'NO APROBADO'
+              : 'APROBADO (SIN VACANTE)')
+      const empateLabel = row.isCutoffTie
+        ? `EMPATE EN CORTE (${row.tieGroupSize || row.tieCount || 2})`
+        : row.isTied
+          ? `EMPATE (${row.tieGroupSize || row.tieCount || 2})`
+          : 'SIN EMPATE'
+
+      const r = sheetRanking.addRow([
+        idx + 1,
+        row.codPuesto || row.cod_puesto || '',
+        row.puesto || row.programa || '',
+        row.unidad || '',
+        row.codExamen || row.cod_examen || row.area || '',
+        row.grupo || '',
+        row.aula || row.aulaPadron || '',
+        row.dni || '',
+        fullNameOf(row),
+        stats.correct,
+        stats.incorrect,
+        stats.blank,
+        Number(row.score || 0),
+        row.positionInPrograma || row.position || idx + 1,
+        condicion,
+        empateLabel,
+      ])
+
+      r.getCell(13).font = { bold: true }
+      r.getCell(13).numFmt = '0.000'
+      r.getCell(14).alignment = { horizontal: 'center' }
+
+      if (row.isCutoffTie) {
+        r.eachCell((cell) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } }
+        })
+      } else if (row.isIngresante) {
+        r.eachCell((cell) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD4EDDA' } }
+        })
+      }
+    })
+
+    sheetRanking.columns = [
+      { width: 7 },
+      { width: 14 },
+      { width: 32 },
+      { width: 32 },
+      { width: 14 },
+      { width: 12 },
+      { width: 10 },
+      { width: 12 },
+      { width: 34 },
+      { width: 11 },
+      { width: 11 },
+      { width: 11 },
+      { width: 13 },
+      { width: 18 },
+      { width: 26 },
+      { width: 20 },
+    ]
+    sheetRanking.views = [{ state: 'frozen', ySplit: 3 }]
+    sheetRanking.autoFilter = 'A3:P3'
+
+    // ── HOJA 3: Padrón Consolidado ──────────────────────────────────────────
+    const sheetPadron = workbook.addWorksheet('Padrón Consolidado')
+    sheetPadron.mergeCells('A1:S1')
+    sheetPadron.getCell('A1').value =
+      'PADRÓN GENERAL CONSOLIDADO DE POSTULANTES (CALIFICADOS, AUSENTES Y ANULADOS)'
+    sheetPadron.getCell('A1').font = { bold: true, size: 13, color: { argb: 'FF0A2446' } }
+    sheetPadron.getCell('A1').alignment = { horizontal: 'center' }
+    sheetPadron.addRow([])
+
+    const padronHeader = sheetPadron.addRow([
+      'N°',
+      'DNI',
+      'APELLIDO PATERNO',
+      'APELLIDO MATERNO',
+      'NOMBRES',
+      'COD_EXAMEN',
+      'COD_PUESTO',
+      'PUESTO',
+      'UNIDAD',
+      'GRUPO',
+      'AULA',
+      'ESTADO PROCESAMIENTO',
+      'ACIERTOS',
+      'ERRORES',
+      'BLANCOS',
+      'PUNTAJE',
+      'ORDEN MÉRITO PUESTO',
+      'CONDICIÓN FINAL',
+      'DETALLE / SUSTENTO',
+    ])
+    styleHeaderRow(padronHeader)
+
+    const resultByDni = new Map()
+    rankedResults.forEach((r) => {
+      const d = stripDigits(r.dni)
+      if (d) resultByDni.set(d, r)
+    })
+    const noCalifByDni = new Map()
+    noCalificados.forEach((r) => {
+      const d = stripDigits(r.dni)
+      if (d) noCalifByDni.set(d, r)
+    })
+
+    const baseConsolidadoRows =
+      archiveRows.length > 0
+        ? archiveRows
+        : [
+            ...rankedResults,
+            ...noCalificados,
+          ]
+
+    baseConsolidadoRows.forEach((cand, idx) => {
+      const dni = stripDigits(cand.dni)
+      const calRow = resultByDni.get(dni)
+      const ncRow = noCalifByDni.get(dni)
+      let estadoProc = 'CALIFICADO'
+      let aciertos = ''
+      let errores = ''
+      let blancos = ''
+      let puntaje = ''
+      let ordenMerito = ''
+      let condicionFinal = ''
+      let detalle = ''
+
+      if (calRow) {
+        const st =
+          calRow.correctCount !== undefined
+            ? { correct: calRow.correctCount, incorrect: calRow.incorrectCount, blank: calRow.blankCount }
+            : answerStats(calRow)
+        estadoProc = 'CALIFICADO'
+        aciertos = st.correct
+        errores = st.incorrect
+        blancos = st.blank
+        puntaje = Number(calRow.score || 0)
+        ordenMerito = calRow.positionInPrograma || calRow.position || ''
+        condicionFinal = calRow.condicion || (calRow.isIngresante ? 'GANADOR / ALCANZÓ VACANTE' : 'EVALUADO')
+      } else if (ncRow) {
+        const mot = String(ncRow.motivo || '').toUpperCase()
+        if (mot.includes('ANULADA')) {
+          estadoProc = 'ANULADO POR COMISIÓN'
+        } else if (mot.includes('AUSENTE') || mot.includes('SIN RESPUESTA')) {
+          estadoProc = 'AUSENTE'
+        } else {
+          estadoProc = 'NO CALIFICADO'
+        }
+        condicionFinal = estadoProc
+        detalle = [ncRow.motivo, ncRow.detalle, ncRow.documento].filter(Boolean).join(' — ')
+      } else {
+        estadoProc = 'AUSENTE'
+        condicionFinal = 'AUSENTE'
+        detalle = 'Sin lectura de ficha de respuestas'
+      }
+
+      sheetPadron.addRow([
+        idx + 1,
+        dni || cand.dni || '',
+        cand.paterno || '',
+        cand.materno || '',
+        cand.nombres || '',
+        cand.cod_examen || cand.codExamen || cand.area || '',
+        cand.cod_puesto || cand.codPuesto || cand.codigo_programa || '',
+        cand.puesto || cand.programa || '',
+        cand.unidad || '',
+        cand.grupo || '',
+        cand.aula_padron || cand.aula || '',
+        estadoProc,
+        aciertos,
+        errores,
+        blancos,
+        puntaje,
+        ordenMerito,
+        condicionFinal,
+        detalle,
+      ])
+    })
+
+    sheetPadron.columns = [
+      { width: 7 },
+      { width: 12 },
+      { width: 18 },
+      { width: 18 },
+      { width: 24 },
+      { width: 14 },
+      { width: 14 },
+      { width: 30 },
+      { width: 30 },
+      { width: 12 },
+      { width: 10 },
+      { width: 22 },
+      { width: 10 },
+      { width: 10 },
+      { width: 10 },
+      { width: 12 },
+      { width: 16 },
+      { width: 24 },
+      { width: 42 },
+    ]
+    sheetPadron.views = [{ state: 'frozen', ySplit: 3 }]
+
+    // ── HOJA 4: Empates Detectados ──────────────────────────────────────────
+    const sheetEmpates = workbook.addWorksheet('Empates Detectados')
+    const tiedRows = sortedByPuestoAndRank.filter((r) => r.isTied === true)
+    const empateHeader = sheetEmpates.addRow([
+      'COD_PUESTO',
+      'PUESTO',
+      'UNIDAD',
+      'COD_EXAMEN',
+      'DNI',
+      'APELLIDOS Y NOMBRES',
+      'PUNTAJE',
+      'ACIERTOS',
+      'ERRORES',
+      'BLANCOS',
+      'ORDEN MÉRITO PUESTO',
+      'TAMAÑO EMPATE',
+      'EMPATE EN CORTE VACANTE',
+      'CONDICIÓN',
+    ])
+    styleHeaderRow(empateHeader, 'FF92400E')
+
+    if (tiedRows.length > 0) {
+      tiedRows.forEach((row) => {
+        const st =
+          row.correctCount !== undefined
+            ? { correct: row.correctCount, incorrect: row.incorrectCount, blank: row.blankCount }
+            : answerStats(row)
+        const r = sheetEmpates.addRow([
+          row.codPuesto || row.cod_puesto || '',
+          row.puesto || row.programa || '',
+          row.unidad || '',
+          row.codExamen || row.cod_examen || row.area || '',
+          row.dni || '',
+          fullNameOf(row),
+          Number(row.score || 0),
+          st.correct,
+          st.incorrect,
+          st.blank,
+          row.positionInPrograma || row.position || '',
+          row.tieGroupSize || row.tieCount || 2,
+          row.isCutoffTie ? 'SÍ (CORTE DE VACANTE)' : 'NO',
+          row.condicion || '',
+        ])
+        if (row.isCutoffTie) {
+          r.eachCell((cell) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } }
+          })
+        }
+      })
+    } else {
+      sheetEmpates.addRow([
+        '-',
+        'Sin empates detectados',
+        '-',
+        '-',
+        '-',
+        'No se registraron puntajes empatados en los puestos evaluados.',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        'NO',
+        '-',
+      ])
+    }
+
+    sheetEmpates.columns = [
+      { width: 14 },
+      { width: 30 },
+      { width: 30 },
+      { width: 14 },
+      { width: 12 },
+      { width: 34 },
+      { width: 12 },
+      { width: 10 },
+      { width: 10 },
+      { width: 10 },
+      { width: 18 },
+      { width: 16 },
+      { width: 22 },
+      { width: 24 },
+    ]
+
+    // ── HOJA 5: No Calificados y Anulados ───────────────────────────────────
+    const sheetNoCalif = workbook.addWorksheet('No Calificados y Anulados')
+    const ncHeader = sheetNoCalif.addRow([
+      'DNI',
+      'APELLIDO PATERNO',
+      'APELLIDO MATERNO',
+      'NOMBRES',
+      'COD_EXAMEN',
+      'COD_PUESTO',
+      'PUESTO',
+      'UNIDAD',
+      'GRUPO',
+      'AULA',
+      'MOTIVO',
+      'DETALLE / SUSTENTO',
+      'DOCUMENTO DE REFERENCIA',
+    ])
+    styleHeaderRow(ncHeader, 'FF7C2D12')
+
+    if (noCalificados.length > 0) {
+      noCalificados.forEach((row) => {
+        sheetNoCalif.addRow([
+          row.dni || '',
+          row.paterno || '',
+          row.materno || '',
+          row.nombres || '',
+          row.codExamen || row.cod_examen || row.area || '',
+          row.codPuesto || row.cod_puesto || '',
+          row.puesto || row.programa || '',
+          row.unidad || '',
+          row.grupo || '',
+          row.aula || '',
+          row.motivo || '',
+          row.detalle || '',
+          row.documento || '',
+        ])
+      })
+    } else {
+      sheetNoCalif.addRow([
+        '-',
+        '-',
+        '-',
+        'Sin registros de ausentes o anulados',
+        '-',
+        '-',
+        '-',
+        '-',
+        '-',
+        '-',
+        'Sin observaciones',
+        'Todos los postulantes del padrón fueron calificados.',
+        '-',
+      ])
+    }
+
+    sheetNoCalif.columns = [
+      { width: 12 },
+      { width: 18 },
+      { width: 18 },
+      { width: 24 },
+      { width: 14 },
+      { width: 14 },
+      { width: 28 },
+      { width: 28 },
+      { width: 12 },
+      { width: 10 },
+      { width: 28 },
+      { width: 45 },
+      { width: 26 },
+    ]
+
+    // ── HOJA 6: Excepciones y Pruebas ───────────────────────────────────────
+    const sheetExc = workbook.addWorksheet('Excepciones y Pruebas')
+    sheetExc.mergeCells('A1:F1')
+    sheetExc.getCell('A1').value =
+      'AUDITORÍA DE EXCEPCIONES, ANULACIONES Y 5 PRUEBAS SINTÉTICAS PRE-CALIFICACIÓN'
+    sheetExc.getCell('A1').font = { bold: true, size: 12, color: { argb: 'FF0A2446' } }
+    sheetExc.addRow(['Huella SHA-256 Canónica de Configuración:', configSha256])
+    sheetExc.addRow(['Huella en Bloques de 8:', formatHashBlocks(configSha256, 8)])
+    sheetExc.addRow([])
+
+    const qExcTitle = sheetExc.addRow(['1. EXCEPCIONES DE PREGUNTAS Y FE DE ERRATAS'])
+    qExcTitle.getCell(1).font = { bold: true, size: 11, color: { argb: 'FF0A2446' } }
+    const qExcHeader = sheetExc.addRow([
+      'COD_EXAMEN',
+      'N° PREGUNTA',
+      'TIPO DE EXCEPCIÓN',
+      'RESPUESTAS VÁLIDAS',
+      'MOTIVO / JUSTIFICACIÓN',
+      'DOCUMENTO DE SUSTENTO',
+    ])
+    styleHeaderRow(qExcHeader)
+
+    if (questionExceptions.length > 0) {
+      questionExceptions.forEach((exc) => {
+        sheetExc.addRow([
+          exc.codExamen || exc.area || 'TODOS',
+          exc.questionNumber || '',
+          exc.type || '',
+          exc.validAnswers || '-',
+          exc.reason || '',
+          exc.documentRef || '',
+        ])
+      })
+    } else {
+      sheetExc.addRow(['-', '-', 'SIN EXCEPCIONES', '-', 'No se aplicaron excepciones de preguntas.', '-'])
+    }
+
+    sheetExc.addRow([])
+    const cExcTitle = sheetExc.addRow(['2. POSTULANTES ANULADOS POR DISPOSICIÓN DE LA COMISIÓN'])
+    cExcTitle.getCell(1).font = { bold: true, size: 11, color: { argb: 'FF0A2446' } }
+    const cExcHeader = sheetExc.addRow([
+      'DNI',
+      'POSTULANTE',
+      'COD_EXAMEN',
+      'COD_PUESTO',
+      'MOTIVO DE ANULACIÓN',
+      'ACTA / DOCUMENTO DE SUSTENTO',
+    ])
+    styleHeaderRow(cExcHeader, 'FF7C2D12')
+
+    const effectiveCandExc = candidateExceptions.length > 0 ? candidateExceptions : anuladosComision
+    if (effectiveCandExc.length > 0) {
+      effectiveCandExc.forEach((exc) => {
+        sheetExc.addRow([
+          exc.dni || '',
+          fullNameOf(exc) || exc.nombres || '',
+          exc.codExamen || exc.cod_examen || '',
+          exc.codPuesto || exc.cod_puesto || '',
+          exc.reason || exc.detalle || exc.motivo || '',
+          exc.documentRef || exc.documento || '',
+        ])
+      })
+    } else {
+      sheetExc.addRow(['-', 'Sin postulantes anulados', '-', '-', 'Ninguna participación fue anulada.', '-'])
+    }
+
+    sheetExc.addRow([])
+    const synTitle = sheetExc.addRow(['3. BATERÍA DE 5 PRUEBAS SINTÉTICAS PRE-CALIFICACIÓN'])
+    synTitle.getCell(1).font = { bold: true, size: 11, color: { argb: 'FF0A2446' } }
+    const synHeader = sheetExc.addRow([
+      'CÓDIGO',
+      'CASO DE PRUEBA SINTÉTICO',
+      'PUNTAJE ESPERADO',
+      'PUNTAJE OBTENIDO',
+      'ESTADO',
+      'DETALLE DE VERIFICACIÓN',
+    ])
+    styleHeaderRow(synHeader, 'FF15803D')
+
+    ;(syntheticSuite.cases || []).forEach((tc) => {
+      sheetExc.addRow([
+        tc.code,
+        tc.name,
+        tc.expectedScore !== null && tc.expectedScore !== undefined ? Number(tc.expectedScore).toFixed(3) : 'EXCLUIDO RANKING',
+        tc.obtainedScore !== null && tc.obtainedScore !== undefined ? Number(tc.obtainedScore).toFixed(3) : 'ANULADO AUDITADO',
+        tc.passed ? 'CONFORME (OK)' : 'OBSERVADO',
+        tc.details || tc.description || '',
+      ])
+    })
+
+    sheetExc.columns = [
+      { width: 22 },
+      { width: 42 },
+      { width: 22 },
+      { width: 22 },
+      { width: 28 },
+      { width: 48 },
+    ]
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const filename =
+      options.filename ||
+      buildFilename('RESULTADOS_OFICIALES_PJ', convocatoriaName || 'CSJ_PUNO_728', 'consolidado', 'xlsx')
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    saveAs(blob, filename)
+    return registerExportedArtifact({
+      name: filename,
+      type: 'excel',
+      label: 'Padrón General y Ranking Oficial por Puesto PJ (Excel)',
+      buffer,
+    })
   }
 
   async function exportScoresToExcel(rankedResults, convocatoriaName = '', options = {}) {
     if (!rankedResults?.length) return
 
+    const processType = options.processType || 'simulacro'
+    if (processType === 'poder_judicial') {
+      return exportPjResultsToExcel(rankedResults, convocatoriaName, options)
+    }
+
     const { ExcelJS, saveAs } = await loadExcelExportDeps()
     const workbook = new ExcelJS.Workbook()
-    const processType = options.processType || 'simulacro'
 
     if (processType !== 'real') {
       const area = options.area || rankedResults[0]?.area || 'Área'
@@ -399,11 +1219,17 @@ export function useExport() {
       addNoCalificadosSheet(workbook, options.areaSummary?.noCalificados || [], { includeProgram: false })
 
       const buffer = await workbook.xlsx.writeBuffer()
+      const filename = buildFilename('simulacro-resultados', convocatoriaName, area, 'xlsx')
       const blob = new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       })
-      saveAs(blob, buildFilename('simulacro-resultados', convocatoriaName, area, 'xlsx'))
-      return
+      saveAs(blob, filename)
+      return registerExportedArtifact({
+        name: filename,
+        type: 'excel',
+        label: `Resultados de Simulacro — ${displayAreaName(area)} (Excel)`,
+        buffer,
+      })
     }
 
     // Agrupar por área
@@ -486,15 +1312,23 @@ export function useExport() {
     })
 
     const buffer = await workbook.xlsx.writeBuffer()
+    const filename = buildFilename('resultados', convocatoriaName, options.area || 'todas', 'xlsx')
     const blob = new Blob([buffer], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     })
-    saveAs(blob, buildFilename('resultados', convocatoriaName, options.area || 'todas', 'xlsx'))
+    saveAs(blob, filename)
+    return registerExportedArtifact({
+      name: filename,
+      type: 'excel',
+      label: 'Padrón de Resultados Oficiales (Excel)',
+      buffer,
+    })
   }
 
-  async function _loadLogoBase64() {
+  async function _loadLogoBase64(url = '/unap.png') {
     try {
-      const res = await fetch('/unap.png')
+      const res = await fetch(url)
+      if (!res.ok) return null
       const blob = await res.blob()
       return await new Promise((resolve) => {
         const reader = new FileReader()
@@ -506,7 +1340,219 @@ export function useExport() {
     }
   }
 
-  async function exportIngresantesPdf(rankedResults, summary, convocatoriaName = '', processType = 'simulacro') {
+  async function exportPjPublicationPdf(rankedResults = [], summary = {}, convocatoriaName = '', options = {}) {
+    if (!rankedResults?.length) return null
+
+    const { jsPDF, autoTable } = await loadPdfExportDeps()
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const logoUnap = await _loadLogoBase64('/unap.png')
+    const logoPj = await _loadLogoBase64('/actas-static/assets/logo-pj.jpg')
+
+    const pageW = doc.internal.pageSize.getWidth()
+    const pageH = doc.internal.pageSize.getHeight()
+    const dateStr = new Date().toLocaleDateString('es-PE', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    })
+
+    const sortedRows = [...rankedResults].sort((a, b) => {
+      const pA = String(a.codPuesto || a.cod_puesto || a.programa || '')
+      const pB = String(b.codPuesto || b.cod_puesto || b.programa || '')
+      const cmp = pA.localeCompare(pB, 'es', { numeric: true, sensitivity: 'base' })
+      if (cmp !== 0) return cmp
+      return Number(a.positionInPrograma || a.position || 0) - Number(b.positionInPrograma || b.position || 0)
+    })
+
+    const byPuesto = new Map()
+    sortedRows.forEach((row) => {
+      const codPuesto = row.codPuesto || row.cod_puesto || ''
+      const puesto = row.puesto || row.programa || '(Sin puesto)'
+      const unidad = row.unidad || ''
+      const key = `${codPuesto}__${puesto}__${unidad}`
+      if (!byPuesto.has(key)) {
+        byPuesto.set(key, {
+          codPuesto,
+          puesto,
+          unidad,
+          codExamen: row.codExamen || row.cod_examen || row.area || '',
+          rows: [],
+        })
+      }
+      byPuesto.get(key).rows.push(row)
+    })
+
+    const drawHeader = () => {
+      if (logoUnap) {
+        try { doc.addImage(logoUnap, 'PNG', 10, 7, 16, 16) } catch {}
+      }
+      if (logoPj) {
+        try { doc.addImage(logoPj, 'JPEG', pageW - 26, 7, 16, 16) } catch {}
+      }
+
+      doc.setFontSize(11.5)
+      doc.setTextColor(10, 36, 70)
+      doc.setFont(undefined, 'bold')
+      doc.text('UNIVERSIDAD NACIONAL DEL ALTIPLANO DE PUNO', pageW / 2, 11, { align: 'center' })
+
+      doc.setFontSize(8.5)
+      doc.setTextColor(30, 58, 95)
+      doc.text('DIRECCIÓN DE ADMISIÓN — CONVENIO CORTE SUPERIOR DE JUSTICIA DE PUNO', pageW / 2, 15.5, { align: 'center' })
+
+      doc.setFontSize(10)
+      doc.setTextColor(10, 36, 70)
+      doc.text(
+        `RESULTADOS OFICIALES POR PUESTO — ${convocatoriaName || 'PROCESO DE SELECCIÓN D.L. 728 N.° 001-2026-UE-PUNO'}`,
+        pageW / 2,
+        21,
+        { align: 'center' },
+      )
+
+      doc.setDrawColor(10, 36, 70)
+      doc.setLineWidth(0.5)
+      doc.line(10, 24.5, pageW - 10, 24.5)
+      doc.setDrawColor(221, 171, 68)
+      doc.setLineWidth(0.4)
+      doc.line(10, 25.5, pageW - 10, 25.5)
+    }
+
+    const drawFooterSignatures = (pageNum) => {
+      const sigY = pageH - 20
+      doc.setDrawColor(100, 116, 139)
+      doc.setLineWidth(0.3)
+      doc.line(22, sigY, 88, sigY)
+      doc.line(pageW - 88, sigY, pageW - 22, sigY)
+
+      doc.setFontSize(7)
+      doc.setTextColor(15, 23, 42)
+      doc.setFont(undefined, 'bold')
+      doc.text('Dr. Bladimiro Centeno Herrera', 55, sigY + 3.5, { align: 'center' })
+      doc.text('Abog. Benny José Álvarez Quiñonez', pageW - 55, sigY + 3.5, { align: 'center' })
+
+      doc.setFont(undefined, 'normal')
+      doc.setFontSize(6.5)
+      doc.setTextColor(100, 116, 139)
+      doc.text('Director de Admisión — UNA-PUNO', 55, sigY + 7, { align: 'center' })
+      doc.text('Presidente CSJ Puno / Comisión D.L. 728', pageW - 55, sigY + 7, { align: 'center' })
+
+      doc.line(10, pageH - 9.5, pageW - 10, pageH - 9.5)
+      doc.text(`Sistema de Calificación Óptica UNA-PUNO — Fecha: ${dateStr}`, 10, pageH - 6)
+      doc.text(`Página ${pageNum}`, pageW - 10, pageH - 6, { align: 'right' })
+    }
+
+    drawHeader()
+
+    const bodyRows = []
+    Array.from(byPuesto.values()).forEach((group) => {
+      const headerLabel = [
+        group.codPuesto ? `[${group.codPuesto}]` : '',
+        group.puesto,
+        group.unidad ? `— UNIDAD: ${group.unidad}` : '',
+        group.codExamen ? `(Examen: ${group.codExamen} | Evaluados: ${group.rows.length})` : `(Evaluados: ${group.rows.length})`,
+      ]
+        .filter(Boolean)
+        .join(' ')
+
+      bodyRows.push([
+        {
+          content: headerLabel,
+          colSpan: 6,
+          styles: {
+            fillColor: [10, 36, 70],
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+            fontSize: 7.5,
+            cellPadding: { top: 2.2, bottom: 2.2, left: 3, right: 3 },
+          },
+        },
+      ])
+
+      group.rows.forEach((row, idx) => {
+        const fullName = [row.paterno, row.materno, row.nombres]
+          .map((v) => String(v || '').trim())
+          .filter(Boolean)
+          .join(' ')
+        const condicion =
+          row.condicion ||
+          (row.isCutoffTie
+            ? 'EMPATE EN CORTE'
+            : row.isIngresante
+              ? 'ALCANZÓ VACANTE / APTO'
+              : row.isApto === false
+                ? 'NO APTO'
+                : 'APTO (SIN VACANTE)')
+        bodyRows.push([
+          row.positionInPrograma || row.position || idx + 1,
+          row.dni || '',
+          fullName,
+          row.codExamen || row.area || '',
+          Number(row.score || 0).toFixed(3),
+          condicion,
+        ])
+      })
+    })
+
+    autoTable(doc, {
+      startY: 29,
+      head: [['ORDEN MÉRITO', 'DNI', 'APELLIDOS Y NOMBRES', 'EXAMEN', 'PUNTAJE', 'CONDICIÓN']],
+      body: bodyRows,
+      headStyles: {
+        fillColor: [30, 58, 95],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 7.5,
+        halign: 'center',
+      },
+      bodyStyles: { fontSize: 7.2, cellPadding: 1.8 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 18, fontStyle: 'bold' },
+        1: { halign: 'center', cellWidth: 20 },
+        2: { halign: 'left', cellWidth: 74 },
+        3: { halign: 'center', cellWidth: 16 },
+        4: { halign: 'right', cellWidth: 20, fontStyle: 'bold' },
+        5: { halign: 'center', cellWidth: 42 },
+      },
+      margin: { top: 29, bottom: 26, left: 10, right: 10 },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 5) {
+          const val = String(data.cell.raw || '').toUpperCase()
+          if (val.includes('EMPATE')) {
+            data.cell.styles.textColor = [146, 64, 14]
+            data.cell.styles.fontStyle = 'bold'
+          } else if (val.includes('VACANTE') || val.includes('GANADOR')) {
+            data.cell.styles.textColor = [21, 128, 61]
+            data.cell.styles.fontStyle = 'bold'
+          }
+        }
+      },
+      didDrawPage: () => {
+        const pg = doc.internal?.getCurrentPageInfo?.()?.pageNumber || 1
+        if (pg > 1) {
+          drawHeader()
+        }
+        drawFooterSignatures(pg)
+      },
+    })
+
+    const filename =
+      options.filename ||
+      buildFilename('PUBLICACION_OFICIAL_PJ', convocatoriaName || 'CSJ_PUNO_728', 'puestos', 'pdf')
+    const pdfBuffer = _extractPdfBuffer(doc)
+    doc.save(filename)
+    return registerExportedArtifact({
+      name: filename,
+      type: 'pdf',
+      label: 'Publicación Oficial en Orden de Mérito por Puesto PJ (PDF)',
+      buffer: pdfBuffer,
+    })
+  }
+
+  async function exportIngresantesPdf(rankedResults, summary, convocatoriaName = '', processType = 'simulacro', options = {}) {
+    if (processType === 'poder_judicial' || options?.processType === 'poder_judicial') {
+      return exportPjPublicationPdf(rankedResults, summary, convocatoriaName, options)
+    }
+
     const ingresantes = (rankedResults || []).filter(r => r.isIngresante)
     if (!ingresantes.length) return
 
@@ -631,7 +1677,7 @@ export function useExport() {
             5: { halign: 'center', cellWidth: 20, fontStyle: 'bold' },
           },
           margin: { left: 8, right: 8 },
-          didDrawPage: (data) => {
+          didDrawPage: () => {
             const pg = doc.internal.getCurrentPageInfo().pageNumber
             doc.setFontSize(7)
             doc.setTextColor(150, 150, 150)
@@ -661,7 +1707,7 @@ export function useExport() {
             5: { halign: 'center', cellWidth: 18, fontStyle: 'bold' },
           },
           margin: { left: 8, right: 8 },
-          didDrawPage: (data) => {
+          didDrawPage: () => {
             const pg = doc.internal.getCurrentPageInfo().pageNumber
             doc.setFontSize(7)
             doc.setTextColor(150, 150, 150)
@@ -675,13 +1721,25 @@ export function useExport() {
     const date = new Date().toISOString().slice(0, 10)
     const safeName = (convocatoriaName || 'ingresantes').replace(/[^a-z0-9_-]/gi, '_')
     const modoSuffix = isReal ? '-real' : ''
-    doc.save(`ingresantes${modoSuffix}-${safeName}-${date}.pdf`)
+    const filename = `ingresantes${modoSuffix}-${safeName}-${date}.pdf`
+    const pdfBuffer = _extractPdfBuffer(doc)
+    doc.save(filename)
+    return registerExportedArtifact({
+      name: filename,
+      type: 'pdf',
+      label: 'Relación de Ingresantes / Ganadores (PDF)',
+      buffer: pdfBuffer,
+    })
   }
 
   async function exportScoresToPdf(rankedResults, summary, convocatoriaName = '', options = {}) {
     if (!rankedResults?.length) return
-    const { jsPDF, autoTable } = await loadPdfExportDeps()
     const processType = options.processType || 'simulacro'
+    if (processType === 'poder_judicial') {
+      return exportPjPublicationPdf(rankedResults, summary, convocatoriaName, options)
+    }
+
+    const { jsPDF, autoTable } = await loadPdfExportDeps()
     const isReal = processType === 'real'
 
     // Agrupar por área
@@ -862,7 +1920,15 @@ export function useExport() {
       })
     })
 
-    doc.save(buildFilename(isReal ? 'resultados' : 'simulacro-ranking', convocatoriaName, options.area || 'todas', 'pdf'))
+    const filename = buildFilename(isReal ? 'resultados' : 'simulacro-ranking', convocatoriaName, options.area || 'todas', 'pdf')
+    const pdfBuffer = _extractPdfBuffer(doc)
+    doc.save(filename)
+    return registerExportedArtifact({
+      name: filename,
+      type: 'pdf',
+      label: 'Relación en Orden de Mérito para Publicación (PDF)',
+      buffer: pdfBuffer,
+    })
   }
 
   async function exportSimulacroAreasToPdf(areaResultsMap = {}, convocatoriaName = '', options = {}) {
@@ -884,7 +1950,6 @@ export function useExport() {
     const pageH = doc.internal.pageSize.getHeight()
     const date = new Date().toLocaleDateString('es-PE')
     const allRows = areaEntries.flatMap((entry) => entry.results)
-    const allNoCalificados = areaEntries.flatMap((entry) => entry.summary?.noCalificados || [])
 
     if (logoBase64) doc.addImage(logoBase64, 'PNG', 10, 8, 18, 18)
     doc.setFillColor(10, 36, 70)
@@ -994,14 +2059,27 @@ export function useExport() {
       })
     })
 
-    doc.save(buildFilename('simulacro-ranking-todo', convocatoriaName, 'todas', 'pdf'))
+    const filename = buildFilename('simulacro-ranking-todo', convocatoriaName, 'todas', 'pdf')
+    const pdfBuffer = _extractPdfBuffer(doc)
+    doc.save(filename)
+    return registerExportedArtifact({
+      name: filename,
+      type: 'pdf',
+      label: 'Consolidado General de Simulacro (PDF)',
+      buffer: pdfBuffer,
+    })
   }
 
   return {
+    exportedArtifacts,
+    registerExportedArtifact,
+    clearExportedArtifacts,
     exportScoresToExcel,
     exportSimulacroAreasToExcel,
+    exportPjResultsToExcel,
     exportScoresToPdf,
     exportSimulacroAreasToPdf,
     exportIngresantesPdf,
+    exportPjPublicationPdf,
   }
 }

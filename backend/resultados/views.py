@@ -1,11 +1,16 @@
-from django.db import transaction
+from django.db import models, transaction
 from django.utils.dateparse import parse_datetime
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import AreaCalificacion, ProcesoCalificacion, ResultadoCandidato, VerificadorSesion
-from .serializers import ProcesoDetailSerializer, ProcesoListSerializer, VerificadorSesionSerializer
+from .models import AreaCalificacion, EventoBitacora, ProcesoCalificacion, ResultadoCandidato, VerificadorSesion
+from .serializers import (
+    EventoBitacoraSerializer,
+    ProcesoDetailSerializer,
+    ProcesoListSerializer,
+    VerificadorSesionSerializer,
+)
 
 
 class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
@@ -46,15 +51,20 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
         if not isinstance(areas_payload, dict):
             return Response({'detail': 'areas debe ser un objeto.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        defaults = {
+            'name': name,
+            'process_type': process_type,
+            'simulacro_scope': simulacro_scope,
+        }
+        if 'configMetadata' in data or 'config_metadata' in data:
+            raw_meta = data.get('configMetadata') if 'configMetadata' in data else data.get('config_metadata')
+            defaults['config_metadata'] = raw_meta if isinstance(raw_meta, dict) else {}
+
         with transaction.atomic():
             proceso, _ = ProcesoCalificacion.objects.update_or_create(
                 created_by=request.user,
                 local_id=local_id,
-                defaults={
-                    'name': name,
-                    'process_type': process_type,
-                    'simulacro_scope': simulacro_scope,
-                },
+                defaults=defaults,
             )
 
             area_names = set(areas_payload)
@@ -63,6 +73,28 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
             for area_name, area_data in areas_payload.items():
                 summary = area_data.get('summary', {})
                 results = area_data.get('results', [])
+
+                preflight_snapshot = (
+                    area_data.get('preflightSnapshot')
+                    or area_data.get('preflight_snapshot')
+                    or summary.get('preflightSnapshot')
+                    or summary.get('preflight_snapshot')
+                    or {}
+                )
+                validation_snapshot = (
+                    area_data.get('validationSnapshot')
+                    or area_data.get('validation_snapshot')
+                    or summary.get('validationSnapshot')
+                    or summary.get('validation_snapshot')
+                    or {}
+                )
+                config_sha256 = (
+                    area_data.get('configSha256')
+                    or area_data.get('config_sha256')
+                    or summary.get('configSha256')
+                    or summary.get('config_sha256')
+                    or ''
+                )
 
                 area_obj, _ = AreaCalificacion.objects.update_or_create(
                     proceso=proceso,
@@ -86,6 +118,9 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                         'no_calificados': summary.get('noCalificados', []),
                         'total_weight': summary.get('totalWeight', 0),
                         'answers_length': summary.get('answersLength', 60),
+                        'preflight_snapshot': preflight_snapshot if isinstance(preflight_snapshot, dict) else {},
+                        'validation_snapshot': validation_snapshot if isinstance(validation_snapshot, dict) else {},
+                        'config_sha256': str(config_sha256 or ''),
                     },
                 )
 
@@ -123,6 +158,9 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
         areas = {}
         for area_obj in proceso.areas.prefetch_related('resultados').all():
             areas[area_obj.area] = {
+                'preflightSnapshot': area_obj.preflight_snapshot,
+                'validationSnapshot': area_obj.validation_snapshot,
+                'configSha256': area_obj.config_sha256,
                 'summary': {
                     'area': area_obj.area,
                     'timestamp': area_obj.timestamp.isoformat() if area_obj.timestamp else None,
@@ -143,6 +181,12 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                     'plantillaId': area_obj.plantilla_id,
                     'plantillaName': area_obj.plantilla_name,
                     'plantillaSnapshot': area_obj.plantilla_snapshot,
+                    'preflightSnapshot': area_obj.preflight_snapshot,
+                    'validationSnapshot': area_obj.validation_snapshot,
+                    'configSha256': area_obj.config_sha256,
+                    'preflight_snapshot': area_obj.preflight_snapshot,
+                    'validation_snapshot': area_obj.validation_snapshot,
+                    'config_sha256': area_obj.config_sha256,
                 },
                 'results': [
                     {
@@ -174,6 +218,8 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
             'name': proceso.name,
             'type': proceso.process_type,
             'simulacroScope': proceso.simulacro_scope,
+            'configMetadata': proceso.config_metadata,
+            'config_metadata': proceso.config_metadata,
             'savedAt': proceso.updated_at.isoformat(),
             'areas': areas,
         })
@@ -199,3 +245,32 @@ class VerificadorSesionViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save()
+
+
+class EventoBitacoraViewSet(viewsets.ModelViewSet):
+    """
+    Bitácora de modificaciones y eventos de auditoría del usuario actual.
+
+    GET    /api/bitacora/?proceso=<id_o_local_id>
+    POST   /api/bitacora/
+    """
+    serializer_class = EventoBitacoraSerializer
+
+    def get_queryset(self):
+        qs = EventoBitacora.objects.filter(created_by=self.request.user).select_related('proceso', 'created_by')
+        proceso_param = self.request.query_params.get('proceso') or self.request.query_params.get('proceso_id')
+        if proceso_param:
+            if str(proceso_param).isdigit():
+                qs = qs.filter(
+                    models.Q(proceso_id=int(proceso_param)) | models.Q(proceso__local_id=str(proceso_param))
+                )
+            else:
+                qs = qs.filter(proceso__local_id=str(proceso_param))
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(created_by=self.request.user)
+

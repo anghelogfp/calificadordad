@@ -6,6 +6,7 @@ import { useToast } from '@/composables/useToast'
 import {
   normalize,
   normalizeArea,
+  stripDigits,
 } from '@/utils/helpers'
 import {
   GENERAL_SIMULACRO_AREA,
@@ -13,15 +14,22 @@ import {
 import { calculateAreaResults } from '@/domain/calification/calculateResults'
 import { buildCalificationPreflight } from '@/domain/calification/preflight'
 import { validateCalificationResult } from '@/domain/calification/validateResults'
+import { runPreCalificationSyntheticSuite } from '@/domain/calification/syntheticTests'
+import { computeConfigurationSha256 } from '@/domain/calification/configHash'
+
+export const PODER_JUDICIAL_AREA = 'CONCURSO PODER JUDICIAL'
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
 }
 
-function generateDefaultName() {
+function generateDefaultName(type = 'simulacro') {
   const date = new Date()
   const year = date.getFullYear()
   const month = date.toLocaleDateString('es-PE', { month: 'long' })
+  if (type === 'poder_judicial') {
+    return `Convocatoria N.° 001-${year}-UE-PUNO · CSJ Puno`
+  }
   return `Admisión ${year} · ${month.charAt(0).toUpperCase() + month.slice(1)}`
 }
 
@@ -95,15 +103,18 @@ export function useCalification(
     get: () => _processMeta.value.type || 'simulacro',
     set: (val) => { _processMeta.value = { ..._processMeta.value, type: val } },
   })
+  const isPoderJudicial = computed(() => processType.value === 'poder_judicial')
   const inferredSimulacroScope = computed(() =>
     archiveRows.value.some(row => row.area?.trim()) ? 'areas' : 'general'
   )
   const simulacroScope = computed({
-    get: () => processType.value === 'real' ? '' : (_processMeta.value.simulacroScope || inferredSimulacroScope.value),
+    get: () => (processType.value === 'real' || processType.value === 'poder_judicial')
+      ? ''
+      : (_processMeta.value.simulacroScope || inferredSimulacroScope.value),
     set: (val) => { _processMeta.value = { ..._processMeta.value, simulacroScope: val } },
   })
   const isGeneralSimulacro = computed(() =>
-    processType.value !== 'real' && simulacroScope.value === 'general'
+    processType.value === 'simulacro' && simulacroScope.value === 'general'
   )
 
   const calificationDisplayArea = ref(
@@ -111,14 +122,161 @@ export function useCalification(
   )
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // ESTADO PODER JUDICIAL (EXCEPCIONES, CRITERIOS, PRUEBAS SINTÉTICAS, BITÁCORA)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  const questionExceptions = ref([])
+  const candidateExceptions = ref([])
+  const scoringOptions = ref({
+    useMinPassingScore: false,
+    minPassingScore: 18,
+    requireQuotaForIngreso: true,
+    tieBreakerMode: 'shared_rank',
+  })
+  const syntheticSuiteResult = ref(null)
+  const bitacoraEvents = ref([])
+
+  async function logBitacoraEvent({
+    categoria = 'CONFIGURACION',
+    accion = '',
+    justificacion = '',
+    documento_sustento = '',
+    valor_anterior = null,
+    valor_nuevo = null,
+  } = {}) {
+    const entry = {
+      id: generateId(),
+      timestamp: new Date().toISOString(),
+      categoria,
+      accion,
+      justificacion,
+      documento_sustento,
+      valor_anterior,
+      valor_nuevo,
+    }
+    bitacoraEvents.value = [entry, ...bitacoraEvents.value]
+    try {
+      await apiFetch('/bitacora/', {
+        method: 'POST',
+        body: JSON.stringify({
+          proceso_local_id: activeProcess.value.id || '',
+          categoria,
+          accion,
+          justificacion,
+          documento_sustento,
+          valor_anterior,
+          valor_nuevo,
+        }),
+      })
+    } catch {
+      // Offline / API no disponible: conservado en bitacoraEvents en memoria
+    }
+    return entry
+  }
+
+  function addQuestionException(exc = {}) {
+    const qNum = Number(exc.questionNumber)
+    if (!Number.isInteger(qNum) || qNum < 1) return null
+    const newItem = {
+      id: exc.id || generateId(),
+      codExamen: String(exc.codExamen || '*').trim() || '*',
+      questionNumber: qNum,
+      type: String(exc.type || 'ANULADA_OTORGAR').trim().toUpperCase(),
+      validAnswers: String(exc.validAnswers || '').toUpperCase().replace(/[^A-E]/g, ''),
+      reason: String(exc.reason || '').trim(),
+      documentRef: String(exc.documentRef || '').trim(),
+    }
+    questionExceptions.value = [
+      ...questionExceptions.value.filter(
+        (item) =>
+          !(normalize(item.codExamen) === normalize(newItem.codExamen) && item.questionNumber === newItem.questionNumber),
+      ),
+      newItem,
+    ]
+    logBitacoraEvent({
+      categoria: 'EXCEPCION_PREGUNTA',
+      accion: `Excepción agregada: Examen ${newItem.codExamen} · Pregunta ${newItem.questionNumber} (${newItem.type})`,
+      justificacion: newItem.reason,
+      documento_sustento: newItem.documentRef,
+      valor_nuevo: newItem,
+    })
+    return newItem
+  }
+
+  function removeQuestionException(id) {
+    const prev = questionExceptions.value.find((item) => item.id === id)
+    questionExceptions.value = questionExceptions.value.filter((item) => item.id !== id)
+    if (prev) {
+      logBitacoraEvent({
+        categoria: 'EXCEPCION_PREGUNTA',
+        accion: `Excepción eliminada: Examen ${prev.codExamen} · Pregunta ${prev.questionNumber}`,
+        justificacion: prev.reason,
+        documento_sustento: prev.documentRef,
+        valor_anterior: prev,
+      })
+    }
+  }
+
+  function addCandidateException(exc = {}) {
+    const dni = stripDigits(exc.dni)
+    if (!dni) return null
+    const matchedPadron = archiveRows.value.find((r) => stripDigits(r.dni) === dni) || {}
+    const newItem = {
+      id: exc.id || generateId(),
+      dni,
+      paterno: exc.paterno || matchedPadron.paterno || '',
+      materno: exc.materno || matchedPadron.materno || '',
+      nombres: exc.nombres || matchedPadron.nombres || '',
+      codExamen: exc.codExamen || matchedPadron.cod_examen || matchedPadron.area || '',
+      codPuesto: exc.codPuesto || matchedPadron.cod_puesto || matchedPadron.programa || '',
+      reason: String(exc.reason || 'Anulado por acuerdo de comisión').trim(),
+      documentRef: String(exc.documentRef || '').trim(),
+    }
+    candidateExceptions.value = [
+      ...candidateExceptions.value.filter((item) => stripDigits(item.dni) !== dni),
+      newItem,
+    ]
+    logBitacoraEvent({
+      categoria: 'ANULACION_POSTULANTE',
+      accion: `Participación anulada para DNI ${dni} (${[newItem.paterno, newItem.materno, newItem.nombres].filter(Boolean).join(' ')})`,
+      justificacion: newItem.reason,
+      documento_sustento: newItem.documentRef,
+      valor_nuevo: newItem,
+    })
+    return newItem
+  }
+
+  function removeCandidateException(idOrDni) {
+    const prev = candidateExceptions.value.find(
+      (item) => item.id === idOrDni || stripDigits(item.dni) === stripDigits(idOrDni),
+    )
+    candidateExceptions.value = candidateExceptions.value.filter(
+      (item) => item.id !== idOrDni && stripDigits(item.dni) !== stripDigits(idOrDni),
+    )
+    if (prev) {
+      logBitacoraEvent({
+        categoria: 'ANULACION_POSTULANTE',
+        accion: `Anulación revertida para DNI ${prev.dni}`,
+        justificacion: prev.reason,
+        documento_sustento: prev.documentRef,
+        valor_anterior: prev,
+      })
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // ESTADO DEL MODAL
   // ═══════════════════════════════════════════════════════════════════════════
 
   const showCalificationModal = ref(false)
   const calificationArea = ref(
-    isGeneralSimulacro.value ? GENERAL_SIMULACRO_AREA : (effectiveAreaNames.value[0] ?? ANSWER_KEY_AREAS[0])
+    isPoderJudicial.value
+      ? PODER_JUDICIAL_AREA
+      : isGeneralSimulacro.value
+        ? GENERAL_SIMULACRO_AREA
+        : (effectiveAreaNames.value[0] ?? ANSWER_KEY_AREAS[0])
   )
-  const calificationPlantillaId = ref(null)   // reemplaza calificationPonderationArea
+  const calificationPlantillaId = ref(null)
   const calificationError = ref('')
   const calificationSearch = ref('')
 
@@ -128,18 +286,26 @@ export function useCalification(
   const calificationConfigApiReady = ref(false)
   let skipNextCalificationConfigSync = false
 
+  function getDefaultScoringForArea(area) {
+    if (area === PODER_JUDICIAL_AREA || isPoderJudicial.value) {
+      return { correctValue: 1, incorrectValue: 0, blankValue: 0 }
+    }
+    return { correctValue: 10, incorrectValue: 0, blankValue: 2 }
+  }
+
   function getConfigForArea(area) {
     const stored = calificationConfigStorage.value[area]
+    const defaults = getDefaultScoringForArea(area)
     return {
-      correctValue: stored?.correctValue ?? 10,
-      incorrectValue: stored?.incorrectValue ?? 0,
-      blankValue: stored?.blankValue ?? 2,
+      correctValue: stored?.correctValue ?? defaults.correctValue,
+      incorrectValue: stored?.incorrectValue ?? defaults.incorrectValue,
+      blankValue: stored?.blankValue ?? defaults.blankValue,
     }
   }
 
   function initConfigForArea(area) {
     if (!calificationConfigStorage.value[area]) {
-      calificationConfigStorage.value[area] = { correctValue: 10, incorrectValue: 0, blankValue: 2 }
+      calificationConfigStorage.value[area] = getDefaultScoringForArea(area)
     }
   }
 
@@ -212,9 +378,9 @@ export function useCalification(
     { debounce: 800, deep: true },
   )
 
-  const calificationCorrectValue = ref(10)
+  const calificationCorrectValue = ref(isPoderJudicial.value ? 1 : 10)
   const calificationIncorrectValue = ref(0)
-  const calificationBlankValue = ref(2)
+  const calificationBlankValue = ref(isPoderJudicial.value ? 0 : 2)
 
   // ═══════════════════════════════════════════════════════════════════════════
   // RESULTADOS REACTIVOS
@@ -247,12 +413,42 @@ export function useCalification(
       normalize(row.dni).includes(needle) ||
       normalize(row.paterno).includes(needle) ||
       normalize(row.materno).includes(needle) ||
-      normalize(row.nombres).includes(needle)
+      normalize(row.nombres).includes(needle) ||
+      normalize(row.codExamen).includes(needle) ||
+      normalize(row.codPuesto).includes(needle) ||
+      normalize(row.puesto).includes(needle) ||
+      normalize(row.unidad).includes(needle)
     )
   })
 
+  const defaultPjPlantilla = computed(() => ({
+    id: 'pj-default-30',
+    name: `Poder Judicial — ${effectiveAnswersLength.value} Preguntas (Peso Unitario)`,
+    area: '',
+    questionTotal: effectiveAnswersLength.value,
+    items: [
+      {
+        subject: 'Conocimientos',
+        questionCount: effectiveAnswersLength.value,
+        ponderation: 1,
+        order: 1,
+      },
+    ],
+  }))
+
   // Plantillas disponibles para el área actualmente seleccionada en el modal
   const availablePlantillas = computed(() => {
+    if (isPoderJudicial.value) {
+      const list = (ponderationsComposable.plantillas.value || [])
+        .slice()
+        .sort((a, b) => {
+          const aReady = a.questionTotal === effectiveAnswersLength.value ? 0 : 1
+          const bReady = b.questionTotal === effectiveAnswersLength.value ? 0 : 1
+          return aReady - bReady || String(a.name).localeCompare(String(b.name), 'es')
+        })
+      const hasMatchingReady = list.some((p) => p.questionTotal === effectiveAnswersLength.value)
+      return hasMatchingReady ? list : [defaultPjPlantilla.value, ...list]
+    }
     if (isGeneralSimulacro.value) {
       return ponderationsComposable.plantillas.value
         .slice()
@@ -266,9 +462,15 @@ export function useCalification(
     return ponderationsComposable.getPlantillasForCalification(area)
   })
 
-  const selectedCalificationPlantilla = computed(() =>
-    ponderationsComposable.getPlantillaById(calificationPlantillaId.value)
-  )
+  const selectedCalificationPlantilla = computed(() => {
+    if (calificationPlantillaId.value === 'pj-default-30') {
+      return defaultPjPlantilla.value
+    }
+    return (
+      ponderationsComposable.getPlantillaById(calificationPlantillaId.value) ||
+      (isPoderJudicial.value ? defaultPjPlantilla.value : undefined)
+    )
+  })
 
   const selectedPonderationTotals = computed(() => {
     const plantilla = selectedCalificationPlantilla.value
@@ -280,14 +482,32 @@ export function useCalification(
     }
   })
 
-  const calificationAreaOptions = computed(() =>
-    isGeneralSimulacro.value ? [GENERAL_SIMULACRO_AREA] : effectiveAreaNames.value
-  )
+  const calificationAreaOptions = computed(() => {
+    if (isPoderJudicial.value) return [PODER_JUDICIAL_AREA]
+    return isGeneralSimulacro.value ? [GENERAL_SIMULACRO_AREA] : effectiveAreaNames.value
+  })
   const calificationHasResults = computed(() => processAreas.value.length > 0)
 
-  // Programas de estudio del área actualmente seleccionada en el modal
+  const examCodesInPadron = computed(() => {
+    const codes = new Set()
+    archiveRows.value.forEach((r) => {
+      const code = String(r?.cod_examen || r?.codExamen || r?.area || '').trim()
+      if (code) codes.add(code)
+    })
+    return Array.from(codes).sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+  })
+
+  // Programas de estudio / puestos del área actualmente seleccionada en el modal
   const programasForCurrentArea = computed(() => {
     if (isGeneralSimulacro.value) return []
+    if (isPoderJudicial.value) {
+      const set = new Set()
+      archiveRows.value.forEach((r) => {
+        const puesto = String(r?.puesto || r?.programa || r?.cod_puesto || '').trim()
+        if (puesto) set.add(puesto)
+      })
+      return Array.from(set).sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+    }
     const area = normalizeArea(calificationArea.value, effectiveAreaNames.value)
     const set = new Set()
     archiveRows.value.forEach(r => {
@@ -296,6 +516,40 @@ export function useCalification(
     })
     return Array.from(set).sort()
   })
+
+  const configurationSha256 = computed(() =>
+    computeConfigurationSha256({
+      answersLength: effectiveAnswersLength.value,
+      correctValue: calificationCorrectValue.value,
+      incorrectValue: calificationIncorrectValue.value,
+      blankValue: calificationBlankValue.value,
+      plantilla: selectedCalificationPlantilla.value,
+      answerKeyRows: answerKeyRows.value,
+      questionExceptions: questionExceptions.value,
+      candidateExceptions: candidateExceptions.value,
+      scoringOptions: scoringOptions.value,
+    }),
+  )
+
+  function runSyntheticSuite(sampleExamCode = '') {
+    const suiteResult = runPreCalificationSyntheticSuite({
+      answerKeyRows: answerKeyRows.value,
+      plantilla: selectedCalificationPlantilla.value,
+      correctValue: Number(calificationCorrectValue.value),
+      incorrectValue: Number(calificationIncorrectValue.value),
+      blankValue: Number(calificationBlankValue.value),
+      answersLength: effectiveAnswersLength.value,
+      questionExceptions: questionExceptions.value,
+      sampleExamCode: sampleExamCode || examCodesInPadron.value[0] || 'E01a',
+    })
+    syntheticSuiteResult.value = suiteResult
+    logBitacoraEvent({
+      categoria: 'PRUEBAS_SINTETICAS',
+      accion: `Ejecución de 5 pruebas sintéticas (${suiteResult.passedAll ? 'CONFORME 5/5' : 'OBSERVADO'})`,
+      justificacion: `Examen verificado: ${suiteResult.examCodeTested} · Huella SHA-256: ${configurationSha256.value.formatted}`,
+    })
+    return suiteResult
+  }
 
   // ── Pre-vuelo ─────────────────────────────────────────────────────────────
   const preflightCheck = computed(() => buildCalificationPreflight({
@@ -335,7 +589,7 @@ export function useCalification(
   const canCalify = computed(() =>
     responsesRows.value.length > 0 &&
     answerKeyRows.value.length > 0 &&
-    ponderationsComposable.plantillas.value.length > 0
+    (isPoderJudicial.value || ponderationsComposable.plantillas.value.length > 0)
   )
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -343,6 +597,17 @@ export function useCalification(
   // ═══════════════════════════════════════════════════════════════════════════
 
   watch(calificationArea, (area) => {
+    if (isPoderJudicial.value) {
+      if (area !== PODER_JUDICIAL_AREA) {
+        calificationArea.value = PODER_JUDICIAL_AREA
+      }
+      initConfigForArea(PODER_JUDICIAL_AREA)
+      const cfg = getConfigForArea(PODER_JUDICIAL_AREA)
+      calificationCorrectValue.value = cfg.correctValue
+      calificationIncorrectValue.value = cfg.incorrectValue
+      calificationBlankValue.value = cfg.blankValue
+      return
+    }
     if (isGeneralSimulacro.value) {
       calificationArea.value = GENERAL_SIMULACRO_AREA
       return
@@ -365,16 +630,26 @@ export function useCalification(
   })
 
   watch([processType, simulacroScope, inferredSimulacroScope], () => {
-    if (processType.value === 'real' && _processMeta.value.simulacroScope) {
+    if ((processType.value === 'real' || processType.value === 'poder_judicial') && _processMeta.value.simulacroScope) {
       simulacroScope.value = ''
       return
     }
-    if (processType.value !== 'real' && !simulacroScope.value) {
+    if (processType.value === 'simulacro' && !simulacroScope.value) {
       simulacroScope.value = inferredSimulacroScope.value
     }
-    if (isGeneralSimulacro.value) {
+    if (isPoderJudicial.value) {
+      calificationArea.value = PODER_JUDICIAL_AREA
+      initConfigForArea(PODER_JUDICIAL_AREA)
+      const cfg = getConfigForArea(PODER_JUDICIAL_AREA)
+      calificationCorrectValue.value = cfg.correctValue
+      calificationIncorrectValue.value = cfg.incorrectValue
+      calificationBlankValue.value = cfg.blankValue
+    } else if (isGeneralSimulacro.value) {
       calificationArea.value = GENERAL_SIMULACRO_AREA
-    } else if (calificationArea.value === GENERAL_SIMULACRO_AREA) {
+    } else if (
+      calificationArea.value === GENERAL_SIMULACRO_AREA ||
+      calificationArea.value === PODER_JUDICIAL_AREA
+    ) {
       calificationArea.value = effectiveAreaNames.value[0] ?? ANSWER_KEY_AREAS[0]
     }
   }, { immediate: true })
@@ -394,17 +669,21 @@ export function useCalification(
       return
     }
 
-    if (processType.value !== 'real' && !_processMeta.value.simulacroScope) {
+    if (processType.value === 'simulacro' && !_processMeta.value.simulacroScope) {
       simulacroScope.value = inferredSimulacroScope.value
     }
-    if (isGeneralSimulacro.value) {
+    if (isPoderJudicial.value) {
+      calificationArea.value = PODER_JUDICIAL_AREA
+    } else if (isGeneralSimulacro.value) {
       calificationArea.value = GENERAL_SIMULACRO_AREA
     }
 
-    const area = isGeneralSimulacro.value
-      ? GENERAL_SIMULACRO_AREA
-      : normalizeArea(calificationArea.value, effectiveAreaNames.value)
-    const available = isGeneralSimulacro.value
+    const area = isPoderJudicial.value
+      ? PODER_JUDICIAL_AREA
+      : isGeneralSimulacro.value
+        ? GENERAL_SIMULACRO_AREA
+        : normalizeArea(calificationArea.value, effectiveAreaNames.value)
+    const available = isPoderJudicial.value || isGeneralSimulacro.value
       ? availablePlantillas.value
       : ponderationsComposable.getPlantillasForCalification(area)
 
@@ -429,7 +708,7 @@ export function useCalification(
     calificationBlankValue.value = cfg.blankValue
 
     if (!processName.value) {
-      processName.value = generateDefaultName()
+      processName.value = generateDefaultName(processType.value)
     }
 
     calificationError.value = ''
@@ -454,6 +733,18 @@ export function useCalification(
     processType.value = type
     simulacroScope.value = normalizedScope
     calificationSearch.value = ''
+    if (type === 'poder_judicial') {
+      calificationArea.value = PODER_JUDICIAL_AREA
+      calificationConfigStorage.value[PODER_JUDICIAL_AREA] = {
+        correctValue: 1,
+        incorrectValue: 0,
+        blankValue: 0,
+      }
+      calificationCorrectValue.value = 1
+      calificationIncorrectValue.value = 0
+      calificationBlankValue.value = 0
+      calificationPlantillaId.value = 'pj-default-30'
+    }
   }
 
   function switchDisplayArea(area) {
@@ -470,21 +761,35 @@ export function useCalification(
     activeProcess.value = { ...process }
     processName.value = process.name || ''
     processType.value = process.type || 'simulacro'
-    simulacroScope.value = process.type === 'real'
+    simulacroScope.value = (process.type === 'real' || process.type === 'poder_judicial')
       ? ''
       : (process.simulacroScope || inferredSimulacroScope.value)
     const areas = Object.keys(process.areas || {})
     calificationDisplayArea.value = areas[0] || null
     calificationSearch.value = ''
+    if (process.config_metadata && typeof process.config_metadata === 'object') {
+      const meta = process.config_metadata
+      if (Array.isArray(meta.questionExceptions)) {
+        questionExceptions.value = meta.questionExceptions
+      }
+      if (Array.isArray(meta.candidateExceptions)) {
+        candidateExceptions.value = meta.candidateExceptions
+      }
+      if (meta.scoringOptions && typeof meta.scoringOptions === 'object') {
+        scoringOptions.value = { ...scoringOptions.value, ...meta.scoringOptions }
+      }
+      if (meta.syntheticSuiteResult) {
+        syntheticSuiteResult.value = meta.syntheticSuiteResult
+      }
+      if (Array.isArray(meta.bitacoraEvents)) {
+        bitacoraEvents.value = meta.bitacoraEvents
+      }
+    }
   }
 
   function resetCalificationResults() {
-    startNewProcess()
+    startNewProcess({ type: processType.value })
   }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // MÉTODOS — API
-  // ═══════════════════════════════════════════════════════════════════════════
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CALIFICACIÓN
@@ -511,6 +816,10 @@ export function useCalification(
       answerKeyFallbackByArea: answerKeyFallbackByArea?.value,
       areaList: effectiveAreaNames.value,
       vacantesPrograma: vacantesPrograma?.value,
+      vacantesPuesto: vacantesPrograma?.value,
+      questionExceptions: questionExceptions.value,
+      candidateExceptions: candidateExceptions.value,
+      scoringOptions: scoringOptions.value,
     })
   }
 
@@ -520,6 +829,7 @@ export function useCalification(
       processType: processType.value,
       answersLength: effectiveAnswersLength.value,
       vacantesPrograma: vacantesPrograma?.value,
+      vacantesPuesto: vacantesPrograma?.value,
     })
 
     if (!validation.valid) {
@@ -534,10 +844,12 @@ export function useCalification(
   function runCalification() {
     calificationError.value = ''
 
-    const area = isGeneralSimulacro.value
-      ? GENERAL_SIMULACRO_AREA
-      : normalizeArea(calificationArea.value, effectiveAreaNames.value)
-    const plantilla = ponderationsComposable.getPlantillaById(calificationPlantillaId.value)
+    const area = isPoderJudicial.value
+      ? PODER_JUDICIAL_AREA
+      : isGeneralSimulacro.value
+        ? GENERAL_SIMULACRO_AREA
+        : normalizeArea(calificationArea.value, effectiveAreaNames.value)
+    const plantilla = selectedCalificationPlantilla.value
     if (!plantilla) {
       const msg = 'Selecciona una plantilla de ponderación.'
       calificationError.value = msg
@@ -559,6 +871,10 @@ export function useCalification(
       return
     }
 
+    if (isPoderJudicial.value && !syntheticSuiteResult.value) {
+      runSyntheticSuite()
+    }
+
     let areaResult
     try {
       areaResult = _calcForArea(area, plantilla, correctValue, incorrectValue, blankValue)
@@ -570,8 +886,14 @@ export function useCalification(
       return
     }
 
+    if (isPoderJudicial.value && areaResult?.summary) {
+      areaResult.summary.configSha256 = String(configurationSha256.value)
+      areaResult.summary.configSha256Formatted = configurationSha256.value.formatted
+      areaResult.summary.syntheticSuiteResult = syntheticSuiteResult.value
+    }
+
     const currentId = activeProcess.value.id || generateId()
-    const currentName = processName.value.trim() || generateDefaultName()
+    const currentName = processName.value.trim() || generateDefaultName(processType.value)
 
     activeProcess.value = {
       id: currentId,
@@ -586,6 +908,17 @@ export function useCalification(
 
     calificationDisplayArea.value = area
     calificationConfigStorage.value[area] = { correctValue, incorrectValue, blankValue }
+
+    if (isPoderJudicial.value) {
+      logBitacoraEvent({
+        categoria: 'RECALCULO',
+        accion: `Calificación general ejecutada (${areaResult.results.length} calificados, ${areaResult.summary.noCalificados?.length || 0} no calificados)`,
+        justificacion: `Valores: +${correctValue} / ${incorrectValue} / ${blankValue} · Huella: ${configurationSha256.value.formatted}`,
+      })
+      showCalificationModal.value = false
+      _saveProcesoToApi()
+      return
+    }
 
     // Avanzar automáticamente a la siguiente área pendiente, o cerrar si ya no hay
     const nextPending = effectiveAreaNames.value.find(
@@ -608,6 +941,12 @@ export function useCalification(
    */
   function runAllAreas() {
     calificationError.value = ''
+
+    if (isPoderJudicial.value) {
+      runCalification()
+      if (calificationError.value) return null
+      return { calculated: [PODER_JUDICIAL_AREA], skipped: [] }
+    }
 
     const calculated = []
     const skippedDetails = []
@@ -671,7 +1010,7 @@ export function useCalification(
     }
 
     const currentId = activeProcess.value.id || generateId()
-    const currentName = processName.value.trim() || generateDefaultName()
+    const currentName = processName.value.trim() || generateDefaultName(processType.value)
 
     activeProcess.value = {
       id: currentId,
@@ -705,6 +1044,15 @@ export function useCalification(
           type: proceso.type || 'simulacro',
           simulacroScope: proceso.simulacroScope || '',
           areas: proceso.areas,
+          config_metadata: {
+            questionExceptions: questionExceptions.value,
+            candidateExceptions: candidateExceptions.value,
+            scoringOptions: scoringOptions.value,
+            syntheticSuiteResult: syntheticSuiteResult.value,
+            configurationSha256: String(configurationSha256.value),
+            configurationSha256Formatted: configurationSha256.value.formatted,
+            bitacoraEvents: bitacoraEvents.value,
+          },
         }),
       })
       if (!res.ok) throw new Error()
@@ -731,6 +1079,22 @@ export function useCalification(
     simulacroScope,
     inferredSimulacroScope,
     isGeneralSimulacro,
+    isPoderJudicial,
+
+    // Poder Judicial state & helpers
+    questionExceptions,
+    candidateExceptions,
+    scoringOptions,
+    syntheticSuiteResult,
+    configurationSha256,
+    bitacoraEvents,
+    examCodesInPadron,
+    addQuestionException,
+    removeQuestionException,
+    addCandidateException,
+    removeCandidateException,
+    runSyntheticSuite,
+    logBitacoraEvent,
 
     // Results
     calificationResults,

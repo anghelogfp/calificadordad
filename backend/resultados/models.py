@@ -58,6 +58,7 @@ class ProcesoCalificacion(models.Model):
     name = models.CharField(max_length=200)
     process_type = models.CharField(max_length=20, default='simulacro')
     simulacro_scope = models.CharField(max_length=20, blank=True, default='')
+    config_metadata = models.JSONField(default=dict, blank=True)
     created_by = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -120,6 +121,9 @@ class AreaCalificacion(models.Model):
     no_calificados = models.JSONField(default=list)
     total_weight = models.DecimalField(max_digits=10, decimal_places=3, default=0)
     answers_length = models.IntegerField(default=60)
+    preflight_snapshot = models.JSONField(default=dict, blank=True)
+    validation_snapshot = models.JSONField(default=dict, blank=True)
+    config_sha256 = models.CharField(max_length=64, blank=True, default='')
 
     class Meta:
         db_table = 'areas_calificacion'
@@ -165,3 +169,36 @@ class ResultadoCandidato(models.Model):
 
     def __str__(self):
         return f'{self.dni} — {self.area} — {self.score}'
+
+
+class EventoBitacora(models.Model):
+    """Registro de auditoría y modificaciones trazables del proceso."""
+    proceso = models.ForeignKey(
+        ProcesoCalificacion,
+        on_delete=models.CASCADE,
+        related_name='bitacora',
+        null=True,
+        blank=True,
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='eventos_bitacora',
+    )
+    timestamp = models.DateTimeField(auto_now_add=True)
+    categoria = models.CharField(max_length=50, default='GENERAL')
+    accion = models.CharField(max_length=250)
+    justificacion = models.TextField(blank=True, default='')
+    documento_sustento = models.CharField(max_length=200, blank=True, default='')
+    valor_anterior = models.JSONField(null=True, blank=True)
+    valor_nuevo = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'eventos_bitacora'
+        ordering = ['-timestamp', '-id']
+        indexes = [
+            models.Index(fields=['created_by', 'timestamp']),
+        ]
+
+    def __str__(self):
+        return f'[{self.categoria}] {self.accion}'

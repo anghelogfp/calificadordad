@@ -36,6 +36,9 @@ const selectedPath = computed(() => {
   if (processPath.value === 'real') {
     return { type: 'real', simulacroScope: '' }
   }
+  if (processPath.value === 'poder-judicial') {
+    return { type: 'poder_judicial', simulacroScope: '' }
+  }
   return { type: '', simulacroScope: '' }
 })
 
@@ -176,6 +179,22 @@ function confirm() {
                     <span class="path-option__desc">Claves por área/tipo, vacantes, ranking por carrera e ingresantes.</span>
                   </div>
                   <span class="path-option__badge">Área + tipo</span>
+                </button>
+                <button
+                  type="button"
+                  class="path-option path-option--pj"
+                  :class="{ 'path-option--active': processPath === 'poder-judicial' }"
+                  @click="processPath = 'poder-judicial'"
+                >
+                  <span class="path-option__radio">
+                    <span v-if="processPath === 'poder-judicial'" class="path-option__dot" />
+                  </span>
+                  <div class="path-option__info">
+                    <span class="path-option__eyebrow">Convenio Institucional</span>
+                    <span class="path-option__name">Concurso Poder Judicial (CSJ Puno)</span>
+                    <span class="path-option__desc">Claves por código de examen (27 tipos), ranking por puesto (59 plazas), excepciones, 5 pruebas sintéticas y actas oficiales.</span>
+                  </div>
+                  <span class="path-option__badge">Examen + Puesto</span>
                 </button>
               </div>
               <span v-if="processPathError" class="field-error">{{ processPathError }}</span>
@@ -452,6 +471,26 @@ function confirm() {
 
 .path-option--real .path-option__badge {
   color: #78350f;
+}
+
+.path-option--pj.path-option--active {
+  border-color: #9f1239;
+  background: #fff1f2;
+  box-shadow: 0 0 0 3px rgba(159, 18, 57, 0.12);
+}
+
+.path-option--pj.path-option--active .path-option__radio {
+  border-color: #9f1239;
+}
+
+.path-option--pj .path-option__dot {
+  background: #9f1239;
+}
+
+.path-option--pj .path-option__badge {
+  color: #881337;
+  border-color: #fecdd3;
+  background: #fff1f2;
 }
 
 .setup-summary {

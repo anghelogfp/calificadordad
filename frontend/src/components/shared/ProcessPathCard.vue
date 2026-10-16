@@ -43,6 +43,12 @@ defineProps({
   background: #fffdf7;
 }
 
+.process-path-card--poder-judicial {
+  border-color: #fecdd3;
+  border-left-color: #9f1239;
+  background: #fff1f2;
+}
+
 .process-path-card__body {
   min-width: 0;
 }

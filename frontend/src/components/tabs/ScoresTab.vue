@@ -331,6 +331,37 @@ function handleExportIngresantesPdf() {
     calification.activeProcess?.type ?? 'simulacro'
   )
 }
+
+function handleExportPjExcel() {
+  const currentArea = calification.calificationDisplayArea
+  const areaData = calification.activeProcess?.areas?.[currentArea] || {}
+  const ranked = areaData.results || calification.calificationAllResults.value || []
+  props.exporter.exportPjResultsToExcel(
+    ranked,
+    calification.calificationSummary,
+    props.convocatoriaName || calification.processName || '',
+    {
+      padronRows: areaData.metadata?.padronRows || [],
+      noCalificados: areaData.noCalificados || [],
+      anuladosComision: areaData.anuladosComision || [],
+      questionExceptions: calification.questionExceptions?.value || [],
+      candidateExceptions: calification.candidateExceptions?.value || [],
+      syntheticResults: calification.syntheticResults?.value || null,
+      configSha256: areaData.config_sha256 || '',
+    }
+  )
+}
+
+function handleExportPjPdf() {
+  const currentArea = calification.calificationDisplayArea
+  const areaData = calification.activeProcess?.areas?.[currentArea] || {}
+  const ranked = areaData.results || calification.calificationAllResults.value || []
+  props.exporter.exportPjPublicationPdf(
+    ranked,
+    calification.calificationSummary,
+    props.convocatoriaName || calification.processName || '',
+  )
+}
 </script>
 
 <template>
@@ -423,6 +454,10 @@ function handleExportIngresantesPdf() {
           <details class="action-menu">
             <summary class="btn btn--ghost">Exportar <span aria-hidden="true">▾</span></summary>
             <div class="action-menu__panel">
+              <template v-if="calification.activeProcess?.type === 'poder_judicial'">
+                <button type="button" @click="handleExportPjExcel">Exportar Excel Oficial Poder Judicial</button>
+                <button type="button" @click="handleExportPjPdf">Exportar PDF Publicación por Puesto</button>
+              </template>
               <button type="button" @click="handleExportExcel">Exportar Excel área actual</button>
               <button
                 v-if="!isRealMode && !isGeneralSimulacro && calification.processAreas.length > 1"

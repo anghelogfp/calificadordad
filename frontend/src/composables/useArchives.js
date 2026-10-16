@@ -7,6 +7,7 @@ import {
   ARCHIVE_SCHEMA_FIELDS,
 } from '@/constants'
 import { generateId, normalize, normalizeAreaStrict, stripDigits } from '@/utils/helpers'
+import { sha256Hex } from '@/utils/cryptoHash'
 import { apiFetch } from '@/utils/apiFetch'
 import { loadExcelDeps, loadExcelExportDeps } from '@/utils/exportLoaders'
 
@@ -73,8 +74,25 @@ function inferAreaFromExamId(lookup) {
     'codigo examen',
     'código examen',
   ])
-  const normalizedExamId = String(examId || '').trim().replace(/^0+/, '') || '0'
-  return AREA_BY_EXAM_ID[normalizedExamId] || ''
+  const trimmed = String(examId || '').trim()
+  const normalizedExamId = trimmed.replace(/^0+/, '') || '0'
+  if (AREA_BY_EXAM_ID[normalizedExamId]) {
+    return AREA_BY_EXAM_ID[normalizedExamId]
+  }
+  return trimmed
+}
+
+/**
+ * Extrae grupo y aula desde observaciones con formato "grupo 1 - aula A18"
+ */
+export function parseGrupoAulaFromObservaciones(observaciones = '') {
+  const text = String(observaciones || '').trim()
+  const match = text.match(/grupo\s*(\d+)\s*[-–·]\s*aula\s*([A-Za-z0-9_-]+)/i)
+  if (!match) return { grupo: '', aula_padron: '' }
+  return {
+    grupo: `Grupo ${match[1]}`,
+    aula_padron: match[2].toUpperCase(),
+  }
 }
 
 /**
@@ -96,6 +114,26 @@ export function mapArchiveRowToSchema(row) {
 
   if (!mappedRow.area) {
     mappedRow.area = inferAreaFromExamId(lookup)
+  }
+
+  if (mappedRow.cod_examen && !AREA_BY_EXAM_ID[String(mappedRow.cod_examen).replace(/^0+/, '')]) {
+    if (!mappedRow.area) {
+      mappedRow.area = mappedRow.cod_examen
+    }
+  }
+
+  if (mappedRow.puesto && !mappedRow.programa) {
+    mappedRow.programa = mappedRow.puesto
+  }
+
+  if (mappedRow.cod_puesto && !mappedRow.codigo_programa) {
+    mappedRow.codigo_programa = mappedRow.cod_puesto
+  }
+
+  if (mappedRow.observaciones && (!mappedRow.grupo || !mappedRow.aula_padron)) {
+    const parsed = parseGrupoAulaFromObservaciones(mappedRow.observaciones)
+    if (!mappedRow.grupo && parsed.grupo) mappedRow.grupo = parsed.grupo
+    if (!mappedRow.aula_padron && parsed.aula_padron) mappedRow.aula_padron = parsed.aula_padron
   }
 
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(mappedRow.fecha_inscripcion || '')) {
@@ -124,7 +162,12 @@ function buildArchiveIssues(rows, areaList = []) {
       if (dni.length !== 8) issues.push(`DNI incompleto (${dni.length}/8)`)
       if ((countsByDni.get(dni) || 0) > 1) issues.push('DNI duplicado')
     }
-    if (normalizedAreaList.length && row.area?.trim() && !normalizeAreaStrict(row.area, normalizedAreaList)) {
+    if (
+      !row.cod_examen?.trim() &&
+      normalizedAreaList.length &&
+      row.area?.trim() &&
+      !normalizeAreaStrict(row.area, normalizedAreaList)
+    ) {
       issues.push('Área no configurada')
     }
     return {
@@ -145,11 +188,22 @@ export function useArchives(areaNames) {
     createRow: createArchiveRow,
     filterFn: (row, searchValue) => {
       const needle = normalize(searchValue)
-      return ARCHIVE_COLUMNS.some(({ key }) => normalize(row[key]).includes(needle))
+      return (
+        ARCHIVE_COLUMNS.some(({ key }) => normalize(row[key]).includes(needle)) ||
+        normalize(row.cod_examen).includes(needle) ||
+        normalize(row.cod_puesto).includes(needle) ||
+        normalize(row.puesto).includes(needle) ||
+        normalize(row.unidad).includes(needle)
+      )
     },
   })
 
   const lastFileName = reactive({ value: '' })
+  const lastFileSha256 = ref('')
+  const lastFileSize = ref(0)
+  const rarFileName = ref('')
+  const rarFileSha256 = ref('')
+  const rarFileSize = ref(0)
   const apiLoading = ref(false)
   const apiSyncing = ref(false)
   const apiReady = ref(false)
@@ -160,6 +214,65 @@ export function useArchives(areaNames) {
 
   // Computed para verificar si hay datos
   const archiveHasData = computed(() => tableState.rows.value.length > 0)
+
+  const isPoderJudicialPadron = computed(() =>
+    tableState.rows.value.some((r) => Boolean(r.cod_examen?.trim() || r.cod_puesto?.trim() || r.puesto?.trim()))
+  )
+
+  const examCodes = computed(() => {
+    const set = new Set()
+    tableState.rows.value.forEach((r) => {
+      const code = (r.cod_examen || r.area || '').trim()
+      if (code) set.add(code)
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+  })
+
+  const puestosList = computed(() => {
+    const map = new Map()
+    tableState.rows.value.forEach((r) => {
+      const codPuesto = (r.cod_puesto || r.codigo_programa || '').trim()
+      const puesto = (r.puesto || r.programa || '').trim()
+      const key = codPuesto || puesto
+      if (!key) return
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          codPuesto,
+          puesto: puesto || codPuesto,
+          codExamen: (r.cod_examen || r.area || '').trim(),
+          unidad: (r.unidad || '').trim(),
+          count: 0,
+        })
+      }
+      map.get(key).count += 1
+    })
+    return Array.from(map.values()).sort((a, b) =>
+      a.codExamen.localeCompare(b.codExamen, 'es', { numeric: true }) ||
+      a.codPuesto.localeCompare(b.codPuesto, 'es', { numeric: true })
+    )
+  })
+
+  const aulasReceptionSummary = computed(() => {
+    const groupMap = new Map()
+    tableState.rows.value.forEach((r) => {
+      const parsed = parseGrupoAulaFromObservaciones(r.observaciones)
+      const grupo = (r.grupo || parsed.grupo || 'Grupo Único').trim()
+      const aula = (r.aula_padron || parsed.aula_padron || 'S/A').trim()
+      if (!groupMap.has(grupo)) groupMap.set(grupo, new Map())
+      const aulaMap = groupMap.get(grupo)
+      aulaMap.set(aula, (aulaMap.get(aula) || 0) + 1)
+    })
+    const groups = []
+    for (const [grupo, aulaMap] of [...groupMap.entries()].sort((a, b) => a[0].localeCompare(b[0], 'es', { numeric: true }))) {
+      const aulas = [...aulaMap.entries()]
+        .map(([aula, cantidad]) => ({ aula, cantidad }))
+        .sort((a, b) => a.aula.localeCompare(b.aula, 'es', { numeric: true }))
+      const totalPostulantes = aulas.reduce((acc, item) => acc + item.cantidad, 0)
+      groups.push({ grupo, aulas, totalAulas: aulas.length, totalPostulantes })
+    }
+    return groups
+  })
 
   // Lookup por DNI
   const archiveByDni = computed(() => {
@@ -262,6 +375,8 @@ export function useArchives(areaNames) {
     try {
       const { ExcelJS } = await loadExcelDeps()
       const buffer = await file.arrayBuffer()
+      lastFileSha256.value = sha256Hex(buffer)
+      lastFileSize.value = Number(file.size || buffer.byteLength || 0)
       const workbook = new ExcelJS.Workbook()
       await workbook.xlsx.load(buffer)
 
@@ -326,6 +441,23 @@ export function useArchives(areaNames) {
 
       tableState.importError.value =
         'No se pudo procesar el archivo Excel. Revisa que sea un .xlsx válido y que no esté protegido o dañado.'
+    }
+  }
+
+  /**
+   * Calcula y registra el hash SHA-256 de un archivo contenedor (.rar / .zip)
+   */
+  async function readContainerArchiveHash(file) {
+    if (!file) return null
+    const buffer = await file.arrayBuffer()
+    const hash = sha256Hex(buffer)
+    rarFileName.value = file.name || ''
+    rarFileSha256.value = hash
+    rarFileSize.value = Number(file.size || buffer.byteLength || 0)
+    return {
+      name: rarFileName.value,
+      sha256: rarFileSha256.value,
+      size: rarFileSize.value,
     }
   }
 
@@ -457,6 +589,15 @@ export function useArchives(areaNames) {
     archiveIssueByRowId,
     observedRows,
     lastFileName,
+    lastFileSha256,
+    lastFileSize,
+    rarFileName,
+    rarFileSha256,
+    rarFileSize,
+    isPoderJudicialPadron,
+    examCodes,
+    puestosList,
+    aulasReceptionSummary,
     apiLoading,
     apiSyncing,
     apiReady,
@@ -465,6 +606,7 @@ export function useArchives(areaNames) {
     initializeArchives,
     syncArchivesToApi,
     readArchiveWorkbook,
+    readContainerArchiveHash,
     exportArchiveToExcel,
     exportArchiveIssuesToExcel,
     onArchiveDrop,

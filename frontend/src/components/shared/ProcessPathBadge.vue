@@ -7,11 +7,15 @@ const props = defineProps({
 })
 
 const label = computed(() => {
+  if (props.processType === 'poder_judicial') return 'Concurso Poder Judicial'
   if (props.processType === 'real') return 'Convocatoria real'
   return props.simulacroScope === 'general' ? 'Simulacro general' : 'Simulacro por áreas'
 })
 
-const variant = computed(() => props.processType === 'real' ? 'real' : 'simulacro')
+const variant = computed(() => {
+  if (props.processType === 'poder_judicial') return 'poder-judicial'
+  return props.processType === 'real' ? 'real' : 'simulacro'
+})
 </script>
 
 <template>
@@ -40,5 +44,11 @@ const variant = computed(() => props.processType === 'real' ? 'real' : 'simulacr
   border-color: #fed7aa;
   background: #fff7ed;
   color: #92400e;
+}
+
+.process-path-badge--poder-judicial {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #881337;
 }
 </style>

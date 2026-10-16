@@ -11,12 +11,28 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+REPO_DIR = BASE_DIR.parent
+
+IS_FROZEN = getattr(sys, 'frozen', False)
+BUNDLE_DIR = Path(getattr(sys, '_MEIPASS', REPO_DIR)).resolve() if IS_FROZEN else REPO_DIR
+
+FRONTEND_DIST_DIR = (
+    BUNDLE_DIR / 'frontend' / 'dist'
+    if (BUNDLE_DIR / 'frontend' / 'dist').exists()
+    else REPO_DIR / 'frontend' / 'dist'
+)
+REPORTES_ACTAS_DIR = (
+    BUNDLE_DIR / 'reportes-actas'
+    if (BUNDLE_DIR / 'reportes-actas').exists()
+    else REPO_DIR / 'reportes-actas'
+)
 
 
 # Quick-start development settings - unsuitable for production
@@ -28,7 +44,7 @@ DEBUG = os.getenv('DJANGO_DEBUG', 'true').lower() in ('1', 'true', 'yes')
 # Development gets a stable local-only key. Production must provide its own.
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 if not SECRET_KEY:
-    if DEBUG:
+    if DEBUG or IS_FROZEN:
         SECRET_KEY = 'django-insecure-calificador-local-development-only'
     else:
         raise ImproperlyConfigured('DJANGO_SECRET_KEY es obligatorio en producción.')
@@ -71,7 +87,7 @@ MIDDLEWARE = [
 # CORS settings para permitir peticiones del frontend
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv(
     'DJANGO_CORS_ALLOWED_ORIGINS',
-    'http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000',
+    'http://localhost:5173,http://localhost:3000,http://localhost:8000,http://127.0.0.1:5173,http://127.0.0.1:3000,http://127.0.0.1:8000',
 ).split(',') if origin.strip()]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -120,10 +136,17 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+_custom_db_path = os.getenv('CALIFICADOR_DB_PATH', '').strip()
+if _custom_db_path:
+    DB_FILE_PATH = Path(_custom_db_path).resolve()
+    DB_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
+else:
+    DB_FILE_PATH = BASE_DIR / 'db.sqlite3'
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': DB_FILE_PATH,
     }
 }
 

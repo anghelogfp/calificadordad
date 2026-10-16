@@ -73,6 +73,12 @@ export const ARCHIVE_SCHEMA_FIELDS = [
   'provincia_colegio',
   'distrito_colegio',
   'observaciones',
+  'cod_examen',
+  'cod_puesto',
+  'puesto',
+  'unidad',
+  'grupo',
+  'aula_padron',
 ]
 
 // Alias de claves para mapeo de columnas Excel
@@ -101,6 +107,12 @@ export const ARCHIVE_KEY_ALIASES = {
   departamento_colegio: ['departamento colegio', 'departamento_colegio'],
   provincia_colegio: ['provincia colegio', 'provincia_colegio'],
   distrito_colegio: ['distrito colegio', 'distrito_colegio'],
+  cod_examen: ['cod_examen', 'cod examen', 'codigo examen', 'código examen', 'examen', 'tipo examen', 'tipo_examen'],
+  cod_puesto: ['cod_puesto', 'cod puesto', 'codigo puesto', 'código puesto', 'cod plaza', 'codigo plaza'],
+  puesto: ['puesto', 'cargo', 'plaza', 'denominacion del puesto', 'denominación del puesto'],
+  unidad: ['unidad', 'dependencia', 'organo jurisdiccional', 'órgano jurisdiccional', 'sede', 'unidad organica', 'unidad orgánica'],
+  grupo: ['grupo', 'turno'],
+  aula_padron: ['aula_padron', 'aula padron', 'aula asignada'],
 }
 
 // Inicializar aliases completos
@@ -176,6 +188,22 @@ export const STORAGE_KEYS = Object.freeze({
 export const DEFAULT_DAT_FORMAT = Object.freeze({
   headerLength: 21,
   answersLength: 60,
+  lithoOffset: 0,
+  lithoLength: 6,
+  tipoOffset: 6,
+  tipoLength: 1,
+  dniOffset: 7,
+  dniLength: 8,
+  aulaOffset: 15,
+  aulaLength: 3,
+  answersOffset: 18,
+  responseAnswersOffset: 7,
+})
+
+// Formato DAT para Concurso Poder Judicial (30 preguntas)
+export const PJ_DAT_FORMAT = Object.freeze({
+  headerLength: 21,
+  answersLength: 30,
   lithoOffset: 0,
   lithoLength: 6,
   tipoOffset: 6,

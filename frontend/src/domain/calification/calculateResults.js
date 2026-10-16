@@ -12,10 +12,10 @@ import {
   REAL_TEST_TYPES,
   GENERAL_SIMULACRO_AREA,
 } from '@/utils/calificationHelpers'
+import { scoreAnswerSheet } from './scoreAnswerSheet'
+import { calculatePjResults } from './calculatePjResults'
 
-function roundScore(value) {
-  return Math.round(value * 1000) / 1000
-}
+export { calculatePjResults }
 
 function compareByScoreAndName(a, b) {
   const scoreDiff = Number(b.score || 0) - Number(a.score || 0)
@@ -29,25 +29,32 @@ function compareByScoreAndName(a, b) {
   return String(a.dni || '').localeCompare(String(b.dni || ''))
 }
 
-export function calculateAreaResults({
-  area,
-  plantilla,
-  correctValue,
-  incorrectValue,
-  blankValue,
-  processType,
-  simulacroScope,
-  answersLength,
-  archiveRows,
-  responsesRows,
-  answerKeyRows,
-  responsesByDni,
-  answerKeyLookupByAreaTipo,
-  answerKeyFallbackByArea,
-  areaList,
-  vacantesPrograma = {},
-  timestamp = new Date().toISOString(),
-}) {
+export function calculateAreaResults(params) {
+  if (params?.processType === 'poder_judicial') {
+    return calculatePjResults(params)
+  }
+
+  const {
+    area,
+    plantilla,
+    correctValue,
+    incorrectValue,
+    blankValue,
+    processType,
+    simulacroScope,
+    answersLength,
+    archiveRows,
+    responsesRows,
+    answerKeyRows,
+    responsesByDni,
+    answerKeyLookupByAreaTipo,
+    answerKeyFallbackByArea,
+    areaList,
+    vacantesPrograma = {},
+    questionExceptions = [],
+    timestamp = new Date().toISOString(),
+  } = params
+
   const isRealProcess = processType === 'real'
   const generalSimulacro = !isRealProcess && simulacroScope === 'general'
   const calculationArea = generalSimulacro ? GENERAL_SIMULACRO_AREA : normalizeArea(area, areaList)
@@ -217,78 +224,15 @@ export function calculateAreaResults({
     }
 
     const { row: responseRow, answer: answerRow } = matchForArea
-    const answersRaw = (responseRow?.answers || '').toUpperCase()
-    const correctAnswersRaw = (answerRow?.answers || '').toUpperCase()
-    const originalAnswersLength = answersRaw.length
-    const answers = answersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
-    const correctAnswers = correctAnswersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
-
-    let total = 0
-    const questionDetails = []
-    const subjectBreakdownByName = new Map()
-
-    for (let index = 0; index < plan.length; index += 1) {
-      const planItem = plan[index] || {}
-      const subject = String(planItem.subject || 'Sin materia').trim() || 'Sin materia'
-      const weight = Number(planItem.weight) || 0
-
-      const responseChar = answers[index] || ' '
-      const correctChar = correctAnswers[index] || ' '
-      const isCorrectCharValid = /^[A-E]$/.test(correctChar)
-      const isResponseCharValid = /^[A-E]$/.test(responseChar)
-      const isMultipleMark = responseChar === '*'
-      const isAssumedFinalBlank = index >= originalAnswersLength
-
-      if (!isCorrectCharValid) {
-        throw new Error(`La clave oficial contiene una respuesta inválida en la pregunta ${index + 1}.`)
-      }
-
-      let contribution = 0
-      let status = 'blank'
-      if (isCorrectCharValid && isResponseCharValid && responseChar === correctChar) {
-        contribution = correctValue * weight
-        status = 'correct'
-      } else if (isResponseCharValid) {
-        contribution = incorrectValue * weight
-        status = 'incorrect'
-      } else if (isMultipleMark) {
-        contribution = 0
-        status = 'multiple'
-      } else {
-        contribution = blankValue * weight
-      }
-
-      total += contribution
-      const roundedContribution = roundScore(contribution)
-      questionDetails.push({
-        number: index + 1,
-        subject,
-        weight,
-        answer: responseChar.trim(),
-        blankSource: status === 'blank' ? (isAssumedFinalBlank ? 'assumed-final' : 'dat') : '',
-        correctAnswer: correctChar,
-        status,
-        score: roundedContribution,
-      })
-
-      if (!subjectBreakdownByName.has(subject)) {
-        subjectBreakdownByName.set(subject, {
-          subject,
-          questions: 0,
-          correct: 0,
-          incorrect: 0,
-          multiple: 0,
-          blank: 0,
-          score: 0,
-          totalWeight: 0,
-        })
-      }
-      const subjectBreakdown = subjectBreakdownByName.get(subject)
-      subjectBreakdown.questions += 1
-      subjectBreakdown[status] += 1
-      subjectBreakdown.score = roundScore(subjectBreakdown.score + contribution)
-      subjectBreakdown.totalWeight = roundScore(subjectBreakdown.totalWeight + weight)
-    }
+    const sheetResult = scoreAnswerSheet({
+      answersRaw: responseRow?.answers || '',
+      correctAnswersRaw: answerRow?.answers || '',
+      plan,
+      correctValue,
+      incorrectValue,
+      blankValue,
+      questionExceptions,
+    })
 
     processedResults.push({
       id: `${stripDigits(candidate.dni)}-${calculationArea}`,
@@ -298,14 +242,14 @@ export function calculateAreaResults({
       nombres: candidate.nombres || '',
       area: calculationArea,
       programa: candidate.programa || '',
-      score: roundScore(total),
+      score: sheetResult.score,
       position: 0,
       positionInPrograma: 0,
       isIngresante: false,
-      questionDetails,
-      subjectBreakdown: [...subjectBreakdownByName.values()],
-      answersRaw: answers,
-      correctAnswersRaw: correctAnswers,
+      questionDetails: sheetResult.questionDetails,
+      subjectBreakdown: sheetResult.subjectBreakdown,
+      answersRaw: sheetResult.answersNormalized,
+      correctAnswersRaw: sheetResult.correctAnswersNormalized,
       aula: responseRow.aula || '',
       tipo: responseRow.tipo || '',
       litho: responseRow.litho || '',

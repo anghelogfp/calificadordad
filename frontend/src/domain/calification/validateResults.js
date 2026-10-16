@@ -1,11 +1,25 @@
 import { stripDigits } from '@/utils/helpers'
 
+const VALID_QUESTION_STATUSES = new Set(['correct', 'incorrect', 'blank', 'multiple', 'excluded'])
+
 function issue(code, message, context = {}) {
   return { code, message, context }
 }
 
 function isSequential(values) {
   return values.every((value, index) => value === index + 1)
+}
+
+function isValidSharedRankSequence(values) {
+  if (values.length === 0) return true
+  if (values[0] !== 1) return false
+  for (let i = 1; i < values.length; i += 1) {
+    const prev = values[i - 1]
+    const curr = values[i]
+    if (curr < prev) return false
+    if (curr !== prev && curr !== i + 1 && curr !== prev + 1) return false
+  }
+  return true
 }
 
 function roundScore(value) {
@@ -21,6 +35,7 @@ export function validateCalificationResult({
   processType = 'simulacro',
   answersLength,
   vacantesPrograma = {},
+  vacantesPuesto = {},
 } = {}) {
   const errors = []
   const warnings = []
@@ -28,6 +43,7 @@ export function validateCalificationResult({
   const summary = result?.summary || {}
   const noCalificados = Array.isArray(summary.noCalificados) ? summary.noCalificados : []
   const expectedAnswersLength = Number(answersLength ?? summary.answersLength)
+  const effectiveProcessType = processType || summary.processType || 'simulacro'
 
   if (!result || typeof result !== 'object') {
     errors.push(issue('RESULT_REQUIRED', 'El resultado de calificación es requerido.'))
@@ -76,6 +92,17 @@ export function validateCalificationResult({
               dni,
               expected: expectedAnswersLength,
               actual: row.questionDetails.length,
+            }))
+          }
+
+          const invalidStatusDetail = row.questionDetails.find(
+            (q) => q?.status !== undefined && !VALID_QUESTION_STATUSES.has(q.status),
+          )
+          if (invalidStatusDetail) {
+            errors.push(issue('QUESTION_DETAIL_STATUS_INVALID', 'El estado de una pregunta no es válido.', {
+              dni,
+              number: invalidStatusDetail.number,
+              status: invalidStatusDetail.status,
             }))
           }
 
@@ -138,7 +165,7 @@ export function validateCalificationResult({
     errors.push(issue('TOTAL_CANDIDATES_INVALID', 'El resumen no tiene un total de candidatos válido.'))
   }
 
-  if (processType === 'real') {
+  if (effectiveProcessType === 'real') {
     const byPrograma = new Map()
     results.forEach((row) => {
       const programa = String(row.programa || '').trim()
@@ -181,6 +208,55 @@ export function validateCalificationResult({
           }))
         }
       })
+    })
+  } else if (effectiveProcessType === 'poder_judicial') {
+    const effectiveVacantes = { ...vacantesPrograma, ...vacantesPuesto }
+    const byPuesto = new Map()
+
+    results.forEach((row) => {
+      const puestoKey = String(row.codPuesto || row.programa || row.puesto || '').trim()
+      const dni = stripDigits(row.dni)
+      if (!puestoKey) {
+        errors.push(issue('PJ_RESULT_PUESTO_REQUIRED', 'En Poder Judicial todo resultado calificado debe tener puesto asignado.', { dni }))
+        return
+      }
+      if (!byPuesto.has(puestoKey)) byPuesto.set(puestoKey, [])
+      byPuesto.get(puestoKey).push(row)
+    })
+
+    byPuesto.forEach((rows, puestoKey) => {
+      const programPositions = rows.map((row) => Number(row.positionInPrograma))
+      if (programPositions.some((position) => !Number.isInteger(position) || position < 1)) {
+        errors.push(issue('PROGRAM_POSITION_INVALID', 'Las posiciones por puesto deben ser enteros positivos.', { programa: puestoKey }))
+      } else if (!isValidSharedRankSequence(programPositions)) {
+        errors.push(issue('PROGRAM_POSITION_SEQUENCE_INVALID', 'Las posiciones por puesto no tienen una secuencia válida.', {
+          programa: puestoKey,
+          positions: programPositions,
+        }))
+      }
+
+      const sampleRow = rows[0] || {}
+      const cupo = Number(
+        effectiveVacantes?.[puestoKey] ??
+          effectiveVacantes?.[sampleRow.codPuesto] ??
+          effectiveVacantes?.[sampleRow.puesto] ??
+          effectiveVacantes?.[sampleRow.programa] ??
+          0,
+      )
+      const requireQuota = summary?.scoringOptions?.requireQuotaForIngreso !== false
+
+      if (requireQuota && cupo > 0) {
+        rows.forEach((row) => {
+          if (row.isIngresante && Number(row.positionInPrograma) > cupo) {
+            errors.push(issue('INGRESANTE_OUT_OF_QUOTA', 'Un ganador de vacante no puede estar fuera del cupo del puesto.', {
+              programa: puestoKey,
+              dni: stripDigits(row.dni),
+              positionInPrograma: row.positionInPrograma,
+              cupo,
+            }))
+          }
+        })
+      }
     })
   } else {
     const ingresantes = results.filter((row) => row.isIngresante)

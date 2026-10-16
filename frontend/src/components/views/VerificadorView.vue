@@ -1,14 +1,28 @@
 <script setup>
-import { ref, computed, reactive, nextTick } from 'vue'
+import { ref, computed, reactive, nextTick, watch } from 'vue'
 import { buildQuestionPlan } from '@/utils/helpers'
-import { useVerificador } from '@/composables/useVerificador'
+import { scoreAnswerSheet, roundScore } from '@/domain/calification/scoreAnswerSheet'
+import {
+  useVerificador,
+  PJ_EXAM_CODES,
+  extractExamCodes,
+  filterExceptionsForExam,
+  findCandidateInProcess,
+  normalizeDni,
+} from '@/composables/useVerificador'
 import { useToast } from '@/composables/useToast'
 import { loadPdfExportDeps } from '@/utils/exportLoaders'
 import AnswerSheetPreview from '@/components/shared/AnswerSheetPreview.vue'
 
 const props = defineProps({
-  ponderations: { type: Object, required: true },
-  currentUser:  { type: String, default: '' },
+  ponderations:        { type: Object, default: () => ({}) },
+  currentUser:         { type: String, default: '' },
+  plantillas:          { type: Array, default: () => [] },
+  archiveRows:         { type: Array, default: () => [] },
+  responsesRows:       { type: Array, default: () => [] },
+  answerKeyRows:       { type: Array, default: () => [] },
+  questionExceptions:  { type: Array, default: () => [] },
+  calificationResults: { type: Array, default: () => [] },
 })
 
 const toast = useToast()
@@ -19,11 +33,18 @@ const subTab = ref('nueva') // 'nueva' | 'historial'
 const historySearch = ref('')
 const savedKeyVersion = ref(0)
 
+// ── Modo de verificación (Poder Judicial 30 preg vs Admisión 60 preg) ────────
+const verifierMode = ref('poder_judicial') // 'poder_judicial' | 'admision'
+
 // ── Estado del formulario ─────────────────────────────────────────────────────
 const selectedPlantillaId = ref(null)
-const correctValue   = ref(10)
+const correctValue   = ref(1)
 const incorrectValue = ref(0)
-const blankValue     = ref(2)
+const blankValue     = ref(0)
+
+const selectedExamCode  = ref('')
+const dniSearchQuery    = ref('')
+const loadedCandidateComparison = ref(null)
 
 const candidatoProceso  = ref('')
 const candidatoDni      = ref('')
@@ -34,7 +55,14 @@ const candidatoAula     = ref('')
 const candidatoPosicion = ref('')
 const candidatoTipo     = ref('')
 
-// Arrays de 60 celdas (strings 'A'-'E' o '')
+// Simulador rápido de excepciones en el verificador
+const localExceptions = ref([])
+const simQuestionNumber = ref(1)
+const simExceptionType = ref('ANULADA_OTORGAR')
+const simValidAnswers = ref('BD')
+const simExceptionReason = ref('')
+
+// Arrays de 60 celdas (strings 'A'-'E', '*' o '')
 const correctCells = reactive(Array(60).fill(''))
 const answerCells  = reactive(Array(60).fill(''))
 
@@ -46,7 +74,13 @@ const answerRefs  = ref([])
 const editingId = ref(null)
 
 // ── Plantilla seleccionada ────────────────────────────────────────────────────
-const plantillasList = computed(() => props.ponderations.plantillas?.value ?? [])
+const plantillasList = computed(() => {
+  if (Array.isArray(props.plantillas) && props.plantillas.length > 0) {
+    return props.plantillas
+  }
+  const fromPonderations = props.ponderations?.plantillas?.value ?? props.ponderations?.plantillas
+  return Array.isArray(fromPonderations) ? fromPonderations : []
+})
 
 const selectedPlantilla = computed(() =>
   plantillasList.value.find(p => p.id === selectedPlantillaId.value) ?? null
@@ -59,111 +93,407 @@ function plantillaOptionLabel(plantilla) {
   return name.toLowerCase().includes(area.toLowerCase()) ? name : `${name} : ${area}`
 }
 
-const questionPlan = computed(() =>
-  selectedPlantilla.value
-    ? buildQuestionPlan(selectedPlantilla.value.items || [])
-    : Array(60).fill({ subject: '', weight: 0 })
+const questionPlan = computed(() => {
+  if (selectedPlantilla.value) {
+    const built = buildQuestionPlan(selectedPlantilla.value.items || [])
+    if (built.length > 0) return built
+  }
+  const count = verifierMode.value === 'poder_judicial' ? 30 : 60
+  const defaultSubject = verifierMode.value === 'poder_judicial' ? 'Conocimientos' : 'General'
+  return Array.from({ length: count }, () => ({ subject: defaultSubject, weight: 1 }))
+})
+
+const totalQuestions = computed(() => questionPlan.value.length || (verifierMode.value === 'poder_judicial' ? 30 : 60))
+
+// Cuando se cambia de plantilla manualmente, sincronizar modo si aplica
+watch(selectedPlantilla, (plantilla) => {
+  if (!plantilla) return
+  const built = buildQuestionPlan(plantilla.items || [])
+  if (built.length === 30) {
+    verifierMode.value = 'poder_judicial'
+  } else if (built.length === 60) {
+    verifierMode.value = 'admision'
+  }
+})
+
+function setVerifierMode(mode) {
+  verifierMode.value = mode
+  if (mode === 'poder_judicial') {
+    correctValue.value = 1
+    incorrectValue.value = 0
+    blankValue.value = 0
+    if (selectedPlantilla.value) {
+      const built = buildQuestionPlan(selectedPlantilla.value.items || [])
+      if (built.length !== 30) {
+        const pjPlantilla = plantillasList.value.find(p => buildQuestionPlan(p.items || []).length === 30)
+        selectedPlantillaId.value = pjPlantilla ? pjPlantilla.id : null
+      }
+    }
+    if (simQuestionNumber.value > 30) simQuestionNumber.value = 1
+  } else {
+    correctValue.value = 10
+    incorrectValue.value = 0
+    blankValue.value = 2
+    if (selectedPlantilla.value) {
+      const built = buildQuestionPlan(selectedPlantilla.value.items || [])
+      if (built.length === 30) {
+        selectedPlantillaId.value = null
+      }
+    }
+  }
+}
+
+// ── Códigos de Examen disponibles (COD_EXAMEN) ────────────────────────────────
+const availableExamCodes = computed(() => {
+  const extracted = extractExamCodes({
+    answerKeyRows: props.answerKeyRows,
+    archiveRows: props.archiveRows,
+  })
+  if (extracted.length > 0) return extracted
+  return PJ_EXAM_CODES.map(code => ({ code, hasKey: false, candidateCount: 0 }))
+})
+
+const activeExamCode = computed(() =>
+  String(selectedExamCode.value || candidatoArea.value || '').trim()
 )
 
-const totalQuestions = computed(() => questionPlan.value.length || 60)
+// ── Excepciones activas (del proceso + simuladas en el verificador) ──────────
+const processExceptionsForExam = computed(() =>
+  filterExceptionsForExam(props.questionExceptions, activeExamCode.value)
+)
 
-const savedKeyStorageId = computed(() =>
-  selectedPlantilla.value
-    ? `calificador-verificador-clave-${selectedPlantilla.value.id}`
+const activeExceptionsForExam = computed(() => {
+  const byQuestion = new Map()
+  processExceptionsForExam.value.forEach((exc) => {
+    const qNum = Number(exc.questionNumber)
+    if (qNum >= 1 && qNum <= totalQuestions.value) {
+      byQuestion.set(qNum, { ...exc, source: 'proceso' })
+    }
+  })
+  localExceptions.value.forEach((exc) => {
+    const qNum = Number(exc.questionNumber)
+    if (qNum >= 1 && qNum <= totalQuestions.value) {
+      if (exc.type === 'NONE') {
+        byQuestion.delete(qNum)
+      } else {
+        byQuestion.set(qNum, { ...exc, source: 'simulacion' })
+      }
+    }
+  })
+  return Array.from(byQuestion.values()).sort((a, b) => a.questionNumber - b.questionNumber)
+})
+
+const activeExceptionsByQuestion = computed(() => {
+  const map = new Map()
+  activeExceptionsForExam.value.forEach((exc) => {
+    map.set(Number(exc.questionNumber), exc)
+  })
+  return map
+})
+
+function addOrUpdateLocalException() {
+  const qNum = Number(simQuestionNumber.value)
+  if (!Number.isInteger(qNum) || qNum < 1 || qNum > totalQuestions.value) {
+    toast.showToast(`Ingresa un N° de pregunta entre 1 y ${totalQuestions.value}`, 'warning')
+    return
+  }
+  const type = String(simExceptionType.value || 'ANULADA_OTORGAR').toUpperCase()
+  const validAnswers = type === 'CLAVE_MULTIPLE'
+    ? String(simValidAnswers.value || '').toUpperCase().replace(/[^A-E]/g, '')
     : ''
-)
+
+  if (type === 'CLAVE_MULTIPLE' && validAnswers.length < 1) {
+    toast.showToast('Ingresa al menos una letra válida (A-E) para clave múltiple', 'warning')
+    return
+  }
+
+  const existingIdx = localExceptions.value.findIndex(e => Number(e.questionNumber) === qNum)
+  const payload = {
+    questionNumber: qNum,
+    codExamen: activeExamCode.value || '*',
+    type,
+    validAnswers,
+    reason: simExceptionReason.value.trim() || 'Simulación en Verificador Manual',
+  }
+  if (existingIdx !== -1) {
+    localExceptions.value.splice(existingIdx, 1, payload)
+  } else {
+    localExceptions.value.push(payload)
+  }
+  toast.showToast(`Excepción aplicada a la pregunta ${qNum}`, 'success')
+}
+
+function setRowQuickException(questionNumber, type) {
+  const qNum = Number(questionNumber)
+  const existingIdx = localExceptions.value.findIndex(e => Number(e.questionNumber) === qNum)
+  if (!type) {
+    if (existingIdx !== -1) {
+      localExceptions.value.splice(existingIdx, 1)
+    } else if (processExceptionsForExam.value.some(e => Number(e.questionNumber) === qNum)) {
+      localExceptions.value.push({ questionNumber: qNum, type: 'NONE' })
+    }
+    return
+  }
+  const currentKey = normalizeCell(correctCells[qNum - 1]) || 'A'
+  const fallbackMulti = currentKey === 'B' ? 'BD' : `${currentKey}B`
+  const payload = {
+    questionNumber: qNum,
+    codExamen: activeExamCode.value || '*',
+    type,
+    validAnswers: type === 'CLAVE_MULTIPLE' ? (simValidAnswers.value.toUpperCase().replace(/[^A-E]/g, '') || fallbackMulti) : '',
+    reason: 'Simulación rápida en tabla',
+  }
+  if (existingIdx !== -1) {
+    localExceptions.value.splice(existingIdx, 1, payload)
+  } else {
+    localExceptions.value.push(payload)
+  }
+}
+
+function removeException(questionNumber) {
+  setRowQuickException(questionNumber, '')
+}
+
+function clearLocalExceptions() {
+  localExceptions.value = []
+}
+
+const savedKeyStorageId = computed(() => {
+  if (selectedPlantilla.value) {
+    return `calificador-verificador-clave-${selectedPlantilla.value.id}`
+  }
+  if (activeExamCode.value) {
+    return `calificador-verificador-clave-pj-${activeExamCode.value.toLowerCase()}`
+  }
+  return `calificador-verificador-clave-${verifierMode.value}-${totalQuestions.value}`
+})
 
 const hasSavedCorrectKey = computed(() => {
   savedKeyVersion.value
   return !!(savedKeyStorageId.value && localStorage.getItem(savedKeyStorageId.value))
 })
 
-// ── Cálculo reactivo pregunta × pregunta ──────────────────────────────────────
-const rows = computed(() => {
+// ── Mapa de normalización: 1-5 → A-E, A-E → A-E, * → * ────────────────────────
+const KEY_MAP = {
+  '1': 'A', '2': 'B', '3': 'C', '4': 'D', '5': 'E',
+  'A': 'A', 'B': 'B', 'C': 'C', 'D': 'D', 'E': 'E',
+  '*': '*',
+}
+
+function normalizeCell(c, allowMultiple = false) {
+  const mapped = KEY_MAP[(c || '').toUpperCase()] || ''
+  if (!allowMultiple && mapped === '*') return ''
+  return mapped
+}
+
+function cellsToPositionString(cells, total = totalQuestions.value, allowMultiple = false) {
+  return Array.from({ length: total }, (_, index) => normalizeCell(cells[index], allowMultiple) || ' ').join('')
+}
+
+const answerString = computed(() =>
+  cellsToPositionString(answerCells, totalQuestions.value, true)
+)
+
+const correctString = computed(() =>
+  cellsToPositionString(correctCells, totalQuestions.value, false)
+)
+
+// ── Cálculo unificado delegando a scoreAnswerSheet ────────────────────────────
+const scoringResult = computed(() => {
   const plan = questionPlan.value
-  const corrVal   = Number(correctValue.value)   || 0
-  const incorrVal = Number(incorrectValue.value) || 0
-  const blkVal    = Number(blankValue.value)     || 0
-  const roundScore = (value) => Math.round(value * 1000) / 1000
+  const total = plan.length
+  const answersRaw = answerString.value
+  const rawCorrect = correctString.value
+  const exceptions = activeExceptionsForExam.value
+  const excByQ = activeExceptionsByQuestion.value
 
+  // Para evitar que scoreAnswerSheet lance error mientras el operador aún está
+  // digitando las celdas de la clave una por una, proveemos un carácter seguro
+  // en las posiciones donde la clave aún está vacía, preservando el cálculo exacto.
+  const safeCorrectChars = Array.from({ length: total }, (_, i) => {
+    const ch = rawCorrect[i] || ' '
+    if (/^[A-E]$/.test(ch)) return ch
+    const marked = answersRaw[i] || ' '
+    return marked === 'A' ? 'B' : 'A'
+  }).join('')
+
+  const sanitizedExceptions = exceptions.map((exc) => {
+    if (String(exc.type || '').toUpperCase() === 'CLAVE_MULTIPLE') {
+      const cleaned = String(exc.validAnswers || '').toUpperCase().replace(/[^A-E]/g, '')
+      return { ...exc, validAnswers: cleaned || 'A' }
+    }
+    return exc
+  })
+
+  try {
+    return scoreAnswerSheet({
+      answersRaw,
+      correctAnswersRaw: safeCorrectChars,
+      plan,
+      correctValue: Number(correctValue.value) || 0,
+      incorrectValue: Number(incorrectValue.value) || 0,
+      blankValue: Number(blankValue.value) || 0,
+      questionExceptions: sanitizedExceptions,
+    })
+  } catch {
+    return {
+      score: 0,
+      maxPossibleScore: 0,
+      correctCount: 0,
+      incorrectCount: 0,
+      blankCount: total,
+      multipleCount: 0,
+      annulledGrantedCount: 0,
+      annulledExcludedCount: 0,
+      questionDetails: [],
+      subjectBreakdown: [],
+      answersNormalized: answersRaw,
+      correctAnswersNormalized: safeCorrectChars,
+    }
+  }
+})
+
+const rows = computed(() => {
+  const details = scoringResult.value.questionDetails || []
+  const plan = questionPlan.value
   let acum = 0
-  return plan.map((item, i) => {
-    const marked  = normalizeCell(answerCells[i])
-    const correct = normalizeCell(correctCells[i])
-    const weight  = Number(item.weight) || 0
 
-    const isCorrectValid = /^[A-E]$/.test(correct)
-    const isMarkedValid  = /^[A-E]$/.test(marked)
+  return details.map((detail, i) => {
+    const rawMarked = String(answerCells[i] || '').toUpperCase()
+    const rawCorrect = String(correctCells[i] || '').toUpperCase()
+    const isCorrectValid = /^[A-E]$/.test(normalizeCell(correctCells[i]))
+    const isMarkedValid = /^[A-E]$/.test(normalizeCell(answerCells[i]))
+    const isMultipleMark = rawMarked === '*'
 
-    let status, pts
-    if (isCorrectValid && isMarkedValid && marked === correct) {
-      status = 'correct'
-      pts    = roundScore(corrVal * weight)
-    } else if (isMarkedValid) {
-      status = 'incorrect'
-      pts    = roundScore(incorrVal * weight)
-    } else {
-      status = 'blank'
-      pts    = roundScore(blkVal * weight)
+    acum = roundScore(acum + detail.score)
+
+    let displayCorrect = isCorrectValid ? rawCorrect : '?'
+    if (detail.exceptionApplied === 'ANULADA_OTORGAR') {
+      displayCorrect = isCorrectValid ? `${rawCorrect} (+)` : 'ANUL+'
+    } else if (detail.exceptionApplied === 'ANULADA_EXCLUIR') {
+      displayCorrect = 'EXCL'
+    } else if (detail.exceptionApplied === 'CLAVE_MULTIPLE') {
+      displayCorrect = detail.correctAnswer || rawCorrect || '?'
     }
 
-    acum = roundScore(acum + pts)
-
-    // Para display: mostrar tal como lo ingresó (número o letra)
-    const rawMarked  = (answerCells[i]  || '').toUpperCase()
-    const rawCorrect = (correctCells[i] || '').toUpperCase()
-
     return {
-      n: i + 1,
-      subject: item.subject || '',
-      marked:  isMarkedValid  ? rawMarked  : '—',
-      correct: isCorrectValid ? rawCorrect : '?',
-      weight,
-      status,
-      pts,
+      ...detail,
+      n: detail.number,
+      subject: plan[i]?.subject || detail.subject || '',
+      marked: isMultipleMark ? '*' : (isMarkedValid ? rawMarked : '—'),
+      correct: displayCorrect,
+      weight: detail.weight,
+      status: detail.status,
+      pts: detail.score,
       acum,
+      exceptionApplied: detail.exceptionApplied || null,
     }
   })
 })
 
+// Alias requerido por contrato reactivo
+const questionResults = rows
+
 const detailColumns = computed(() => {
-  const midpoint = Math.ceil(rows.value.length / 2)
+  const all = rows.value
+  if (all.length === 30) {
+    return [
+      all.slice(0, 10),
+      all.slice(10, 20),
+      all.slice(20, 30),
+    ]
+  }
+  const midpoint = Math.ceil(all.length / 2)
   return [
-    rows.value.slice(0, midpoint),
-    rows.value.slice(midpoint),
+    all.slice(0, midpoint),
+    all.slice(midpoint),
   ].filter(column => column.length > 0)
 })
 
-const stats = computed(() => {
-  let correctCount = 0, incorrectCount = 0, blankCount = 0
-  rows.value.forEach(r => {
-    if (r.status === 'correct')        correctCount++
-    else if (r.status === 'incorrect') incorrectCount++
-    else                               blankCount++
-  })
-  const score = rows.value.length ? rows.value[rows.value.length - 1].acum : 0
-  return { correctCount, incorrectCount, blankCount, score }
+const questionBlocks = computed(() => {
+  const total = totalQuestions.value
+  const blocks = []
+  for (let start = 1; start <= total; start += 10) {
+    const end = Math.min(start + 9, total)
+    const indices = []
+    for (let q = start; q <= end; q++) indices.push(q)
+    blocks.push({
+      label: `Preguntas ${String(start).padStart(2, '0')}–${String(end).padStart(2, '0')}`,
+      indices,
+    })
+  }
+  return blocks
 })
+
+const stats = computed(() => ({
+  correctCount: scoringResult.value.correctCount,
+  incorrectCount: scoringResult.value.incorrectCount,
+  blankCount: scoringResult.value.blankCount,
+  multipleCount: scoringResult.value.multipleCount,
+  annulledGrantedCount: scoringResult.value.annulledGrantedCount,
+  annulledExcludedCount: scoringResult.value.annulledExcludedCount,
+  score: scoringResult.value.score,
+  maxPossibleScore: scoringResult.value.maxPossibleScore,
+}))
+
+// Alias requerido por contrato reactivo
+const totals = stats
 
 const missingSummary = computed(() => {
   const total = totalQuestions.value
-  const missingCorrect = correctCells.slice(0, total).filter(c => !normalizeCell(c)).length
-  const missingAnswers = answerCells.slice(0, total).filter(c => !normalizeCell(c)).length
+  const excMap = activeExceptionsByQuestion.value
+  let missingCorrect = 0
+  let missingAnswers = 0
+  for (let i = 0; i < total; i++) {
+    const exc = excMap.get(i + 1)
+    const excCoversKey = exc && (
+      exc.type === 'ANULADA_OTORGAR' ||
+      exc.type === 'ANULADA_EXCLUIR' ||
+      (exc.type === 'CLAVE_MULTIPLE' && String(exc.validAnswers || '').trim().length > 0)
+    )
+    if (!excCoversKey && !normalizeCell(correctCells[i])) {
+      missingCorrect++
+    }
+    if (!normalizeCell(answerCells[i], true)) {
+      missingAnswers++
+    }
+  }
   return { missingCorrect, missingAnswers }
 })
 
-const subjectSummary = computed(() => {
-  const map = new Map()
-  rows.value.forEach((row) => {
-    const key = row.subject || 'Sin curso'
-    if (!map.has(key)) map.set(key, { subject: key, correct: 0, incorrect: 0, blank: 0, points: 0 })
-    const item = map.get(key)
-    if (row.status === 'correct') item.correct += 1
-    else if (row.status === 'incorrect') item.incorrect += 1
-    else item.blank += 1
-    item.points = Math.round((item.points + row.pts) * 1000) / 1000
-  })
-  return Array.from(map.values())
+const subjectBreakdown = computed(() =>
+  (scoringResult.value.subjectBreakdown || []).map(item => ({
+    ...item,
+    subject: item.subject === 'Sin materia' ? 'Sin curso' : item.subject,
+    points: item.score,
+  }))
+)
+
+const subjectSummary = subjectBreakdown
+
+// Comparación con Ranking Oficial
+const rankingComparison = computed(() => {
+  const targetDni = normalizeDni(candidatoDni.value || dniSearchQuery.value)
+  const fromResults = targetDni && Array.isArray(props.calificationResults)
+    ? props.calificationResults.find(r => normalizeDni(r?.dni) === targetDni) || null
+    : null
+  const official = fromResults || loadedCandidateComparison.value
+  if (!official || official.score === undefined || official.score === null) return null
+
+  const verifierScore = Number(stats.value.score)
+  const officialScore = roundScore(Number(official.score))
+  const diff = roundScore(Math.abs(verifierScore - officialScore))
+  const matches = diff < 0.001
+
+  return {
+    dni: official.dni || targetDni,
+    verifierScore,
+    officialScore,
+    diff,
+    matches,
+    condicion: official.condicion || '',
+    position: official.positionInPrograma ?? official.position ?? '',
+  }
 })
 
 const filteredSesiones = computed(() => {
@@ -181,52 +511,35 @@ const filteredSesiones = computed(() => {
   ].some(value => String(value || '').toLowerCase().includes(needle)))
 })
 
-// Mostrar tabla solo si hay al menos una respuesta ingresada (A-E o 1-5)
+// Mostrar tabla si hay al menos una respuesta, clave o excepción activa
 const hasAnyAnswer = computed(() =>
-  answerCells.some(c => !!KEY_MAP[c?.toUpperCase()]) ||
-  correctCells.some(c => !!KEY_MAP[c?.toUpperCase()])
+  answerCells.slice(0, totalQuestions.value).some(c => !!KEY_MAP[c?.toUpperCase()]) ||
+  correctCells.slice(0, totalQuestions.value).some(c => !!KEY_MAP[c?.toUpperCase()]) ||
+  activeExceptionsForExam.value.length > 0
 )
-
-const answerString = computed(() =>
-  cellsToPositionString(answerCells, totalQuestions.value)
-)
-
-const correctString = computed(() =>
-  cellsToPositionString(correctCells, totalQuestions.value)
-)
-
-// ── Mapa de normalización: 1-5 → A-E, A-E → A-E (solo para cálculo/guardado) ─
-const KEY_MAP = { '1':'A','2':'B','3':'C','4':'D','5':'E','A':'A','B':'B','C':'C','D':'D','E':'E' }
-
-function normalizeCell(c) {
-  return KEY_MAP[(c || '').toUpperCase()] || ''
-}
-
-function cellsToPositionString(cells, total = totalQuestions.value) {
-  return Array.from({ length: total }, (_, index) => normalizeCell(cells[index]) || ' ').join('')
-}
 
 function ensureCellCapacity(total = totalQuestions.value) {
-  for (let i = correctCells.length; i < total; i++) correctCells[i] = ''
-  for (let i = answerCells.length; i < total; i++) answerCells[i] = ''
+  const cap = Math.max(60, total)
+  for (let i = correctCells.length; i < cap; i++) correctCells[i] = ''
+  for (let i = answerCells.length; i < cap; i++) answerCells[i] = ''
 }
 
-function extractAnswerChars(text) {
+function extractAnswerChars(text, allowMultiple = false) {
   return String(text || '')
     .toUpperCase()
     .split('')
-    .map(ch => KEY_MAP[ch])
+    .map(ch => normalizeCell(ch, allowMultiple))
     .filter(Boolean)
 }
 
 function setCell(index, gridType, val) {
-  // Guarda el carácter tal como lo ingresó el usuario (letra o número)
   if (gridType === 'correct') correctCells[index] = val
   else                        answerCells[index]  = val
 }
 
 function fillCellsFromText(gridType, text, startIndex = 0) {
-  const chars = extractAnswerChars(text)
+  const allowMulti = gridType !== 'correct'
+  const chars = extractAnswerChars(text, allowMulti)
   if (!chars.length) return 0
   const target = gridType === 'correct' ? correctCells : answerCells
   const max = Math.min(totalQuestions.value, startIndex + chars.length)
@@ -236,13 +549,116 @@ function fillCellsFromText(gridType, text, startIndex = 0) {
   return max - startIndex
 }
 
+function fillCellsPositional(gridType, rawString) {
+  ensureCellCapacity()
+  const target = gridType === 'correct' ? correctCells : answerCells
+  const allowMulti = gridType !== 'correct'
+  const total = totalQuestions.value
+  const str = String(rawString ?? '')
+  for (let i = 0; i < target.length; i++) {
+    if (i < total) {
+      const ch = str[i] || ''
+      target[i] = normalizeCell(ch, allowMulti)
+    } else {
+      target[i] = ''
+    }
+  }
+}
+
+// ── Cargar Clave por Código de Examen (COD_EXAMEN) ────────────────────────────
+function handleSelectExamCode(codeInput) {
+  const code = String(codeInput ?? selectedExamCode.value ?? '').trim()
+  selectedExamCode.value = code
+  if (!code) return
+
+  candidatoArea.value = code
+  if (!candidatoTipo.value) candidatoTipo.value = code
+
+  const keyRow = Array.isArray(props.answerKeyRows)
+    ? props.answerKeyRows.find(
+        k => String(k?.cod_examen || k?.codExamen || k?.area || '').trim().toLowerCase() === code.toLowerCase()
+      )
+    : null
+
+  if (keyRow) {
+    const rawKey = String(keyRow.answers || keyRow.correct_answers || keyRow.respuestas || '')
+    if (rawKey.trim().length <= 30) {
+      setVerifierMode('poder_judicial')
+    }
+    fillCellsPositional('correct', rawKey)
+    toast.showToast(`Clave oficial cargada para ${code}`, 'success')
+  } else {
+    toast.showToast(`Código ${code} seleccionado (sin clave en el proceso activo)`, 'info')
+  }
+}
+
+// ── Buscar Postulante por DNI en el Proceso ───────────────────────────────────
+function buscarPostulantePorDni() {
+  const query = normalizeDni(dniSearchQuery.value || candidatoDni.value)
+  if (!query) {
+    toast.showToast('Ingresa un DNI para buscar en el proceso', 'warning')
+    return
+  }
+
+  const found = findCandidateInProcess(query, {
+    archiveRows: props.archiveRows,
+    responsesRows: props.responsesRows,
+    answerKeyRows: props.answerKeyRows,
+    calificationResults: props.calificationResults,
+  })
+
+  if (!found) {
+    loadedCandidateComparison.value = null
+    toast.showToast(`No se encontró al postulante con DNI ${query} en el proceso activo`, 'warning')
+    return
+  }
+
+  // Si el candidato tiene cod_examen o respuestas de 30 preguntas, activar modo PJ
+  if (
+    found.codExamen &&
+    (PJ_EXAM_CODES.some(c => c.toLowerCase() === found.codExamen.toLowerCase()) ||
+      (found.correctAnswersRaw && found.correctAnswersRaw.trim().length <= 30))
+  ) {
+    setVerifierMode('poder_judicial')
+  }
+
+  candidatoDni.value = found.dni
+  dniSearchQuery.value = found.dni
+  candidatoNombre.value = found.fullName || candidatoNombre.value
+  candidatoArea.value = found.codExamen || candidatoArea.value
+  selectedExamCode.value = found.codExamen || selectedExamCode.value
+
+  const programaParts = [found.codPuesto, found.puesto, found.unidad].filter(Boolean)
+  candidatoPrograma.value = programaParts.join(' — ') || found.puesto || candidatoPrograma.value
+
+  const aulaParts = [found.grupo, found.aula].filter(Boolean)
+  candidatoAula.value = aulaParts.join(' · ') || found.aula || candidatoAula.value
+
+  if (found.officialResult?.positionInPrograma || found.officialResult?.position) {
+    candidatoPosicion.value = String(found.officialResult.positionInPrograma ?? found.officialResult.position)
+  }
+  if (found.codExamen) {
+    candidatoTipo.value = found.codExamen
+  }
+
+  if (found.correctAnswersRaw) {
+    fillCellsPositional('correct', found.correctAnswersRaw)
+  }
+  if (found.answersRaw) {
+    fillCellsPositional('answer', found.answersRaw)
+  }
+
+  loadedCandidateComparison.value = found.officialResult || null
+  toast.showToast(`Datos cargados para DNI ${found.dni}`, 'success')
+}
+
 // ── Navegación de celdas ──────────────────────────────────────────────────────
-// handleCellInput solo cubre paste; la lógica principal va en keydown
 function handleCellInput(e, index, gridType) {
   const raw = e.target.value.toUpperCase()
+  const allowMulti = gridType !== 'correct'
   let stored = ''
   for (const ch of raw) {
-    if (KEY_MAP[ch]) { stored = ch; break }
+    if (normalizeCell(ch, allowMulti)) { stored = ch; break }
   }
   setCell(index, gridType, stored)
   e.target.value = stored
@@ -256,7 +672,8 @@ function handleCellInput(e, index, gridType) {
 
 function handleCellPaste(e, index, gridType) {
   const text = e.clipboardData?.getData('text') || ''
-  const chars = extractAnswerChars(text)
+  const allowMulti = gridType !== 'correct'
+  const chars = extractAnswerChars(text, allowMulti)
   if (chars.length <= 1) return
   e.preventDefault()
   const filled = fillCellsFromText(gridType, text, index)
@@ -268,9 +685,9 @@ function handleCellPaste(e, index, gridType) {
 function handleCellKeydown(e, index, gridType) {
   const refs = gridType === 'correct' ? correctRefs.value : answerRefs.value
   const key  = e.key.toUpperCase()
+  const allowMulti = gridType !== 'correct'
 
-  // Tecla válida (A-E o 1-5): guarda raw, sobreescribe, avanza
-  if (KEY_MAP[key]) {
+  if (normalizeCell(key, allowMulti)) {
     e.preventDefault()
     setCell(index, gridType, key)
     e.target.value = key
@@ -316,17 +733,21 @@ function limpiar() {
   }
   candidatoProceso.value  = ''
   candidatoDni.value      = ''
+  dniSearchQuery.value    = ''
+  selectedExamCode.value  = ''
+  loadedCandidateComparison.value = null
   candidatoNombre.value   = ''
   candidatoArea.value     = ''
   candidatoPrograma.value = ''
   candidatoAula.value     = ''
   candidatoPosicion.value = ''
   candidatoTipo.value     = ''
+  localExceptions.value   = []
   editingId.value = null
 }
 
 async function guardar() {
-  if (!selectedPlantilla.value) {
+  if (!selectedPlantilla.value && verifierMode.value !== 'poder_judicial') {
     toast.showToast('Selecciona una plantilla antes de guardar', 'warning')
     return
   }
@@ -337,10 +758,11 @@ async function guardar() {
 
   ensureCellCapacity()
   const total = totalQuestions.value
+  const defaultSnapshot = [{ subject: 'Conocimientos', questions: total, weight: 1 }]
   const payload = {
-    plantilla_id:       selectedPlantilla.value.id,
-    plantilla_name:     selectedPlantilla.value.name,
-    plantilla_snapshot: selectedPlantilla.value.items || [],
+    plantilla_id:       selectedPlantilla.value?.id ?? null,
+    plantilla_name:     selectedPlantilla.value?.name ?? (verifierMode.value === 'poder_judicial' ? 'Poder Judicial — 30 Preguntas' : 'Admisión — 60 Preguntas'),
+    plantilla_snapshot: selectedPlantilla.value?.items ?? defaultSnapshot,
     proceso:    candidatoProceso.value.trim(),
     dni:        candidatoDni.value.trim(),
     nombre:     candidatoNombre.value.trim(),
@@ -349,8 +771,8 @@ async function guardar() {
     aula:       candidatoAula.value.trim(),
     posicion:   candidatoPosicion.value.trim(),
     tipo_prueba: candidatoTipo.value.trim(),
-    answers:         cellsToPositionString(answerCells, total),
-    correct_answers: cellsToPositionString(correctCells, total),
+    answers:         cellsToPositionString(answerCells, total, true),
+    correct_answers: cellsToPositionString(correctCells, total, false),
     correct_value:   Number(correctValue.value),
     incorrect_value: Number(incorrectValue.value),
     blank_value:     Number(blankValue.value),
@@ -374,21 +796,26 @@ async function guardar() {
 
 function cargarSesion(sesion) {
   selectedPlantillaId.value = sesion.plantilla_id
+  const ansStr = String(sesion.answers || '')
+  const corStr = String(sesion.correct_answers || '')
+  if (!sesion.plantilla_id && (corStr.trim().length <= 30 || Number(sesion.correct_value) === 1)) {
+    verifierMode.value = 'poder_judicial'
+  }
   ensureCellCapacity()
   const total = totalQuestions.value
 
-  // Rellenar las celdas desde los strings
-  const ans = (sesion.answers || '').padEnd(total, ' ')
-  const cor = (sesion.correct_answers || '').padEnd(total, ' ')
+  const ans = ansStr.padEnd(total, ' ')
+  const cor = corStr.padEnd(total, ' ')
   for (let i = 0; i < answerCells.length; i++) {
-    answerCells[i]  = /^[A-E]$/.test(ans[i]) ? ans[i] : ''
-    correctCells[i] = /^[A-E]$/.test(cor[i]) ? cor[i] : ''
+    answerCells[i]  = normalizeCell(ans[i], true)
+    correctCells[i] = normalizeCell(cor[i], false)
   }
 
   candidatoProceso.value  = sesion.proceso || ''
   candidatoDni.value      = sesion.dni || ''
   candidatoNombre.value   = sesion.nombre || ''
   candidatoArea.value     = sesion.area || ''
+  selectedExamCode.value  = sesion.area || ''
   candidatoPrograma.value = sesion.programa || ''
   candidatoAula.value     = sesion.aula || ''
   candidatoPosicion.value = sesion.posicion || ''
@@ -422,11 +849,7 @@ function abrirHistorial() {
 }
 
 function saveCorrectKey() {
-  if (!selectedPlantilla.value) {
-    toast.showToast('Selecciona una plantilla para guardar la clave', 'warning')
-    return
-  }
-  const key = correctCells.map(normalizeCell).join('').slice(0, totalQuestions.value)
+  const key = correctCells.slice(0, totalQuestions.value).map(c => normalizeCell(c)).join('')
   if (!key.trim() || missingSummary.value.missingCorrect > 0) {
     toast.showToast('Completa la clave correcta antes de guardarla', 'warning')
     return
@@ -439,7 +862,7 @@ function saveCorrectKey() {
 function useSavedCorrectKey() {
   const key = savedKeyStorageId.value ? localStorage.getItem(savedKeyStorageId.value) : ''
   if (!key) {
-    toast.showToast('No hay clave guardada para esta plantilla', 'warning')
+    toast.showToast('No hay clave guardada para esta configuración', 'warning')
     return
   }
   fillCellsFromText('correct', key)
@@ -485,6 +908,13 @@ function abbrevCurso(name) {
   const words = name.trim().split(/\s+/)
   if (words.length > 1) return words.map(w => w[0].toUpperCase()).join('.')
   return name.slice(0, 3).toUpperCase()
+}
+
+function exceptionBadgeLabel(excType) {
+  if (excType === 'ANULADA_OTORGAR') return 'Anulada (+pts)'
+  if (excType === 'ANULADA_EXCLUIR') return 'Anulada (Excluida)'
+  if (excType === 'CLAVE_MULTIPLE') return 'Clave múltiple'
+  return ''
 }
 
 async function _loadLogo() {
@@ -533,10 +963,19 @@ async function exportPdf() {
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(203, 213, 225)
-  doc.text('DIRECCIÓN DE ADMISIÓN', txtX, 14, { align: 'center' })
+  doc.text(
+    verifierMode.value === 'poder_judicial'
+      ? 'DIRECCIÓN DE ADMISIÓN · CONCURSO PODER JUDICIAL CSJ PUNO'
+      : 'DIRECCIÓN DE ADMISIÓN',
+    txtX, 14, { align: 'center' }
+  )
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(255, 255, 255)
-  doc.text(selectedPlantilla.value?.name || 'VERIFICACIÓN DE RESPUESTAS', txtX, 20, { align: 'center' })
+  doc.text(
+    selectedPlantilla.value?.name ||
+      (verifierMode.value === 'poder_judicial' ? 'VERIFICACIÓN MANUAL — 30 PREGUNTAS' : 'VERIFICACIÓN DE RESPUESTAS'),
+    txtX, 20, { align: 'center' }
+  )
   doc.setFontSize(7)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(148, 163, 184)
@@ -547,16 +986,14 @@ async function exportPdf() {
 
   // ── 2. Card candidato ─────────────────────────────────────────────────────────
   const CAND_Y = HDR_H + 3
-  const CAND_H = 38          // compacto: proceso inline, todo en 38mm
+  const CAND_H = 38
   doc.setFillColor(248, 250, 252)
   doc.setDrawColor(226, 232, 240)
   doc.setLineWidth(0.3)
   doc.rect(10, CAND_Y, pageW - 20, CAND_H, 'FD')
-  // Franja lateral izquierda
   doc.setFillColor(30, 41, 59)
   doc.rect(10, CAND_Y, 3, CAND_H, 'F')
 
-  // Proceso — línea pequeña encima del nombre
   const procesoStr = candidatoProceso.value.trim()
   if (procesoStr) {
     doc.setFontSize(6.5)
@@ -565,21 +1002,18 @@ async function exportPdf() {
     doc.text(procesoStr.toUpperCase(), 17, CAND_Y + 5)
   }
 
-  // Nombre
   const nombre = candidatoNombre.value.trim() || 'Sin nombre'
   doc.setFontSize(10.5)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(15, 23, 42)
   doc.text(nombre.toUpperCase(), 17, CAND_Y + (procesoStr ? 11 : 8))
 
-  // Sublinea: área · programa
   const subLine = [candidatoArea.value.trim(), candidatoPrograma.value.trim()].filter(Boolean).join(' · ')
   doc.setFontSize(7.5)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(71, 85, 105)
   doc.text(subLine || '—', 17, CAND_Y + (procesoStr ? 17 : 14))
 
-  // Cuadro puntaje — borde ámbar (más compacto)
   const scoreStr  = score.toFixed(3)
   const scoreBoxW = 34
   const scoreBoxH = 22
@@ -596,17 +1030,15 @@ async function exportPdf() {
   doc.setTextColor(120, 53, 15)
   doc.text(scoreStr, scoreBoxX + scoreBoxW / 2, scoreBoxY + 17, { align: 'center' })
 
-  // Separador
   doc.setDrawColor(226, 232, 240)
   doc.setLineWidth(0.3)
   doc.line(17, CAND_Y + 22, scoreBoxX - 3, CAND_Y + 22)
 
-  // Campos en fila: DNI · Aula · Posición · Tipo
   const fieldDefs = [
-    ['DNI',      candidatoDni.value      || '—'],
-    ['Aula',     candidatoAula.value     || '—'],
-    ['Posición', candidatoPosicion.value || '—'],
-    ['Tipo',     candidatoTipo.value     || '—'],
+    ['DNI',          candidatoDni.value      || '—'],
+    ['Aula / Grupo', candidatoAula.value     || '—'],
+    ['Posición',     candidatoPosicion.value || '—'],
+    ['Cód. Examen',  candidatoTipo.value || candidatoArea.value || '—'],
   ]
   const fieldColW = (scoreBoxX - 3 - 17) / fieldDefs.length
   fieldDefs.forEach(([label, val], i) => {
@@ -631,13 +1063,13 @@ async function exportPdf() {
 
   doc.setFontSize(7.5)
   const statPairs = [
-    [`Correctas: `,   `${correctCount}`,          [21, 128, 61]],
-    [`Incorrectas: `, `${incorrectCount}`,         [220, 38, 38]],
-    [`En blanco: `,   `${blankCount}`,             [100, 116, 139]],
-    [`C×`,            `${correctValue.value}`,     [30, 41, 59]],
-    [`I×`,            `${incorrectValue.value}`,   [30, 41, 59]],
-    [`B×`,            `${blankValue.value}`,       [30, 41, 59]],
-    [`Plantilla: `,   selectedPlantilla.value?.name || '—', [30, 58, 138]],
+    ['Correctas: ',   `${correctCount}`,          [21, 128, 61]],
+    ['Incorrectas: ', `${incorrectCount}`,        [220, 38, 38]],
+    ['En blanco: ',   `${blankCount}`,            [100, 116, 139]],
+    ['C×',            `${correctValue.value}`,    [30, 41, 59]],
+    ['I×',            `${incorrectValue.value}`,  [30, 41, 59]],
+    ['B×',            `${blankValue.value}`,      [30, 41, 59]],
+    ['Excepciones: ', `${activeExceptionsForExam.value.length}`, [146, 64, 14]],
   ]
   let sx = 14
   statPairs.forEach(([label, val, rgb]) => {
@@ -654,20 +1086,19 @@ async function exportPdf() {
   // ── 4. Tablas dos columnas ────────────────────────────────────────────────────
   const TABLE_Y = STATS_Y + 12
   const GAP     = 5
-  const halfW   = (pageW - 20 - GAP) / 2   // 92.5 mm por tabla
+  const halfW   = (pageW - 20 - GAP) / 2
 
-  // N°(8) Curso(18) Marc(11) Corr(11) Pond(12) Pts(14) Acum(18.5) = 92.5
   const CW = { 0: 8, 1: 18, 2: 11, 3: 11, 4: 12, 5: 14, 6: 18.5 }
   const HEAD = [['N°', 'Curso', 'Marc.', 'Corr.', 'Pond.', 'Pts', 'Acum.']]
 
   function buildBody(halfRows) {
     return halfRows.map(r => [
       r.n,
-      abbrevCurso(r.subject),
-      r.status === 'blank' ? '—' : (KEY_MAP[r.marked] || r.marked),
-      KEY_MAP[r.correct] || r.correct,
+      r.exceptionApplied ? exceptionBadgeLabel(r.exceptionApplied) : abbrevCurso(r.subject),
+      r.status === 'blank' ? '—' : r.marked,
+      r.correct,
       `×${Number(r.weight).toFixed(3)}`,
-      r.status === 'incorrect' ? '0.000' : r.pts.toFixed(3),
+      r.pts.toFixed(3),
       r.acum.toFixed(3),
     ])
   }
@@ -680,27 +1111,23 @@ async function exportPdf() {
       const col    = data.column.index
       const isLast = data.row.index === halfRows.length - 1
 
-      // Fondo suave por status de fila
       if (row.status === 'correct')   data.cell.styles.fillColor = [240, 253, 244]
       if (row.status === 'incorrect') data.cell.styles.fillColor = [255, 245, 245]
+      if (row.status === 'excluded')  data.cell.styles.fillColor = [241, 245, 249]
 
-      // Marc. — coloreado según resultado
       if (col === 2) {
         data.cell.styles.fontStyle = 'bold'
         if (row.status === 'correct')   data.cell.styles.textColor = [21, 128, 61]
         if (row.status === 'incorrect') data.cell.styles.textColor = [220, 38, 38]
         if (row.status === 'blank')     data.cell.styles.textColor = [148, 163, 184]
       }
-      // Corr. — siempre azul
       if (col === 3) {
         data.cell.styles.textColor = [29, 78, 216]
         data.cell.styles.fontStyle = 'bold'
       }
-      // Pts — verde si correcta
       if (col === 5 && row.status === 'correct') {
         data.cell.styles.textColor = [21, 128, 61]
       }
-      // Último acumulado — solo en la tabla derecha (pregunta final de todo)
       if (isLastTable && col === 6 && isLast) {
         data.cell.styles.fillColor = [254, 249, 195]
         data.cell.styles.textColor = [146, 64, 14]
@@ -727,7 +1154,7 @@ async function exportPdf() {
     },
     columnStyles: {
       0: { cellWidth: CW[0] },
-      1: { cellWidth: CW[1], halign: 'left', fontSize: 7.5, overflow: 'ellipsize' },
+      1: { cellWidth: CW[1], halign: 'left', fontSize: 7, overflow: 'ellipsize' },
       2: { cellWidth: CW[2] },
       3: { cellWidth: CW[3] },
       4: { cellWidth: CW[4], fontSize: 7 },
@@ -743,6 +1170,20 @@ async function exportPdf() {
 
   autoTable(doc, sharedCfg(leftRows,  10,              10 + halfW + GAP, false))
   autoTable(doc, sharedCfg(rightRows, 10 + halfW + GAP, 10,              true))
+
+  // Espacio de firmas en modo 30 preguntas
+  if (allRows.length <= 30) {
+    const signY = pageH - 22
+    doc.setDrawColor(148, 163, 184)
+    doc.setLineWidth(0.3)
+    doc.line(25, signY, 90, signY)
+    doc.line(120, signY, 185, signY)
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(71, 85, 105)
+    doc.text('POR LA UNIVERSIDAD NACIONAL DEL ALTIPLANO', 57.5, signY + 4, { align: 'center' })
+    doc.text('POR LA COMISIÓN PODER JUDICIAL — CSJ PUNO', 152.5, signY + 4, { align: 'center' })
+  }
 
   // ── 5. Footer ─────────────────────────────────────────────────────────────────
   const now   = new Date()
@@ -761,7 +1202,6 @@ async function exportPdf() {
   doc.save(`verificador-${safe}-${fecha.replace(/\//g, '')}.pdf`)
 }
 
-// ── Formatear fecha ───────────────────────────────────────────────────────────
 function formatFecha(iso) {
   if (!iso) return ''
   return new Date(iso).toLocaleDateString('es-PE', {
@@ -777,7 +1217,9 @@ function formatFecha(iso) {
     <div class="verificador__header">
       <div class="verificador__title-row">
         <h2 class="verificador__title">Verificador de Respuestas</h2>
-        <p class="verificador__subtitle">Verifica respuestas de candidatos puntuales sin necesidad de cargar archivos</p>
+        <p class="verificador__subtitle">
+          Verifica hojas de respuestas con el motor oficial <code>scoreAnswerSheet</code>, claves por código de examen y simulación de excepciones en vivo
+        </p>
       </div>
       <div class="verificador__tabs">
         <button
@@ -803,16 +1245,130 @@ function formatFecha(iso) {
     <!-- ══ SUB-TAB: NUEVA VERIFICACIÓN ══════════════════════════════════════════ -->
     <div v-if="subTab === 'nueva'" class="verificador__body">
 
+      <!-- Selector rápido de Perfil: Poder Judicial (30) vs Admisión (60) -->
+      <div class="mode-switch-bar" role="region" aria-label="Modo de verificación">
+        <div class="mode-switch-bar__buttons">
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ 'mode-btn--active': verifierMode === 'poder_judicial' }"
+            data-testid="mode-pj-btn"
+            @click="setVerifierMode('poder_judicial')"
+          >
+            <span class="mode-btn__dot" />
+            Modo Poder Judicial (30 preguntas · 1 / 0 / 0)
+          </button>
+          <button
+            type="button"
+            class="mode-btn"
+            :class="{ 'mode-btn--active': verifierMode === 'admision' }"
+            data-testid="mode-admision-btn"
+            @click="setVerifierMode('admision')"
+          >
+            <span class="mode-btn__dot" />
+            Modo Admisión (60 preguntas · 10 / 0 / 2)
+          </button>
+        </div>
+        <div class="mode-switch-bar__info">
+          <span class="mode-pill">{{ totalQuestions }} preguntas</span>
+          <span class="mode-pill mode-pill--max">Máx: {{ stats.maxPossibleScore.toFixed(3) }} pts</span>
+        </div>
+      </div>
+
+      <!-- Barra de Carga Rápida del Proceso: Búsqueda por DNI + Selector COD_EXAMEN -->
+      <div class="vcard vcard--quickload">
+        <div class="quickload-grid">
+          <!-- Búsqueda instantánea por DNI -->
+          <div class="quickload-block">
+            <label class="config-label" for="verificador-dni-search">
+              Buscar Postulante por DNI en el Proceso
+            </label>
+            <div class="quickload-input-row">
+              <input
+                id="verificador-dni-search"
+                v-model="dniSearchQuery"
+                type="text"
+                maxlength="12"
+                placeholder="Ej: 44095837"
+                class="config-input config-input--flex"
+                data-testid="dni-search-input"
+                @keydown.enter.prevent="buscarPostulantePorDni"
+              />
+              <button
+                type="button"
+                class="btn btn--primary"
+                data-testid="dni-search-btn"
+                @click="buscarPostulantePorDni"
+              >
+                Cargar del Proceso
+              </button>
+            </div>
+          </div>
+
+          <!-- Selector de Clave por Código de Examen (COD_EXAMEN) -->
+          <div class="quickload-block">
+            <label class="config-label" for="verificador-cod-examen">
+              Cargar Clave por Código de Examen (COD_EXAMEN)
+            </label>
+            <div class="quickload-input-row">
+              <select
+                id="verificador-cod-examen"
+                v-model="selectedExamCode"
+                class="config-select config-input--flex"
+                data-testid="cod-examen-select"
+                @change="handleSelectExamCode(selectedExamCode)"
+              >
+                <option value="">— Seleccionar código (27 tipos) —</option>
+                <option
+                  v-for="item in availableExamCodes"
+                  :key="item.code"
+                  :value="item.code"
+                >
+                  {{ item.code }}{{ item.hasKey ? ' · Clave cargada' : '' }}{{ item.candidateCount ? ` (${item.candidateCount} post.)` : '' }}
+                </option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Banner comparativo con el Ranking Oficial -->
+        <div
+          v-if="rankingComparison"
+          class="comparison-banner"
+          :class="rankingComparison.matches ? 'comparison-banner--ok' : 'comparison-banner--diff'"
+          data-testid="ranking-comparison-banner"
+        >
+          <div class="comparison-banner__main">
+            <strong>Puntaje en Verificador: {{ rankingComparison.verifierScore.toFixed(3) }}</strong>
+            <span>vs</span>
+            <strong>Puntaje en Ranking Oficial: {{ rankingComparison.officialScore.toFixed(3) }}</strong>
+            <span>—</span>
+            <span v-if="rankingComparison.matches" class="comparison-banner__status">
+              COINCIDE 100% ✅
+            </span>
+            <span v-else class="comparison-banner__status">
+              DIFIERE EN {{ rankingComparison.diff.toFixed(3) }} PTS ⚠️
+            </span>
+          </div>
+          <div v-if="rankingComparison.condicion || rankingComparison.position" class="comparison-banner__meta">
+            <span v-if="rankingComparison.position">Mérito: #{{ rankingComparison.position }}</span>
+            <span v-if="rankingComparison.condicion">{{ rankingComparison.condicion }}</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Control operativo -->
       <div class="vcard vcard--control">
         <div class="control-panel">
           <div class="control-panel__main">
-            <div class="vcard__title">Configuración</div>
+            <div class="vcard__title">Configuración de Ponderación y Puntaje</div>
             <div class="config-row">
               <div class="config-field config-field--wide">
                 <label class="config-label">Plantilla de Ponderaciones</label>
                 <select v-model.number="selectedPlantillaId" class="config-select">
-                  <option :value="null">Sin Plantilla</option>
+                  <option :value="null">
+                    {{ verifierMode === 'poder_judicial' ? 'Poder Judicial — 30 Preguntas (Peso 1.0)' : 'Sin Plantilla (60 Preguntas)' }}
+                  </option>
                   <option v-for="p in plantillasList" :key="p.id" :value="p.id">
                     {{ plantillaOptionLabel(p) }}
                   </option>
@@ -821,42 +1377,138 @@ function formatFecha(iso) {
 
               <div class="config-field">
                 <label class="config-label">Correcta ×</label>
-                <input v-model.number="correctValue" type="number" step="0.1" min="0" class="config-input" />
+                <input v-model.number="correctValue" type="number" step="0.1" class="config-input" data-testid="correct-value-input" />
               </div>
               <div class="config-field">
                 <label class="config-label">Incorrecta ×</label>
-                <input v-model.number="incorrectValue" type="number" step="0.1" class="config-input" />
+                <input v-model.number="incorrectValue" type="number" step="0.1" class="config-input" data-testid="incorrect-value-input" />
               </div>
               <div class="config-field">
                 <label class="config-label">Blanco ×</label>
-                <input v-model.number="blankValue" type="number" step="0.1" class="config-input" />
+                <input v-model.number="blankValue" type="number" step="0.1" class="config-input" data-testid="blank-value-input" />
               </div>
             </div>
           </div>
 
           <div class="score-panel" :class="{ 'score-panel--empty': !hasAnyAnswer }">
             <span class="score-panel__label">Puntaje</span>
-            <strong class="score-panel__value">{{ stats.score.toFixed(3) }}</strong>
+            <strong class="score-panel__value" data-testid="verifier-total-score">{{ stats.score.toFixed(3) }}</strong>
             <div class="score-panel__meta">
               <span class="score-chip score-chip--correct">{{ stats.correctCount }} C</span>
               <span class="score-chip score-chip--incorrect">{{ stats.incorrectCount }} I</span>
               <span class="score-chip score-chip--blank">{{ stats.blankCount }} B</span>
+              <span v-if="stats.multipleCount" class="score-chip score-chip--multiple">{{ stats.multipleCount }} *</span>
+              <span v-if="stats.annulledGrantedCount" class="score-chip score-chip--granted">+{{ stats.annulledGrantedCount }} Anul.</span>
+              <span v-if="stats.annulledExcludedCount" class="score-chip score-chip--excluded">{{ stats.annulledExcludedCount }} Excl.</span>
             </div>
           </div>
         </div>
 
+        <!-- Simulador rápido de excepciones de pregunta en el verificador -->
+        <details class="exception-simulator" open>
+          <summary>
+            <span>Simulador Rápido de Excepciones por Pregunta (En Vivo)</span>
+            <span v-if="activeExceptionsForExam.length" class="exc-count-badge">
+              {{ activeExceptionsForExam.length }} activa(s)
+            </span>
+          </summary>
+          <div class="exception-simulator__body">
+            <div class="exception-simulator__form">
+              <div class="config-field">
+                <label class="config-label">N° Pregunta</label>
+                <input
+                  v-model.number="simQuestionNumber"
+                  type="number"
+                  min="1"
+                  :max="totalQuestions"
+                  class="config-input"
+                  data-testid="sim-question-number"
+                />
+              </div>
+              <div class="config-field config-field--wide">
+                <label class="config-label">Tipo de Excepción</label>
+                <select
+                  v-model="simExceptionType"
+                  class="config-select"
+                  data-testid="sim-exception-type"
+                >
+                  <option value="ANULADA_OTORGAR">Anulada (+pts a todos)</option>
+                  <option value="ANULADA_EXCLUIR">Anulada (Excluida del cálculo)</option>
+                  <option value="CLAVE_MULTIPLE">Clave múltiple (ej. BD)</option>
+                </select>
+              </div>
+              <div v-if="simExceptionType === 'CLAVE_MULTIPLE'" class="config-field">
+                <label class="config-label">Claves Válidas</label>
+                <input
+                  v-model="simValidAnswers"
+                  type="text"
+                  maxlength="5"
+                  placeholder="BD"
+                  class="config-input"
+                  data-testid="sim-valid-answers"
+                />
+              </div>
+              <div class="config-field config-field--wide">
+                <label class="config-label">Sustento / Nota</label>
+                <input
+                  v-model="simExceptionReason"
+                  type="text"
+                  placeholder="Ej: Acuerdo de Comisión / Fe de erratas"
+                  class="config-input"
+                />
+              </div>
+              <button
+                type="button"
+                class="btn btn--outline"
+                data-testid="apply-sim-exception-btn"
+                @click="addOrUpdateLocalException"
+              >
+                Aplicar Excepción
+              </button>
+              <button
+                v-if="localExceptions.length"
+                type="button"
+                class="btn btn--ghost"
+                @click="clearLocalExceptions"
+              >
+                Restaurar
+              </button>
+            </div>
+
+            <div v-if="activeExceptionsForExam.length" class="exception-chips">
+              <span
+                v-for="exc in activeExceptionsForExam"
+                :key="`exc-${exc.questionNumber}`"
+                class="exc-chip"
+                :class="`exc-chip--${String(exc.type).toLowerCase()}`"
+              >
+                <strong>P{{ exc.questionNumber }}:</strong>
+                <template v-if="exc.type === 'ANULADA_OTORGAR'">Anulada (+pts)</template>
+                <template v-else-if="exc.type === 'ANULADA_EXCLUIR'">Anulada (Excluida)</template>
+                <template v-else-if="exc.type === 'CLAVE_MULTIPLE'">Clave múltiple ({{ exc.validAnswers }})</template>
+                <button
+                  type="button"
+                  class="exc-chip__remove"
+                  title="Quitar excepción"
+                  @click="removeException(exc.questionNumber)"
+                >×</button>
+              </span>
+            </div>
+          </div>
+        </details>
+
         <!-- Datos candidato -->
-        <details class="candidate-fields candidate-fields--optional">
-          <summary>Datos opcionales del candidato</summary>
+        <details class="candidate-fields candidate-fields--optional" open>
+          <summary>Datos del postulante</summary>
           <!-- Fila 1: Proceso + Tipo de prueba -->
           <div class="candidate-row candidate-row--top">
             <div class="cfield cfield--proceso">
               <label class="cfield__label">Proceso / Convocatoria</label>
-              <input v-model="candidatoProceso" type="text" placeholder="Ej: CEPREUNA 2026 - I" class="cfield__input" />
+              <input v-model="candidatoProceso" type="text" placeholder="Ej: CONCURSO PODER JUDICIAL 001-2026-UE-PUNO" class="cfield__input" />
             </div>
             <div class="cfield cfield--tipo">
-              <label class="cfield__label">Tipo de prueba</label>
-              <input v-model="candidatoTipo" type="text" maxlength="10" placeholder="Ej: P, Q, R, S o T" class="cfield__input cfield__input--center" />
+              <label class="cfield__label">Código Examen / Tipo</label>
+              <input v-model="candidatoTipo" type="text" maxlength="15" placeholder="Ej: E02a" class="cfield__input cfield__input--center" />
             </div>
           </div>
 
@@ -864,86 +1516,117 @@ function formatFecha(iso) {
           <div class="candidate-row candidate-row--mid">
             <div class="cfield cfield--nombre">
               <label class="cfield__label">Nombre completo</label>
-              <input v-model="candidatoNombre" type="text" placeholder="Apellidos y Nombres" class="cfield__input" />
+              <input v-model="candidatoNombre" type="text" placeholder="Apellidos y Nombres" class="cfield__input" data-testid="candidato-nombre" />
             </div>
             <div class="cfield cfield--dni">
               <label class="cfield__label">DNI</label>
-              <input v-model="candidatoDni" type="text" maxlength="12" placeholder="12345678" class="cfield__input cfield__input--center" />
+              <input
+                v-model="candidatoDni"
+                type="text"
+                maxlength="12"
+                placeholder="12345678"
+                class="cfield__input cfield__input--center"
+                data-testid="candidato-dni"
+                @keydown.enter.prevent="buscarPostulantePorDni"
+              />
             </div>
             <div class="cfield cfield--aula">
-              <label class="cfield__label">Aula</label>
-              <input v-model="candidatoAula" type="text" maxlength="20" placeholder="Ej: 301" class="cfield__input cfield__input--center" />
+              <label class="cfield__label">Grupo / Aula</label>
+              <input v-model="candidatoAula" type="text" maxlength="30" placeholder="Ej: Grupo 1 · A18" class="cfield__input cfield__input--center" data-testid="candidato-aula" />
             </div>
           </div>
 
           <!-- Fila 3: Área + Programa + Posición -->
           <div class="candidate-row candidate-row--bot">
             <div class="cfield cfield--area">
-              <label class="cfield__label">Área</label>
-              <input v-model="candidatoArea" type="text" placeholder="Ej: Biomédicas" class="cfield__input" />
+              <label class="cfield__label">Área / COD_EXAMEN</label>
+              <input v-model="candidatoArea" type="text" placeholder="Ej: E02a" class="cfield__input" data-testid="candidato-area" />
             </div>
             <div class="cfield cfield--programa">
-              <label class="cfield__label">Programa de estudios</label>
-              <input v-model="candidatoPrograma" type="text" placeholder="Ej: Medicina Humana" class="cfield__input" />
+              <label class="cfield__label">Puesto / Programa / Unidad</label>
+              <input v-model="candidatoPrograma" type="text" placeholder="Ej: Especialista Judicial de Juzgado" class="cfield__input" data-testid="candidato-programa" />
             </div>
             <div class="cfield cfield--posicion">
               <label class="cfield__label">Posición</label>
-              <input v-model="candidatoPosicion" type="text" maxlength="10" placeholder="Ej: 42" class="cfield__input cfield__input--center" />
+              <input v-model="candidatoPosicion" type="text" maxlength="10" placeholder="Ej: 1" class="cfield__input cfield__input--center" />
             </div>
           </div>
         </details>
       </div>
 
-      <!-- Grids de respuestas -->
+      <!-- Grids de respuestas organizadas en bloques de 10 preguntas -->
       <div class="grids-row">
         <!-- Grid respuestas correctas -->
         <div class="vcard vcard--grid">
-          <div class="vcard__title vcard__title--correct">Respuestas Correctas</div>
-          <div class="answer-grid">
+          <div class="vcard__title vcard__title--correct">
+            Respuestas Correctas (Clave Oficial {{ activeExamCode ? `· ${activeExamCode}` : '' }})
+          </div>
+          <div class="blocks-container">
             <div
-              v-for="i in totalQuestions"
-              :key="`c-${i}`"
-              class="cell-wrapper"
+              v-for="block in questionBlocks"
+              :key="`c-block-${block.label}`"
+              class="question-block"
             >
-              <span class="cell-num">{{ i }}</span>
-              <input
-                :ref="el => { if (el) correctRefs[i-1] = el }"
-                :value="correctCells[i-1]"
-                type="text"
-                maxlength="1"
-                class="cell-input cell-input--key"
-                autocomplete="off"
-                @input="e => handleCellInput(e, i-1, 'correct')"
-                @keydown="e => handleCellKeydown(e, i-1, 'correct')"
-                @paste="e => handleCellPaste(e, i-1, 'correct')"
-              />
+              <div class="question-block__label">{{ block.label }}</div>
+              <div class="answer-grid">
+                <div
+                  v-for="i in block.indices"
+                  :key="`c-${i}`"
+                  class="cell-wrapper"
+                >
+                  <span class="cell-num">{{ i }}</span>
+                  <input
+                    :ref="el => { if (el) correctRefs[i-1] = el }"
+                    :value="correctCells[i-1]"
+                    type="text"
+                    maxlength="1"
+                    class="cell-input cell-input--key"
+                    :class="{ 'cell-input--has-exception': activeExceptionsByQuestion.has(i) }"
+                    autocomplete="off"
+                    @input="e => handleCellInput(e, i-1, 'correct')"
+                    @keydown="e => handleCellKeydown(e, i-1, 'correct')"
+                    @paste="e => handleCellPaste(e, i-1, 'correct')"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- Grid respuestas candidato -->
         <div class="vcard vcard--grid">
-          <div class="vcard__title vcard__title--answer">Respuestas del Postulante</div>
-          <div class="answer-grid">
+          <div class="vcard__title vcard__title--answer">
+            Respuestas del Postulante ({{ totalQuestions }} preguntas)
+          </div>
+          <div class="blocks-container">
             <div
-              v-for="i in totalQuestions"
-              :key="`a-${i}`"
-              class="cell-wrapper"
-              :class="`cell-wrapper--${rows[i-1]?.status ?? 'blank'}`"
+              v-for="block in questionBlocks"
+              :key="`a-block-${block.label}`"
+              class="question-block"
             >
-              <span class="cell-num">{{ i }}</span>
-              <input
-                :ref="el => { if (el) answerRefs[i-1] = el }"
-                :value="answerCells[i-1]"
-                type="text"
-                maxlength="1"
-                class="cell-input"
-                :class="`cell-input--${rows[i-1]?.status ?? 'blank'}`"
-                autocomplete="off"
-                @input="e => handleCellInput(e, i-1, 'answer')"
-                @keydown="e => handleCellKeydown(e, i-1, 'answer')"
-                @paste="e => handleCellPaste(e, i-1, 'answer')"
-              />
+              <div class="question-block__label">{{ block.label }}</div>
+              <div class="answer-grid">
+                <div
+                  v-for="i in block.indices"
+                  :key="`a-${i}`"
+                  class="cell-wrapper"
+                  :class="`cell-wrapper--${rows[i-1]?.status ?? 'blank'}`"
+                >
+                  <span class="cell-num">{{ i }}</span>
+                  <input
+                    :ref="el => { if (el) answerRefs[i-1] = el }"
+                    :value="answerCells[i-1]"
+                    type="text"
+                    maxlength="1"
+                    class="cell-input"
+                    :class="`cell-input--${rows[i-1]?.status ?? 'blank'}`"
+                    autocomplete="off"
+                    @input="e => handleCellInput(e, i-1, 'answer')"
+                    @keydown="e => handleCellKeydown(e, i-1, 'answer')"
+                    @paste="e => handleCellPaste(e, i-1, 'answer')"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -954,10 +1637,10 @@ function formatFecha(iso) {
         <div class="helper-panel">
           <div>
             <strong>Clave frecuente</strong>
-            <span>Guarda o reutiliza la clave correcta para la plantilla seleccionada.</span>
+            <span>Guarda o reutiliza la clave correcta para la plantilla o código de examen seleccionado.</span>
           </div>
           <div class="helper-actions">
-            <button type="button" class="btn btn--outline" @click="useSavedCorrectKey" :disabled="!hasSavedCorrectKey">
+            <button type="button" class="btn btn--outline" :disabled="!hasSavedCorrectKey" @click="useSavedCorrectKey">
               Usar clave
             </button>
             <button type="button" class="btn btn--ghost" @click="saveCorrectKey">
@@ -970,7 +1653,7 @@ function formatFecha(iso) {
             <strong>Validación</strong>
             <span>
               {{ missingSummary.missingCorrect }} clave(s) faltante(s) ·
-              {{ missingSummary.missingAnswers }} respuesta(s) faltante(s)
+              {{ missingSummary.missingAnswers }} respuesta(s) en blanco
             </span>
           </div>
         </div>
@@ -992,10 +1675,22 @@ function formatFecha(iso) {
             <span class="stat__val">{{ stats.blankCount }}</span>
             <span class="stat__label">En blanco</span>
           </div>
+          <div v-if="stats.multipleCount" class="stat stat--multiple">
+            <span class="stat__val">{{ stats.multipleCount }}</span>
+            <span class="stat__label">Múltiples (*)</span>
+          </div>
+          <div v-if="stats.annulledGrantedCount" class="stat stat--granted">
+            <span class="stat__val">{{ stats.annulledGrantedCount }}</span>
+            <span class="stat__label">Anuladas (+pts)</span>
+          </div>
+          <div v-if="stats.annulledExcludedCount" class="stat stat--excluded">
+            <span class="stat__val">{{ stats.annulledExcludedCount }}</span>
+            <span class="stat__label">Excluidas</span>
+          </div>
           <div class="stat-divider" />
           <div class="stat">
             <span class="stat__val stat__val--score">{{ stats.score.toFixed(3) }}</span>
-            <span class="stat__label">Puntaje total</span>
+            <span class="stat__label">Puntaje total (de {{ stats.maxPossibleScore.toFixed(3) }})</span>
           </div>
           <div class="stat-multipliers">
             <span>Correcta <strong>×{{ correctValue }}</strong></span>
@@ -1008,9 +1703,12 @@ function formatFecha(iso) {
         <details class="result-details" open>
           <summary>
             <span>Detalle por pregunta</span>
-            <strong>{{ rows.length }} preguntas</strong>
+            <strong>{{ rows.length }} preguntas ({{ detailColumns.length }} bloques)</strong>
           </summary>
-          <div class="detail-table-wrap detail-table-wrap--columns">
+          <div
+            class="detail-table-wrap detail-table-wrap--columns"
+            :class="{ 'detail-table-wrap--three-cols': detailColumns.length === 3 }"
+          >
             <table
               v-for="(columnRows, columnIndex) in detailColumns"
               :key="`detail-col-${columnIndex}`"
@@ -1019,7 +1717,7 @@ function formatFecha(iso) {
               <thead>
                 <tr>
                   <th>N°</th>
-                  <th>Curso</th>
+                  <th>Curso / Excepción</th>
                   <th>Marc.</th>
                   <th>Corr.</th>
                   <th>Pond.</th>
@@ -1034,7 +1732,29 @@ function formatFecha(iso) {
                   :class="['detail-row', `detail-row--${row.status}`, { 'detail-row--last': row.n === rows.length }]"
                 >
                   <td class="cell-n">{{ row.n }}</td>
-                  <td class="cell-subject">{{ row.subject || '—' }}</td>
+                  <td class="cell-subject">
+                    <div class="cell-subject__inner">
+                      <span
+                        v-if="row.exceptionApplied"
+                        class="row-exc-badge"
+                        :class="`row-exc-badge--${String(row.exceptionApplied).toLowerCase()}`"
+                      >
+                        {{ exceptionBadgeLabel(row.exceptionApplied) }}
+                      </span>
+                      <span v-else class="cell-subject__text">{{ row.subject || '—' }}</span>
+                      <select
+                        class="row-exc-select"
+                        :value="row.exceptionApplied || ''"
+                        :title="`Simular excepción en pregunta ${row.n}`"
+                        @change="e => setRowQuickException(row.n, e.target.value)"
+                      >
+                        <option value="">Normal</option>
+                        <option value="ANULADA_OTORGAR">Anulada (+pts)</option>
+                        <option value="ANULADA_EXCLUIR">Anulada (Excluida)</option>
+                        <option value="CLAVE_MULTIPLE">Clave múltiple</option>
+                      </select>
+                    </div>
+                  </td>
                   <td class="cell-marked" :class="`marked--${row.status}`">{{ row.marked }}</td>
                   <td class="cell-correct">{{ row.correct }}</td>
                   <td class="cell-weight">{{ row.weight.toFixed(3) }}</td>
@@ -1248,6 +1968,150 @@ function formatFecha(iso) {
   padding: 0 3px;
 }
 
+/* ── Mode Switch Bar ────────────────────────────────────────────────────────── */
+.mode-switch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--slate-100);
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-lg);
+  flex-wrap: wrap;
+}
+
+.mode-switch-bar__buttons {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--slate-300);
+  background: white;
+  color: var(--slate-700);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mode-btn__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--slate-300);
+}
+
+.mode-btn--active {
+  background: var(--unap-blue-900, #0f172a);
+  color: white;
+  border-color: var(--unap-blue-900, #0f172a);
+}
+
+.mode-btn--active .mode-btn__dot {
+  background: #fbbf24;
+}
+
+.mode-switch-bar__info {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.mode-pill {
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: white;
+  border: 1px solid var(--slate-200);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--slate-700);
+}
+
+.mode-pill--max {
+  background: #fef3c7;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+/* ── Quickload (DNI + COD_EXAMEN) ───────────────────────────────────────────── */
+.vcard--quickload {
+  padding: var(--space-4);
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.quickload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.quickload-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quickload-input-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.config-input--flex {
+  flex: 1;
+  width: auto !important;
+}
+
+.comparison-banner {
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
+
+.comparison-banner--ok {
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  color: #065f46;
+}
+
+.comparison-banner--diff {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
+.comparison-banner__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.comparison-banner__status {
+  font-weight: 800;
+}
+
+.comparison-banner__meta {
+  display: flex;
+  gap: var(--space-2);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 /* ── Body ───────────────────────────────────────────────────────────────────── */
 .verificador__body {
   display: flex;
@@ -1279,7 +2143,7 @@ function formatFecha(iso) {
 /* ── Control operativo ─────────────────────────────────────────────────────── */
 .control-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
   gap: var(--space-4);
   align-items: stretch;
 }
@@ -1346,9 +2210,95 @@ function formatFecha(iso) {
   border: 1px solid transparent;
 }
 
-.score-chip--correct { color: #15803d; border-color: #bbf7d0; }
+.score-chip--correct   { color: #15803d; border-color: #bbf7d0; }
 .score-chip--incorrect { color: #dc2626; border-color: #fecaca; }
-.score-chip--blank { color: var(--slate-500); border-color: var(--slate-200); }
+.score-chip--blank     { color: var(--slate-500); border-color: var(--slate-200); }
+.score-chip--multiple  { color: #c2410c; border-color: #fed7aa; }
+.score-chip--granted   { color: #1d4ed8; border-color: #bfdbfe; }
+.score-chip--excluded  { color: #475569; border-color: #cbd5e1; }
+
+/* ── Simulador de Excepciones ───────────────────────────────────────────────── */
+.exception-simulator {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--slate-100);
+}
+
+.exception-simulator > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--unap-blue-700);
+  list-style: none;
+}
+
+.exception-simulator > summary::-webkit-details-marker { display: none; }
+
+.exc-count-badge {
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.exception-simulator__body {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.exception-simulator__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: flex-end;
+}
+
+.exception-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.exc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+}
+
+.exc-chip--anulada_excluir {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.exc-chip--clave_multiple {
+  background: #fef3c7;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.exc-chip__remove {
+  border: none;
+  background: none;
+  color: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0 2px;
+}
 
 /* ── Config (plantilla + valores) ────────────────────────────────────────────── */
 .config-row {
@@ -1412,13 +2362,8 @@ function formatFecha(iso) {
   align-items: end;
 }
 
-/* Fila 1: Proceso (3fr) + Tipo (1fr) */
 .candidate-row--top { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); }
-
-/* Fila 2: Nombre (2fr) + DNI (1fr) + Aula (1fr) */
 .candidate-row--mid { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); }
-
-/* Fila 3: Área (1fr) + Programa (2fr) + Posición (1fr) */
 .candidate-row--bot { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr); }
 
 .cfield {
@@ -1455,7 +2400,6 @@ function formatFecha(iso) {
 }
 .cfield__input--center { text-align: center; }
 
-/* Proceso — highlight sutil */
 .cfield--proceso .cfield__input {
   border-color: var(--unap-blue-200);
   background: var(--unap-blue-50);
@@ -1465,11 +2409,31 @@ function formatFecha(iso) {
   background: white;
 }
 
-/* ── Grids ──────────────────────────────────────────────────────────────────── */
+/* ── Grids en bloques de 10 ─────────────────────────────────────────────────── */
 .grids-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
+}
+
+.blocks-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.question-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.question-block__label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--slate-400);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .answer-grid {
@@ -1514,16 +2478,20 @@ function formatFecha(iso) {
   box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
 }
 
-/* Colores según status (solo en celdas de respuesta del candidato) */
 .cell-input--correct   { background: #dcfce7; border-color: #86efac; color: #15803d; }
 .cell-input--incorrect { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
 .cell-input--blank     { background: var(--slate-50); }
+.cell-input--excluded  { background: #e2e8f0; border-color: #cbd5e1; color: #475569; }
+.cell-input--multiple  { background: #ffedd5; border-color: #fdba74; color: #c2410c; }
 
-/* La celda de claves correctas siempre azul, igual que la columna Corr. */
 .cell-input--key {
   background: #dbeafe;
   border-color: #93c5fd;
   color: #1d4ed8;
+}
+
+.cell-input--has-exception {
+  box-shadow: inset 0 0 0 2px #f59e0b;
 }
 
 /* ── Utilidades del verificador ─────────────────────────────────────────────── */
@@ -1586,6 +2554,9 @@ function formatFecha(iso) {
 .stat--correct  .stat__val { color: #15803d; }
 .stat--incorrect .stat__val { color: #dc2626; }
 .stat--blank    .stat__val { color: var(--slate-500); }
+.stat--multiple .stat__val { color: #c2410c; }
+.stat--granted  .stat__val { color: #1d4ed8; }
+.stat--excluded .stat__val { color: #475569; }
 .stat-divider { width: 1px; height: 30px; background: var(--slate-200); }
 .stat-multipliers {
   margin-left: auto;
@@ -1647,10 +2618,34 @@ function formatFecha(iso) {
 
 .detail-table-wrap--columns {
   display: grid;
-  grid-template-columns: repeat(2, minmax(430px, 1fr));
+  grid-template-columns: repeat(2, minmax(380px, 1fr));
   gap: var(--space-3);
   padding: var(--space-3);
   background: white;
+}
+
+.detail-table-wrap--three-cols {
+  grid-template-columns: repeat(3, minmax(300px, 1fr));
+}
+
+.row-exc-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  font-size: 0.68rem;
+  font-weight: 800;
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.row-exc-badge--anulada_excluir {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.row-exc-badge--clave_multiple {
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .subject-details {
@@ -1741,29 +2736,30 @@ function formatFecha(iso) {
   padding: 5px var(--space-2);
   border-bottom: 1px solid var(--slate-100);
   white-space: nowrap;
-  font-size: 0.88rem;
+  font-size: 0.85rem;
 }
 .detail-table th:nth-child(1),
-.detail-table td:nth-child(1) { width: 38px; text-align: center; }
+.detail-table td:nth-child(1) { width: 34px; text-align: center; }
 .detail-table th:nth-child(2),
 .detail-table td:nth-child(2) { width: auto; }
 .detail-table th:nth-child(3),
 .detail-table td:nth-child(3),
 .detail-table th:nth-child(4),
-.detail-table td:nth-child(4) { width: 52px; text-align: center; }
+.detail-table td:nth-child(4) { width: 50px; text-align: center; }
 .detail-table th:nth-child(5),
 .detail-table td:nth-child(5),
 .detail-table th:nth-child(6),
 .detail-table td:nth-child(6),
 .detail-table th:nth-child(7),
-.detail-table td:nth-child(7) { width: 76px; text-align: right; }
+.detail-table td:nth-child(7) { width: 64px; text-align: right; }
 
 .detail-row--correct td { background: #f0fdf4; }
 .detail-row--incorrect td { background: #fff1f2; }
 .detail-row--blank td { background: var(--slate-50); }
+.detail-row--excluded td { background: #f1f5f9; color: var(--slate-500); }
+.detail-row--multiple td { background: #fff7ed; }
 .detail-row:hover td { filter: brightness(0.98); }
 
-/* Última fila — solo el acumulado en dorado */
 .detail-row--last .cell-acum {
   background: #fef3c7;
   color: #92400e;
@@ -1797,10 +2793,16 @@ function formatFecha(iso) {
   font-weight: 800;
   background: #fee2e2 !important;
 }
-.marked--blank {
+.marked--blank,
+.marked--excluded {
   color: var(--slate-500);
   font-weight: 800;
   background: #e2e8f0 !important;
+}
+.marked--multiple {
+  color: #c2410c;
+  font-weight: 800;
+  background: #ffedd5 !important;
 }
 
 /* ── Acciones ───────────────────────────────────────────────────────────────── */
@@ -1998,9 +3000,11 @@ function formatFecha(iso) {
 
 @media (max-width: 1100px) {
   .grids-row { grid-template-columns: 1fr; }
+  .quickload-grid { grid-template-columns: 1fr; }
   .control-panel { grid-template-columns: 1fr; }
   .score-panel { min-height: 0; }
-  .detail-table-wrap--columns { grid-template-columns: minmax(430px, 1fr); }
+  .detail-table-wrap--columns,
+  .detail-table-wrap--three-cols { grid-template-columns: minmax(340px, 1fr); }
   .helper-row { grid-template-columns: 1fr; }
 }
 

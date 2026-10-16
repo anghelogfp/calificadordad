@@ -283,14 +283,157 @@ class BackupTransactionTests(TestCase):
 
     def test_valid_backup_replaces_data_atomically(self):
         payload = {
-            'candidatos': [{'id': 'replacement', 'dni': '87654321'}],
-            'procesos': [{'id': 'restored-process', 'name': 'Restaurado', 'areas': {}}],
+            'candidatos': [{
+                'id': 'replacement',
+                'dni': '87654321',
+                'cod_examen': 'E02a',
+                'cod_puesto': '00301',
+                'puesto': 'ESPECIALISTA JUDICIAL',
+                'unidad': 'PUNO',
+                'grupo': 'Grupo 1',
+                'aula_padron': 'A18',
+            }],
+            'identifierSources': [{
+                'id': 'src-1',
+                'name': 'ide.dat',
+                'timestamp': '2026-07-01T12:00:00Z',
+                'totalLines': 10,
+                'validRows': 10,
+                'errorCount': 0,
+                'sha256': 'abc12345',
+                'fileSize': 512,
+            }],
+            'identificadores': [],
+            'procesos': [{
+                'id': 'restored-process',
+                'name': 'Restaurado PJ',
+                'type': 'poder_judicial',
+                'configMetadata': {'rar_sha256': 'eee7604f', 'question_exceptions': [{'questionNumber': 14}]},
+                'areas': {
+                    'E02a': {
+                        'preflightSnapshot': {'ok': True},
+                        'validationSnapshot': {'valid': True},
+                        'configSha256': '1157033efdf632a7',
+                        'summary': {'timestamp': '2026-06-22T12:00:00Z', 'answersLength': 30},
+                        'results': [],
+                    },
+                },
+            }],
+            'bitacora': [{
+                'proceso': 'restored-process',
+                'categoria': 'EXCEPCION_PREGUNTA',
+                'accion': 'Anulación de pregunta 14 en E02a',
+                'justificacion': 'Error tipográfico',
+                'documentoSustento': 'Acta 01-PJ',
+                'valorAnterior': {'type': 'NONE'},
+                'valorNuevo': {'type': 'ANULADA_OTORGAR'},
+            }],
         }
         response = self.client.post('/api/backup/restore/', payload, format='json')
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Candidato.objects.filter(created_by=self.admin, client_id='original').exists())
-        self.assertTrue(Candidato.objects.filter(created_by=self.admin, client_id='replacement').exists())
-        self.assertTrue(ProcesoCalificacion.objects.filter(
-            created_by=self.admin, local_id='restored-process'
-        ).exists())
+        cand = Candidato.objects.get(created_by=self.admin, client_id='replacement')
+        self.assertEqual(cand.cod_examen, 'E02a')
+        self.assertEqual(cand.aula_padron, 'A18')
+        proc = ProcesoCalificacion.objects.get(created_by=self.admin, local_id='restored-process')
+        self.assertEqual(proc.process_type, 'poder_judicial')
+        self.assertEqual(proc.config_metadata['rar_sha256'], 'eee7604f')
+        area_obj = proc.areas.get(area='E02a')
+        self.assertEqual(area_obj.config_sha256, '1157033efdf632a7')
+        self.assertEqual(area_obj.preflight_snapshot, {'ok': True})
+
+        export_res = self.client.get('/api/backup/export/')
+        self.assertEqual(export_res.status_code, 200)
+        self.assertEqual(len(export_res.data['bitacora']), 1)
+        self.assertEqual(export_res.data['bitacora'][0]['categoria'], 'EXCEPCION_PREGUNTA')
+        self.assertEqual(export_res.data['identifierSources'][0]['sha256'], 'abc12345')
+
+
+class PoderJudicialMetadataAndBitacoraTests(TestCase):
+    def setUp(self):
+        self.user_a = User.objects.create_user('pj-user-a', password='test-pass-123')
+        self.user_b = User.objects.create_user('pj-user-b', password='test-pass-123')
+        self.client = APIClient()
+
+    def test_proceso_stores_and_returns_config_metadata_and_area_snapshots(self):
+        self.client.force_authenticate(self.user_a)
+        area = area_payload()
+        area['preflightSnapshot'] = {'isReady': True, 'mode': 'poder_judicial'}
+        area['validationSnapshot'] = {'isValid': True, 'tiesCount': 2}
+        area['configSha256'] = 'a' * 64
+
+        payload = {
+            **process_payload(local_id='pj-proc-1', areas={'E02a': area}),
+            'type': 'poder_judicial',
+            'configMetadata': {
+                'padron_sha256': 'decf800172efcfdbbc15090eb5dbc67bebacd9303e3ef93a45cd4180db4dff92',
+                'question_exceptions': [{'codExamen': 'E02a', 'questionNumber': 5, 'type': 'ANULADA_OTORGAR'}],
+                'scoring_options': {'useMinPassingScore': True, 'minPassingScore': 18},
+            },
+        }
+        create_res = self.client.post('/api/procesos/', payload, format='json')
+        self.assertEqual(create_res.status_code, 201)
+        proceso_id = create_res.data['id']
+
+        full_res = self.client.get(f'/api/procesos/{proceso_id}/full/')
+        self.assertEqual(full_res.status_code, 200)
+        self.assertEqual(full_res.data['type'], 'poder_judicial')
+        self.assertEqual(
+            full_res.data['configMetadata']['padron_sha256'],
+            'decf800172efcfdbbc15090eb5dbc67bebacd9303e3ef93a45cd4180db4dff92',
+        )
+        self.assertEqual(full_res.data['areas']['E02a']['configSha256'], 'a' * 64)
+        self.assertEqual(full_res.data['areas']['E02a']['preflightSnapshot']['mode'], 'poder_judicial')
+        self.assertEqual(full_res.data['areas']['E02a']['validationSnapshot']['tiesCount'], 2)
+
+    def test_evento_bitacora_crud_and_isolation_by_user_and_proceso(self):
+        self.client.force_authenticate(self.user_a)
+        proc_res = self.client.post(
+            '/api/procesos/',
+            process_payload(local_id='pj-proc-bitacora'),
+            format='json',
+        )
+        proc_db_id = proc_res.data['id']
+
+        ev_res = self.client.post(
+            '/api/bitacora/',
+            {
+                'proceso': 'pj-proc-bitacora',
+                'categoria': 'ANULACION_POSTULANTE',
+                'accion': 'Postulante DNI 44095837 anulado por comisión',
+                'justificacion': 'Incumplimiento de directiva en aula A18',
+                'documentoSustento': 'Acta Incidencia A18',
+                'valorAnterior': {'status': 'ACTIVO'},
+                'valorNuevo': {'status': 'ANULADO'},
+            },
+            format='json',
+        )
+        self.assertEqual(ev_res.status_code, 201)
+        self.assertEqual(ev_res.data['proceso'], proc_db_id)
+        self.assertEqual(ev_res.data['proceso_local_id'], 'pj-proc-bitacora')
+        self.assertEqual(ev_res.data['documento_sustento'], 'Acta Incidencia A18')
+
+        list_by_local = self.client.get('/api/bitacora/?proceso=pj-proc-bitacora')
+        self.assertEqual(list_by_local.status_code, 200)
+        self.assertEqual(len(list_by_local.data), 1)
+
+        list_by_db_id = self.client.get(f'/api/bitacora/?proceso={proc_db_id}')
+        self.assertEqual(list_by_db_id.status_code, 200)
+        self.assertEqual(len(list_by_db_id.data), 1)
+
+        self.client.force_authenticate(self.user_b)
+        other_list = self.client.get('/api/bitacora/')
+        self.assertEqual(other_list.status_code, 200)
+        self.assertEqual(len(other_list.data), 0)
+
+    def test_standalone_bootstrap_creates_default_admin_and_pj_template(self):
+        from run_standalone import bootstrap_database
+        from ponderaciones.models import PlantillaPonderacion
+
+        bootstrap_database()
+        self.assertTrue(User.objects.filter(username='admin', is_superuser=True).exists())
+        plantilla = PlantillaPonderacion.objects.filter(name='Poder Judicial — 30 Preguntas').first()
+        self.assertIsNotNone(plantilla)
+        self.assertEqual(plantilla.question_total, 30)
+

@@ -1,10 +1,188 @@
-import { normalizeArea, normalizeAreaStrict, stripDigits } from '@/utils/helpers'
+import { normalize, normalizeArea, normalizeAreaStrict, stripDigits } from '@/utils/helpers'
 import {
   buildDniCounts,
   getCandidateDniIssue,
   REAL_TEST_TYPES,
   GENERAL_SIMULACRO_AREA,
 } from '@/utils/calificationHelpers'
+
+function buildPoderJudicialPreflight({
+  archiveRows = [],
+  responsesRows = [],
+  answerKeyRows = [],
+  responsesByDni = new Map(),
+} = {}) {
+  const effectiveCandidates = archiveRows
+  const dniCounts = buildDniCounts(archiveRows)
+
+  const withoutResponse = effectiveCandidates.filter((c) => {
+    const dni = stripDigits(c.dni)
+    return !responsesByDni.has(dni) || responsesByDni.get(dni).length === 0
+  })
+  const duplicatedResponses = effectiveCandidates.filter((c) => {
+    const dni = stripDigits(c.dni)
+    return dni && (responsesByDni.get(dni) || []).length > 1
+  })
+  const invalidDniCandidates = effectiveCandidates.filter((c) => getCandidateDniIssue(c, dniCounts))
+
+  const allDnisInPadron = new Set(archiveRows.map((r) => stripDigits(r.dni)))
+  const orphanResponses = [...responsesByDni.entries()].filter(([dni]) => !allDnisInPadron.has(dni))
+
+  const uniqueExamCodesMap = new Map()
+  let missingExamCodeCount = 0
+  effectiveCandidates.forEach((c) => {
+    const code = String(c?.cod_examen || c?.codExamen || c?.area || '').trim()
+    if (!code) {
+      missingExamCodeCount += 1
+      return
+    }
+    const norm = normalize(code)
+    if (!uniqueExamCodesMap.has(norm)) {
+      uniqueExamCodesMap.set(norm, code)
+    }
+  })
+
+  const keyCountsByExamCode = new Map()
+  ;(answerKeyRows || []).forEach((k) => {
+    const code = String(k?.cod_examen || k?.codExamen || k?.area || k?.tipo || '').trim()
+    if (!code) return
+    const norm = normalize(code)
+    keyCountsByExamCode.set(norm, (keyCountsByExamCode.get(norm) || 0) + 1)
+  })
+
+  const examCodesInPadron = [...uniqueExamCodesMap.entries()]
+  const coveredExamCodes = examCodesInPadron
+    .filter(([norm]) => (keyCountsByExamCode.get(norm) || 0) >= 1)
+    .map(([, display]) => display)
+  const missingExamCodes = examCodesInPadron
+    .filter(([norm]) => !keyCountsByExamCode.has(norm))
+    .map(([, display]) => display)
+  const duplicatedExamCodes = examCodesInPadron
+    .filter(([norm]) => (keyCountsByExamCode.get(norm) || 0) > 1)
+    .map(([, display]) => display)
+
+  const totalRequiredKeys = examCodesInPadron.length
+  const coveredCount = coveredExamCodes.length
+  const hasAnswerKeys = totalRequiredKeys > 0 && missingExamCodes.length === 0
+
+  const unlinked =
+    archiveRows.length > 0 ? responsesRows.filter((r) => !stripDigits(r.dni)).length : 0
+
+  const items = [
+    {
+      key: 'candidates',
+      label: 'Postulantes en el padrón',
+      value: effectiveCandidates.length,
+      status: effectiveCandidates.length > 0 ? 'ok' : 'error',
+      detail:
+        effectiveCandidates.length === 0 ? 'No hay postulantes cargados en el padrón.' : null,
+    },
+  ]
+
+  if (missingExamCodeCount > 0) {
+    items.push({
+      key: 'missingExamCode',
+      label: 'Postulantes sin código de examen',
+      value: missingExamCodeCount,
+      status: 'warn',
+      detail: `${missingExamCodeCount} postulante(s) no tienen COD_EXAMEN asignado en el padrón y quedarán como no calificados.`,
+    })
+  }
+
+  if (duplicatedExamCodes.length > 0) {
+    items.push({
+      key: 'duplicatedAnswerKeys',
+      label: 'Claves duplicadas por examen',
+      value: duplicatedExamCodes.length,
+      status: 'error',
+      detail: `Hay más de una clave para el mismo código de examen: ${duplicatedExamCodes.join(', ')}. Conserva una única clave por examen.`,
+    })
+  }
+
+  items.push(
+    {
+      key: 'answerKeys',
+      label: 'Claves por código de examen',
+      value:
+        totalRequiredKeys > 0
+          ? `${coveredCount} / ${totalRequiredKeys} claves por código de examen`
+          : 'No encontradas',
+      status: hasAnswerKeys ? 'ok' : 'error',
+      detail: !hasAnswerKeys
+        ? totalRequiredKeys > 0
+          ? `Faltan claves para ${missingExamCodes.length} código(s) de examen: ${missingExamCodes.join(', ')}.`
+          : 'No se encontraron claves ni códigos de examen en el padrón.'
+        : null,
+    },
+    {
+      key: 'invalidDni',
+      label: 'DNI observado en padrón',
+      value: invalidDniCandidates.length,
+      status: invalidDniCandidates.length === 0 ? 'ok' : 'warn',
+      detail:
+        invalidDniCandidates.length > 0
+          ? `${invalidDniCandidates.length} postulante(s) con DNI vacío, incompleto o duplicado quedarán como no calificados.`
+          : null,
+    },
+    {
+      key: 'withoutResponse',
+      label: 'Sin respuesta .dat',
+      value: withoutResponse.length,
+      status: withoutResponse.length === 0 ? 'ok' : 'warn',
+      detail:
+        withoutResponse.length > 0
+          ? `${withoutResponse.length} postulante(s) no tienen respuesta cargada y quedarán como ausentes / no calificados.`
+          : null,
+    },
+    {
+      key: 'duplicatedResponses',
+      label: 'Respuestas duplicadas',
+      value: duplicatedResponses.length,
+      status: duplicatedResponses.length === 0 ? 'ok' : 'warn',
+      detail:
+        duplicatedResponses.length > 0
+          ? `${duplicatedResponses.length} postulante(s) tienen más de una respuesta .dat y no se calificarán.`
+          : null,
+    },
+    {
+      key: 'orphan',
+      label: 'Respuestas sin postulante',
+      value: orphanResponses.length,
+      status: orphanResponses.length === 0 ? 'ok' : 'warn',
+      detail:
+        orphanResponses.length > 0
+          ? `${orphanResponses.length} respuesta(s) .dat no coinciden con ningún DNI del padrón.`
+          : null,
+    },
+  )
+
+  if (unlinked > 0) {
+    items.push({
+      key: 'unlinked',
+      label: 'Respuestas sin DNI',
+      value: unlinked,
+      status: 'warn',
+      detail: `${unlinked} respuesta(s) sin DNI vinculado (no se calificarán).`,
+    })
+  }
+
+  const hasBlockers =
+    effectiveCandidates.length === 0 || !hasAnswerKeys || items.some((i) => i.status === 'error')
+  const hasWarnings = items.some((i) => i.status === 'warn')
+
+  return {
+    items,
+    hasBlockers,
+    hasWarnings,
+    examCodesSummary: {
+      totalRequiredKeys,
+      coveredCount,
+      coveredExamCodes,
+      missingExamCodes,
+      duplicatedExamCodes,
+    },
+  }
+}
 
 export function buildCalificationPreflight({
   area,
@@ -16,6 +194,15 @@ export function buildCalificationPreflight({
   responsesByDni = new Map(),
   areaList = [],
 } = {}) {
+  if (processType === 'poder_judicial') {
+    return buildPoderJudicialPreflight({
+      archiveRows,
+      responsesRows,
+      answerKeyRows,
+      responsesByDni,
+    })
+  }
+
   const isRealProcess = processType === 'real'
   const isGeneralSimulacro = !isRealProcess && simulacroScope === 'general'
   const normalizedArea = isGeneralSimulacro

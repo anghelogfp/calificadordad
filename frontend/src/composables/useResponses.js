@@ -12,6 +12,7 @@ import {
   detectResponseAnswersOffset,
 } from '@/utils/parsers'
 import { apiFetch } from '@/utils/apiFetch'
+import { sha256Hex } from '@/utils/cryptoHash'
 
 export { createResponseRow, buildResponseObservation }
 
@@ -300,6 +301,8 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
       const sourceId = generateId()
       try {
         const text = await file.text()
+        const fileSha256 = sha256Hex(text)
+        const fileSize = Number(file.size || new TextEncoder().encode(text).byteLength || 0)
         const sanitizedText = text.split('\u001a').join('')
         const lines = sanitizedText.split(/\r?\n/)
         const parsedRows = []
@@ -357,6 +360,8 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
             totalLines: contentLines,
             validRows: parsedRows.length,
             errorCount: fileErrors.length,
+            sha256: fileSha256,
+            fileSize,
           },
         ]
       } catch (error) {

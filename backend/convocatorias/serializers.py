@@ -49,6 +49,12 @@ class CandidatoSerializer(serializers.ModelSerializer):
             'observaciones',
             'area',
             'programa',
+            'cod_examen',
+            'cod_puesto',
+            'puesto',
+            'unidad',
+            'grupo',
+            'aula_padron',
             'codigo_modalidad',
             'modalidad',
             'sexo',
@@ -70,7 +76,22 @@ class CandidatoSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
 
-class IdentifierSourceSerializer(serializers.ModelSerializer):
+class _SourceHashFieldsMixin(serializers.ModelSerializer):
+    sha256 = serializers.CharField(allow_blank=True, required=False, default='')
+    fileSize = serializers.IntegerField(source='file_size', required=False, default=0)
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict) and 'file_size' in data and 'fileSize' not in data:
+            data = {**data, 'fileSize': data['file_size']}
+        return super().to_internal_value(data)
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        ret['file_size'] = instance.file_size
+        return ret
+
+
+class IdentifierSourceSerializer(_SourceHashFieldsMixin):
     id = serializers.CharField(source='client_id')
     totalLines = serializers.IntegerField(source='total_lines')
     validRows = serializers.IntegerField(source='valid_rows')
@@ -85,6 +106,8 @@ class IdentifierSourceSerializer(serializers.ModelSerializer):
             'totalLines',
             'validRows',
             'errorCount',
+            'sha256',
+            'fileSize',
             'created_at',
             'updated_at',
         ]
@@ -120,7 +143,7 @@ class IdentifierRowSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
 
-class ResponseSourceSerializer(serializers.ModelSerializer):
+class ResponseSourceSerializer(_SourceHashFieldsMixin):
     id = serializers.CharField(source='client_id')
     totalLines = serializers.IntegerField(source='total_lines')
     validRows = serializers.IntegerField(source='valid_rows')
@@ -135,6 +158,8 @@ class ResponseSourceSerializer(serializers.ModelSerializer):
             'totalLines',
             'validRows',
             'errorCount',
+            'sha256',
+            'fileSize',
             'created_at',
             'updated_at',
         ]
@@ -167,7 +192,7 @@ class ResponseRowSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
 
-class AnswerKeySourceSerializer(serializers.ModelSerializer):
+class AnswerKeySourceSerializer(_SourceHashFieldsMixin):
     id = serializers.CharField(source='client_id')
     identificationName = serializers.CharField(source='identification_name', allow_blank=True, required=False)
     validRows = serializers.IntegerField(source='valid_rows')
@@ -186,6 +211,8 @@ class AnswerKeySourceSerializer(serializers.ModelSerializer):
             'validRows',
             'responseErrors',
             'identificationErrors',
+            'sha256',
+            'fileSize',
             'created_at',
             'updated_at',
         ]

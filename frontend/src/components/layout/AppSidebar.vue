@@ -10,6 +10,7 @@ const props = defineProps({
   activeHistory: { type: Boolean, default: false },
   activeConfig: { type: Boolean, default: false },
   activeVerificador: { type: Boolean, default: false },
+  activeActasPj: { type: Boolean, default: false },
   activeBackup: { type: Boolean, default: false },
   activeUsuarios: { type: Boolean, default: false },
   isStaff: { type: Boolean, default: false },
@@ -17,7 +18,7 @@ const props = defineProps({
   lastProcessTab: { type: String, default: '' },
 })
 
-const emit = defineEmits(['newProcess', 'continueProcess', 'openDashboard', 'openPonderations', 'openHistory', 'openConfig', 'openBackup', 'openVerificador', 'openUsuarios', 'closeMobile'])
+const emit = defineEmits(['newProcess', 'continueProcess', 'openDashboard', 'openPonderations', 'openHistory', 'openConfig', 'openBackup', 'openVerificador', 'openActasPj', 'openUsuarios', 'closeMobile'])
 
 // El proceso está activo cuando el tab es uno de los 5 pasos
 const PROCESS_TABS = ['archives', 'identifiers', 'responses', 'answer_keys', 'results']
@@ -191,6 +192,25 @@ function runAction(eventName) {
         </span>
         <span v-if="expanded || mobileOpen" class="sidebar-item__label">Verificador</span>
         <span v-if="!expanded && !mobileOpen" class="sidebar-tooltip">Verificador</span>
+      </button>
+
+      <!-- Actas e Informe PJ -->
+      <button
+        type="button"
+        class="sidebar-item"
+        :class="{ 'sidebar-item--active': activeActasPj }"
+        @click="runAction('openActasPj')"
+      >
+        <span class="sidebar-item__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="14 2 14 8 20 8" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="16" y1="13" x2="8" y2="13" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="16" y1="17" x2="8" y2="17" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span v-if="expanded || mobileOpen" class="sidebar-item__label">Actas / Reportes PJ</span>
+        <span v-if="!expanded && !mobileOpen" class="sidebar-tooltip">Actas / Reportes PJ</span>
       </button>
 
       <div class="sidebar-divider" />

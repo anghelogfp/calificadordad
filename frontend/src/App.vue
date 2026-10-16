@@ -51,6 +51,7 @@ import DashboardHomeView from '@/components/views/DashboardHomeView.vue'
 import HistoryView from '@/components/views/HistoryView.vue'
 import ConfigView from '@/components/views/ConfigView.vue'
 import VerificadorView from '@/components/views/VerificadorView.vue'
+import ActasPjView from '@/components/views/ActasPjView.vue'
 import UsuariosView from '@/components/views/UsuariosView.vue'
 import BackupView from '@/components/views/BackupView.vue'
 import ToastContainer from '@/components/shared/ToastContainer.vue'
@@ -111,6 +112,19 @@ const calification = useCalification(
 )
 
 const dashboard = useScoreDashboard(calification.calificationAllResults)
+const archiveMeta = computed(() => ({
+  lastFileName: archives.lastFileName?.value || '',
+  lastFileSha256: archives.lastFileSha256?.value || '',
+  lastFileSize: archives.lastFileSize?.value || 0,
+  rarFileName: archives.rarFileName?.value || '',
+  rarFileSha256: archives.rarFileSha256?.value || '',
+  rarFileSize: archives.rarFileSize?.value || 0,
+  examCodes: archives.examCodes?.value || [],
+  puestosList: archives.puestosList?.value || [],
+  aulasReceptionSummary: archives.aulasReceptionSummary?.value || null,
+  isPoderJudicialPadron: archives.isPoderJudicialPadron?.value || false,
+  onReadContainerHash: archives.readContainerArchiveHash,
+}))
 const showDashboardPanel = ref(false)
 const showNuevoProcesoModal = ref(false)
 const savingToHistory = ref(false)
@@ -537,6 +551,7 @@ watch(
         :active-history="activeTab === 'history'"
         :active-config="activeTab === 'config'"
         :active-verificador="activeTab === 'verificador'"
+        :active-actas-pj="activeTab === 'actas_pj'"
         :active-backup="activeTab === 'backup'"
         :active-usuarios="activeTab === 'usuarios'"
         :is-staff="auth.user.value?.is_staff ?? false"
@@ -550,6 +565,7 @@ watch(
         @open-config="activeTab = 'config'"
         @open-backup="activeTab = 'backup'"
         @open-verificador="activeTab = 'verificador'"
+        @open-actas-pj="activeTab = 'actas_pj'"
         @open-usuarios="activeTab = 'usuarios'"
         @close-mobile="mobileMenuOpen = false"
       />
@@ -587,6 +603,7 @@ watch(
               activeTab === 'history'    ? 'Historial de procesos' :
               activeTab === 'config'     ? 'Configuración' :
               activeTab === 'verificador' ? 'Verificador' :
+              activeTab === 'actas_pj'   ? 'Actas e Informe PJ' :
               activeTab === 'usuarios'   ? 'Usuarios' :
               activeTab === 'backup'     ? 'Backup' : activeTab
             }}</span>
@@ -601,6 +618,7 @@ watch(
             @load-process="handleLoadProcess"
             @new-process="startNewProcess"
             @open-verificador="activeTab = 'verificador'"
+            @open-actas-pj="activeTab = 'actas_pj'"
             @open-history="navigateToHistory"
             @continue-process="activeTab = lastStepperTab"
           />
@@ -686,7 +704,27 @@ watch(
           <VerificadorView
             v-else-if="activeTab === 'verificador'"
             :ponderations="ponderations"
+            :plantillas="ponderations.plantillas.value"
+            :archive-rows="archives.rows.value"
+            :responses-rows="responses.rows.value"
+            :answer-key-rows="answerKeys.rows.value"
+            :question-exceptions="calification.questionExceptions?.value || []"
+            :calification-results="calification.calificationAllResults.value"
             :current-user="auth.user.value?.username ?? ''"
+          />
+
+          <ActasPjView
+            v-else-if="activeTab === 'actas_pj'"
+            :archive-rows="archives.rows.value"
+            :archive-meta="archiveMeta"
+            :identifier-rows="identifiers.rows.value"
+            :identifier-sources="identifiers.sources.value"
+            :response-rows="responses.rows.value"
+            :response-sources="responses.sources.value"
+            :answer-key-rows="answerKeys.rows.value"
+            :answer-key-sources="answerKeys.sources.value"
+            :calification="calification"
+            :exported-files-registry="exporter.exportedArtifacts?.value || []"
           />
 
           <UsuariosView

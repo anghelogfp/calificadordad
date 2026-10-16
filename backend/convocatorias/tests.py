@@ -420,3 +420,68 @@ class GlobalAreaAndDatFormatTests(TestCase):
         self.assertEqual(response.data['litho_length'], 7)
         self.assertEqual(response.data['response_answers_offset'], 9)
         self.assertEqual(DatFormatConfig.objects.count(), 1)
+
+    def test_poder_judicial_candidate_and_source_hash_fields_round_trip(self):
+        self.client.force_authenticate(self.user)
+
+        pj_cand = {
+            **candidate_payload('pj-cand-1', '44095837'),
+            'cod_examen': 'E02a',
+            'cod_puesto': '00301',
+            'puesto': 'ESPECIALISTA JUDICIAL DE JUZGADO',
+            'unidad': 'MODULO PENAL CENTRAL - PUNO',
+            'grupo': 'Grupo 1',
+            'aula_padron': 'A18',
+            'observaciones': 'grupo 1 - aula A18',
+        }
+        cand_res = self.client.post(
+            '/api/candidatos/bulk_replace/',
+            {'rows': [pj_cand]},
+            format='json',
+        )
+        self.assertEqual(cand_res.status_code, 200)
+        self.assertEqual(cand_res.data[0]['cod_examen'], 'E02a')
+        self.assertEqual(cand_res.data[0]['cod_puesto'], '00301')
+        self.assertEqual(cand_res.data[0]['puesto'], 'ESPECIALISTA JUDICIAL DE JUZGADO')
+        self.assertEqual(cand_res.data[0]['unidad'], 'MODULO PENAL CENTRAL - PUNO')
+        self.assertEqual(cand_res.data[0]['grupo'], 'Grupo 1')
+        self.assertEqual(cand_res.data[0]['aula_padron'], 'A18')
+
+        sample_hash = 'decf800172efcfdbbc15090eb5dbc67bebacd9303e3ef93a45cd4180db4dff92'
+        id_res = self.client.post(
+            '/api/identificadores/bulk_replace/',
+            {
+                'sources': [{**source_payload('id-src-pj', 'test_ide_5964.dat'), 'sha256': sample_hash, 'fileSize': 4096}],
+                'rows': [identifier_row_payload('id-row-pj', 'id-src-pj', '44095837')],
+            },
+            format='json',
+        )
+        self.assertEqual(id_res.status_code, 200)
+        self.assertEqual(id_res.data['sources'][0]['sha256'], sample_hash)
+        self.assertEqual(id_res.data['sources'][0]['fileSize'], 4096)
+        self.assertEqual(id_res.data['sources'][0]['file_size'], 4096)
+
+        resp_res = self.client.post(
+            '/api/respuestas/bulk_replace/',
+            {
+                'sources': [{**source_payload('res-src-pj', 'test_res_5964.dat'), 'sha256': sample_hash, 'file_size': 8192}],
+                'rows': [response_row_payload('res-row-pj', 'res-src-pj', '44095837')],
+            },
+            format='json',
+        )
+        self.assertEqual(resp_res.status_code, 200)
+        self.assertEqual(resp_res.data['sources'][0]['sha256'], sample_hash)
+        self.assertEqual(resp_res.data['sources'][0]['fileSize'], 8192)
+
+        key_res = self.client.post(
+            '/api/answer-keys/bulk_replace/',
+            {
+                'sources': [{**answer_key_source_payload('key-src-pj', 'claves_pj.dat'), 'sha256': sample_hash, 'fileSize': 2048}],
+                'rows': [answer_key_row_payload('key-row-pj', 'key-src-pj')],
+            },
+            format='json',
+        )
+        self.assertEqual(key_res.status_code, 200)
+        self.assertEqual(key_res.data['sources'][0]['sha256'], sample_hash)
+        self.assertEqual(key_res.data['sources'][0]['fileSize'], 2048)
+
