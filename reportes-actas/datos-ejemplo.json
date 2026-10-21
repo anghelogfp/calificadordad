@@ -1,34 +1,34 @@
 {
   "proceso": {
     "codigo": "CONVOCATORIA N.° 001-2026-UE-PUNO",
-    "nombre": "PROCESO DE SELECCIÓN DE PERSONAL A PLAZO INDETERMINADO D.L. 728",
+    "nombre": "Proceso de Selección de Personal a Plazo Indeterminado N.° 001-2026-UE-PUNO",
     "entidad_convocante": "Corte Superior de Justicia de Puno - Poder Judicial",
     "entidad_ejecutora": "Universidad Nacional del Altiplano - Dirección de Admisión",
     "oficio_referencia": "OFICIO N.° 003-2025-AP-UAF-GAD-CSJPU-PJ",
     "modalidad": "Evaluación Técnica Presencial en Dos (02) Grupos",
-    "fecha": "16 de septiembre de 2026",
+    "fecha": "16 de octubre de 2026",
     "hora_inicio": "08:30 horas",
     "hora_cierre": "16:45 horas",
-    "lugar": "Ciudad Universitaria UNA-PUNO - Pabellón A (Aulas A01 a A25)",
+    "lugar": "Centro de Cómputo y Calificación — UNA-PUNO",
     "postulantes_total": 1982,
     "grupos": {
-      "grupo_1": { "turno": "Mañana", "postulantes": 998, "aulas": 25 },
-      "grupo_2": { "turno": "Tarde", "postulantes": 984, "aulas": 25 }
+      "grupo_1": { "turno": "Turno 1", "postulantes": 998, "aulas": 25 },
+      "grupo_2": { "turno": "Turno 2", "postulantes": 984, "aulas": 25 }
     },
-    "vacantes_total": 65,
-    "ambiente_calificacion": "Sala de Cómputo y Calificación de la Dirección de Admisión"
+    "calificados_validos": 1940,
+    "ambiente_calificacion": "Centro de Cómputo y Calificación de la Dirección de Admisión"
   },
   "responsables": {
-    "presidente_comision_pj": {
-      "nombre": "Abog. Benny José Álvarez Quiñonez",
-      "cargo": "Presidente de la Corte Superior de Justicia de Puno",
-      "dni": "01234567",
+    "representante_pj": {
+      "nombre": "Abog. Edson Teofilo Mamani Quispe",
+      "cargo": "Coordinador de Seguridad Integral",
+      "dni": "46829313",
       "entidad": "Corte Superior de Justicia de Puno"
     },
     "director_admision_unap": {
       "nombre": "Dr. Bladimiro Centeno Herrera",
       "cargo": "Director de la Dirección de Admisión",
-      "dni": "01893412",
+      "dni": "29679918",
       "entidad": "Universidad Nacional del Altiplano de Puno"
     }
   },
@@ -46,11 +46,11 @@
       "tipo": "Padrón Oficial de Postulantes (Microsoft Excel)",
       "peso": "127.8 KB (127,777 bytes)",
       "medio": "Dispositivo USB Oficial CSJ-PUNO (Precinto de Seguridad N.° PJ-00291)",
-      "fecha_hora": "16/09/2026 08:45:10",
+      "fecha_hora": "16/10/2026 08:45:10",
       "sha256": "decf800172efcfdbbc15090eb5dbc67bebacd9303e3ef93a45cd4180db4dff92",
       "sha256_copia": "decf800172efcfdbbc15090eb5dbc67bebacd9303e3ef93a45cd4180db4dff92",
       "coincide": true,
-      "responsable_entrega": "Abog. Benny José Álvarez Quiñonez (CSJ Puno)",
+      "responsable_entrega": "Abog. Edson Teofilo Mamani Quispe (CSJ Puno)",
       "responsable_recepcion": "Dr. Bladimiro Centeno Herrera (UNA-PUNO)"
     }
   ],
@@ -101,7 +101,7 @@
       "sha256": "c8f5b12a9e0d3c4b5a6f7e8d9c0b1a2f3e4d5c6b7a8f9e0d1c2b3a4f5e6d7c8b"
     },
     {
-      "producto": "Relación de Postulantes Aprobados en Orden de Mérito",
+      "producto": "Relación de Postulantes en Orden de Mérito",
       "archivo": "PUBLICACION_MERITO_PJ_2026.pdf",
       "formato": "Documento Portátil (.pdf)",
       "sha256": "3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b"

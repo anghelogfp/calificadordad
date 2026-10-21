@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Formato en Blanco - Incorporación Excepcional de Postulante</title>
+  <link rel="stylesheet" href="assets/print.css">
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 10mm 12mm 10mm 12mm;
+    }
+    .pagina-manual {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 277mm;
+      max-height: 277mm;
+      box-sizing: border-box;
+      overflow: hidden;
+      padding: 0;
+      margin: 0;
+    }
+    @media print {
+      body {
+        background: none !important;
+      }
+      .hoja-a4 {
+        width: 100% !important;
+        height: 277mm !important;
+        max-height: 277mm !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+      }
+    }
+    .caja-instruccion {
+      background-color: #f8fafc;
+      border: 1px solid #94a3b8;
+      border-left: 4px solid #0a2446;
+      padding: 5px 8px;
+      font-size: 7.2pt;
+      color: #1e293b;
+      margin-bottom: 6px;
+      line-height: 1.25;
+    }
+    .grid-casillas {
+      display: grid;
+      grid-template-columns: repeat(8, 22px);
+      gap: 3px;
+    }
+    .casilla-dni {
+      width: 22px;
+      height: 22px;
+      border: 1.5px solid #0f172a;
+      background: #ffffff;
+      text-align: center;
+      font-weight: bold;
+      font-size: 11pt;
+      line-height: 20px;
+    }
+    .linea-manuscrita {
+      border-bottom: 1px dotted #334155;
+      display: inline-block;
+      min-height: 14px;
+    }
+    .tabla-registro-manual {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8pt;
+      margin-top: 3px;
+    }
+    .tabla-registro-manual td,
+    .tabla-registro-manual th {
+      border: 1px solid #cbd5e1;
+      padding: 4px 6px;
+      vertical-align: middle;
+    }
+    .tabla-registro-manual th {
+      background: #f1f5f9;
+      color: #0a2446;
+      font-weight: bold;
+      text-align: left;
+      font-size: 7.5pt;
+    }
+    .kpi-blanco-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .kpi-blanco-item {
+      border: 1.5px solid #64748b;
+      border-radius: 4px;
+      padding: 4px 6px;
+      background: #ffffff;
+      text-align: center;
+    }
+    .kpi-blanco-item .kpi-lbl {
+      font-size: 6.8pt;
+      font-weight: bold;
+      color: #475569;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .kpi-blanco-item .kpi-box-line {
+      height: 24px;
+      border-bottom: 1.5px dashed #0a2446;
+      margin-top: 2px;
+    }
+    .checkbox-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: bold;
+      font-size: 8pt;
+    }
+    .cuadrado-check {
+      display: inline-block;
+      width: 13px;
+      height: 13px;
+      border: 1.5px solid #0f172a;
+      background: #ffffff;
+    }
+    .espacio-observaciones {
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      padding: 6px 8px;
+      min-height: 48px;
+      margin-top: 3px;
+    }
+    .renglon-punteado {
+      border-bottom: 1px dotted #94a3b8;
+      height: 15px;
+      margin-bottom: 2px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="hoja-a4 pagina-manual">
+    <div>
+      <!-- Encabezado Institucional Doble -->
+      <header class="encabezado-institucional" style="margin-bottom: 6px; padding-bottom: 5px;">
+        <img src="assets/logo-unap.png" alt="UNA-PUNO" class="logo-entidad" style="width: 52px; height: 52px;">
+        <div class="texto-encabezado">
+          <div class="universidad" style="font-size: 10.5pt;">Universidad Nacional del Altiplano de Puno</div>
+          <div class="area-rectora" style="font-size: 8pt;">Dirección de Admisión — Centro de Cómputo y Calificación</div>
+          <div class="subtitulo-convenio" style="font-size: 7.2pt;">Proceso de Selección de Personal a Plazo Indeterminado N.° 001-2026-UE-PUNO</div>
+        </div>
+        <img src="assets/logo-pj.jpg" alt="Poder Judicial" class="logo-entidad" style="width: 52px; height: 52px;">
+      </header>
+
+      <!-- Título del Formato Oficial -->
+      <div class="titulo-documento-box" style="margin-bottom: 6px; padding: 5px 8px;">
+        <h1 class="titulo-documento" style="font-size: 11pt; letter-spacing: 0.3px;">ACTA DE INCORPORACIÓN EXCEPCIONAL Y REGISTRO MANUAL DE POSTULANTE</h1>
+        <div class="meta-documento" style="font-size: 7.2pt;">
+          <span>FORMATO DE CONTROL EN MESA N.°: <strong style="color: #0369a1;">ACTA-EXC-2026-[ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ]</strong></span>
+          <span>CONVOCATORIA N.° 001-2026-UE-PUNO (D.L. 728)</span>
+          <span>USO EXCLUSIVO EN MESA DE CÓMPUTO</span>
+        </div>
+      </div>
+
+      <!-- Indicación Operativa -->
+      <div class="caja-instruccion">
+        <strong>INSTRUCCIONES:</strong> Este formato se llena a mano con lapicero azul o negro en el Centro de Cómputo cuando se presente una ficha física de respuestas válida leída por escáner OMR cuyo postulante <u>no figure registrado en el archivo oficial del padrón preliminar (XLSX)</u>, procediéndose a su alta y calificación únicamente bajo autorización expresa de la Comisión del Poder Judicial.
+      </div>
+
+      <!-- 1. Datos de Autorización de la Comisión CSJ Puno -->
+      <section class="seccion" style="margin-bottom: 6px;">
+        <div class="seccion-titulo" style="font-size: 8.5pt; margin-bottom: 3px;">1. Autorización de la Comisión de Selección de la CSJ Puno</div>
+        <table class="tabla-registro-manual">
+          <tr>
+            <th style="width: 32%;">Documento de Autorización / Sustento:</th>
+            <td style="width: 68%;">
+              <span class="checkbox-item"><span class="cuadrado-check"></span> Proveído N.°: <span class="linea-manuscrita" style="width: 140px;"></span></span>
+              &nbsp;&nbsp;&nbsp;
+              <span class="checkbox-item"><span class="cuadrado-check"></span> Resolución N.°: <span class="linea-manuscrita" style="width: 140px;"></span></span>
+            </td>
+          </tr>
+          <tr>
+            <th>Pase de Ingreso Físico Presentado:</th>
+            <td>
+              N.° de Pase / Credencial: <span class="linea-manuscrita" style="width: 160px;"></span>
+              &nbsp;&nbsp;&nbsp; Fecha de Emisión: <span class="linea-manuscrita" style="width: 110px;">_____ / _____ / 2026</span>
+            </td>
+          </tr>
+          <tr>
+            <th>Motivo de la Incorporación Extemporánea:</th>
+            <td>
+              <span class="checkbox-item"><span class="cuadrado-check"></span> Recurso de Reconsideración / Apelación fundado</span><br>
+              <span class="checkbox-item"><span class="cuadrado-check"></span> Subsanación documental aprobada fuera del corte informático</span><br>
+              <span class="checkbox-item"><span class="cuadrado-check"></span> Mandato Judicial / Medida Cautelar</span> &nbsp;|&nbsp; Otro: <span class="linea-manuscrita" style="width: 220px;"></span>
+            </td>
+          </tr>
+        </table>
+      </section>
+
+      <!-- 2. Identificación del Postulante -->
+      <section class="seccion" style="margin-bottom: 6px;">
+        <div class="seccion-titulo" style="font-size: 8.5pt; margin-bottom: 3px;">2. Identificación del Postulante y Datos de Examen</div>
+        <table class="tabla-registro-manual">
+          <tr>
+            <th style="width: 28%;">Apellidos y Nombres:</th>
+            <td colspan="3">
+              <span class="linea-manuscrita" style="width: 98%; font-weight: bold;"></span>
+            </td>
+          </tr>
+          <tr>
+            <th>Número de DNI:</th>
+            <td style="width: 32%;">
+              <div class="grid-casillas">
+                <div class="casilla-dni"></div>
+                <div class="casilla-dni"></div>
+                <div class="casilla-dni"></div>
+                <div class="casilla-dni"></div>
+                <div class="casilla-dni"></div>
+                <div class="casilla-dni"></div>
+                <div class="casilla-dni"></div>
+                <div class="casilla-dni"></div>
+              </div>
+            </td>
+            <th style="width: 18%;">Código de Examen:</th>
+            <td style="width: 22%;">
+              <div style="border: 1.5px solid #0f172a; width: 65px; height: 24px; text-align: center; font-weight: bold; font-size: 11pt; line-height: 22px; background: #fff;">
+                E
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <th>Puesto / Plaza a la que Postula:</th>
+            <td>
+              Cód. Puesto: <span class="linea-manuscrita" style="width: 80px;"></span>
+            </td>
+            <th>Denominación:</th>
+            <td>
+              <span class="linea-manuscrita" style="width: 95%;"></span>
+            </td>
+          </tr>
+          <tr>
+            <th>Dependencia / Sede Judicial:</th>
+            <td colspan="3">
+              <span class="linea-manuscrita" style="width: 98%;"></span>
+            </td>
+          </tr>
+          <tr>
+            <th>Lugar de Rendición:</th>
+            <td>
+              Aula N.°: <span class="linea-manuscrita" style="width: 60px;"></span> (Contingencia)
+            </td>
+            <th>Turno de Rendición:</th>
+            <td>
+              <span class="checkbox-item"><span class="cuadrado-check"></span> Turno 1 (Mañana)</span><br>
+              <span class="checkbox-item"><span class="cuadrado-check"></span> Turno 2 (Tarde)</span>
+            </td>
+          </tr>
+          <tr>
+            <th>Ficha Óptica (Código de Barras):</th>
+            <td colspan="3">
+              N.° Lithocode / Barra de Ficha: <span class="linea-manuscrita" style="width: 220px; font-family: monospace;"></span>
+              &nbsp;&nbsp;&nbsp; Estado Físico: <strong>( &nbsp; ) Conforme &nbsp; ( &nbsp; ) Deteriorada</strong>
+            </td>
+          </tr>
+        </table>
+      </section>
+
+      <!-- 3. Resultados de Calificación en Mesa -->
+      <section class="seccion" style="margin-bottom: 6px;">
+        <div class="seccion-titulo" style="font-size: 8.5pt; margin-bottom: 3px;">3. Resultados de Calificación de la Hoja de Respuestas (30 Preguntas)</div>
+        <div class="kpi-blanco-grid">
+          <div class="kpi-blanco-item">
+            <div class="kpi-lbl">Correctas (+10 / +1)</div>
+            <div class="kpi-box-line"></div>
+          </div>
+          <div class="kpi-blanco-item">
+            <div class="kpi-lbl">Incorrectas (0)</div>
+            <div class="kpi-box-line"></div>
+          </div>
+          <div class="kpi-blanco-item">
+            <div class="kpi-lbl">En Blanco (0)</div>
+            <div class="kpi-box-line"></div>
+          </div>
+          <div class="kpi-blanco-item">
+            <div class="kpi-lbl">Total Preguntas</div>
+            <div style="font-size: 13pt; font-weight: 800; color: #0a2446; line-height: 24px;">30</div>
+          </div>
+          <div class="kpi-blanco-item" style="border-color: #d97706; background: #fefce8;">
+            <div class="kpi-lbl" style="color: #92400e;">Puntaje Final</div>
+            <div class="kpi-box-line" style="border-bottom-color: #b45309;"></div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 5px; font-size: 8pt; background: #f8fafc; border: 1px solid #cbd5e1; padding: 4px 8px;">
+          <span><strong>Dictamen de Evaluación Técnica:</strong></span>
+          <span class="checkbox-item"><span class="cuadrado-check"></span> <strong>APROBADO</strong> (Alcanza puntaje mínimo aprobatorio)</span>
+          <span class="checkbox-item"><span class="cuadrado-check"></span> <strong>NO APROBADO</strong> (No alcanza puntaje mínimo)</span>
+        </div>
+      </section>
+
+      <!-- 4. Observaciones y Declaración de Conformidad -->
+      <section class="seccion" style="margin-bottom: 6px;">
+        <div class="seccion-titulo" style="font-size: 8.5pt; margin-bottom: 2px;">4. Observaciones de la Comisión y Operador de Cómputo</div>
+        <div class="espacio-observaciones">
+          <div class="renglon-punteado"></div>
+          <div class="renglon-punteado"></div>
+          <div class="renglon-punteado"></div>
+        </div>
+        <p style="font-size: 6.8pt; color: #475569; margin-top: 3px; line-height: 1.2;">
+          <strong>DECLARACIÓN:</strong> Los suscritos certifican que la presente incorporación se realiza en acto público y transparente, procediendo a alimentar los datos en el sistema para su incorporación en el <em>Informe Técnico de Calificación (Acta 05)</em> y en el <em>Padrón Final de Resultados (Acta 06)</em>, archivándose la ficha física conjuntamente con la presente acta.
+        </p>
+      </section>
+    </div>
+
+    <!-- 5. Firmas y Sellos Bipartitos -->
+        <!-- Bloque de Firmas Uniforme -->
+    <div class="bloque-firmas" style="margin-top: 40px;">
+      <div class="cuadro-firma">
+        <div class="espacio-sello-firma"></div>
+        <div class="linea-firma">
+          <div class="nombre">Dr. Bladimiro Centeno Herrera</div>
+          <div class="cargo">Director de la Dirección de Admisión</div>
+          <div class="dni">DNI: 29679918</div>
+          <div class="entidad">UNIVERSIDAD NACIONAL DEL ALTIPLANO - PUNO</div>
+        </div>
+      </div>
+      <div class="cuadro-firma">
+        <div class="espacio-sello-firma"></div>
+        <div class="linea-firma">
+          <div class="nombre">Abog. Edson Teofilo Mamani Quispe</div>
+          <div class="cargo">Coordinador de Seguridad Integral</div>
+          <div class="dni">DNI: 46829313</div>
+          <div class="entidad">CORTE SUPERIOR DE JUSTICIA DE PUNO</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

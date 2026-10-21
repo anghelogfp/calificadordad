@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Acta Individual de Incorporación al Padrón</title>
+  <link rel="stylesheet" href="assets/print.css">
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 10mm 14mm 10mm 14mm;
+    }
+    .pagina-individual {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 277mm;
+      max-height: 277mm;
+      box-sizing: border-box;
+      overflow: hidden;
+      padding: 0;
+      margin: 0;
+    }
+    @media print {
+      body {
+        background: none !important;
+      }
+      .hoja-a4 {
+        width: 100% !important;
+        height: 277mm !important;
+        max-height: 277mm !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+      }
+    }
+    .card-bonito {
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 10px;
+      position: relative;
+    }
+    .card-bonito-header {
+      font-size: 8.5pt;
+      font-weight: 800;
+      color: #0a2446;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1.5px solid #e2e8f0;
+      padding-bottom: 4px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .card-bonito-header::before {
+      content: "";
+      display: inline-block;
+      width: 4px;
+      height: 12px;
+      background: #ddab44;
+      border-radius: 2px;
+    }
+    .linea-relleno {
+      border-bottom: 1px dotted #334155;
+      display: inline-block;
+      min-height: 15px;
+    }
+    .dni-grid-bonito {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .dni-casilla {
+      width: 25px;
+      height: 28px;
+      border: 1.5px solid #0f172a;
+      background: #f8fafc;
+      border-radius: 3px;
+      text-align: center;
+      font-weight: 800;
+      font-size: 13pt;
+      line-height: 26px;
+      color: #0a2446;
+    }
+    .badge-examen-box {
+      border: 2px solid #ddab44;
+      background: #fefce8;
+      border-radius: 6px;
+      padding: 4px 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .cuadrado-check-bonito {
+      display: inline-block;
+      width: 13px;
+      height: 13px;
+      border: 1.5px solid #0f172a;
+      border-radius: 2px;
+      background: #ffffff;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+    .recuadro-huella {
+      border: 1.5px dashed #64748b;
+      border-radius: 4px;
+      width: 85px;
+      height: 95px;
+      background: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding-bottom: 6px;
+      font-size: 6.5pt;
+      color: #64748b;
+      text-align: center;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="hoja-a4 pagina-individual">
+    <div>
+      <!-- Encabezado Institucional Doble -->
+      <header class="encabezado-institucional" style="margin-bottom: 8px; padding-bottom: 6px;">
+        <img src="assets/logo-unap.png" alt="UNA-PUNO" class="logo-entidad" style="width: 55px; height: 55px;">
+        <div class="texto-encabezado">
+          <div class="universidad" style="font-size: 11pt;">Universidad Nacional del Altiplano de Puno</div>
+          <div class="area-rectora" style="font-size: 8.5pt;">Dirección de Admisión — Centro de Cómputo y Calificación</div>
+          <div class="subtitulo-convenio" style="font-size: 7.5pt;">Concurso Público de Méritos a Plazo Indeterminado (D.L. 728) — CSJ Puno</div>
+        </div>
+        <img src="assets/logo-pj.jpg" alt="Poder Judicial" class="logo-entidad" style="width: 55px; height: 55px;">
+      </header>
+
+      <!-- Título de la Ficha Individual -->
+      <div class="titulo-documento-box" style="margin-bottom: 10px; padding: 6px 12px;">
+        <h1 class="titulo-documento" style="font-size: 12pt; letter-spacing: 0.3px;">ACTA INDIVIDUAL DE INCORPORACIÓN AL PADRÓN</h1>
+        <div class="meta-documento" style="font-size: 7.5pt;">
+          <span>FORMATO INDIVIDUAL N.°: <strong style="color: #0369a1;">ACTA-INC-2026-[ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ]</strong></span>
+          <span>CONVOCATORIA N.° 001-2026-UE-PUNO</span>
+          <span>REGISTRO EN PASO 1</span>
+        </div>
+      </div>
+
+      <!-- CARD 1: Autorización de la Comisión CSJ Puno -->
+      <div class="card-bonito">
+        <div class="card-bonito-header">1. Autorización de la Comisión de Selección del Poder Judicial</div>
+        <div style="font-size: 8pt; line-height: 1.5;">
+          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-bottom: 6px;">
+            <div>
+              <strong>Documento de Sustento / Autorización:</strong><br>
+              <span class="linea-relleno" style="width: 95%;"></span>
+            </div>
+            <div>
+              <strong>Fecha y Hora de Solicitud:</strong><br>
+              <span class="linea-relleno" style="width: 100%;">_____ / _____ / 2026 &nbsp;&nbsp; ___:___ hrs</span>
+            </div>
+          </div>
+
+          <div style="margin-top: 4px;">
+            <strong>Motivo de la Incorporación Extemporánea al Padrón:</strong>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 3px;">
+              <span><span class="cuadrado-check-bonito"></span> Recurso de Reconsideración / Apelación fundado</span>
+              <span><span class="cuadrado-check-bonito"></span> Mandato Judicial / Medida Cautelar</span>
+              <span><span class="cuadrado-check-bonito"></span> Subsanación admitida por Presidencia CSJ</span>
+              <span><span class="cuadrado-check-bonito"></span> Regularización de Pase de Ingreso N.°: <span class="linea-relleno" style="width: 60px;"></span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 2: Ficha de Datos del Postulante para el Paso 1 -->
+      <div class="card-bonito">
+        <div class="card-bonito-header">2. Ficha de Datos del Postulante (Para Registro en Paso 1 · Padrón)</div>
+        
+        <table style="width: 100%; border-collapse: separate; border-spacing: 0 6px; font-size: 8.2pt;">
+          <!-- DNI -->
+          <tr>
+            <td style="width: 25%; font-weight: bold; color: #0a2446;">Documento de Identidad (DNI):</td>
+            <td style="width: 75%;">
+              <div class="dni-grid-bonito">
+                <div class="dni-casilla"></div>
+                <div class="dni-casilla"></div>
+                <div class="dni-casilla"></div>
+                <div class="dni-casilla"></div>
+                <div class="dni-casilla"></div>
+                <div class="dni-casilla"></div>
+                <div class="dni-casilla"></div>
+                <div class="dni-casilla"></div>
+                <span style="font-size: 7.2pt; color: #64748b; margin-left: 8px;">(8 dígitos exactos)</span>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Apellidos y Nombres -->
+          <tr>
+            <td style="font-weight: bold; color: #0a2446;">Apellido Paterno:</td>
+            <td><span class="linea-relleno" style="width: 95%;"></span></td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; color: #0a2446;">Apellido Materno:</td>
+            <td><span class="linea-relleno" style="width: 95%;"></span></td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; color: #0a2446;">Nombres Completos:</td>
+            <td><span class="linea-relleno" style="width: 95%;"></span></td>
+          </tr>
+
+          <!-- Puesto y Plaza -->
+          <tr>
+            <td style="font-weight: bold; color: #0a2446;">Puesto / Plaza Postulada:</td>
+            <td>
+              Código Puesto: <span class="linea-relleno" style="width: 70px;"></span>
+              &nbsp;&nbsp;&nbsp;
+              Denominación: <span class="linea-relleno" style="width: 230px;"></span>
+            </td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; color: #0a2446;">Unidad Orgánica / Sede:</td>
+            <td><span class="linea-relleno" style="width: 95%;"></span></td>
+          </tr>
+
+          <!-- Código de Examen y Aula -->
+          <tr>
+            <td style="font-weight: bold; color: #0a2446;">Código de Examen Asignado:</td>
+            <td>
+              <div class="badge-examen-box">
+                <span style="font-weight: bold; font-size: 8pt; color: #92400e;">CÓDIGO:</span>
+                <span style="font-size: 13pt; font-weight: 900; color: #0a2446; font-family: monospace;">E</span>
+                <span style="border-bottom: 2px solid #0a2446; width: 40px; display: inline-block;"></span>
+              </div>
+              <span style="font-size: 7.2pt; color: #64748b; margin-left: 10px;">(Seleccionar entre E01 y E27 según puesto)</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; color: #0a2446;">Aula y Turno de Rendición:</td>
+            <td>
+              Aula N.°: <span class="linea-relleno" style="width: 60px;"></span> (Contingencia)
+              &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+              <span><span class="cuadrado-check-bonito"></span> Turno 1 (08:30 hrs)</span>
+              &nbsp;&nbsp;&nbsp;
+              <span><span class="cuadrado-check-bonito"></span> Turno 2 (14:30 hrs)</span>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- CARD 3: Disposición Técnica de Alimentación al Sistema -->
+      <div class="card-bonito" style="background: #f8fafc; border-left: 4px solid #0a2446;">
+        <div style="font-size: 7.5pt; color: #1e293b; line-height: 1.4;">
+          <strong>DISPOSICIÓN TÉCNICA:</strong> Con la firma de la presente acta, la Comisión del Poder Judicial solicita y autoriza expresamente a la Dirección de Admisión de la Universidad Nacional del Altiplano de Puno a ingresar manualmente el registro de este postulante en el <strong>Paso 1 (Padrón de Postulantes)</strong> del software de cómputo, quedando debidamente vinculado para la lectura óptica de su hoja de respuestas y calificación con la clave oficial asignada.
+        </div>
+      </div>
+    </div>
+
+    <!-- Firmas y Huella Dactilar -->
+    <div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 100px; gap: 14px; align-items: flex-end; margin-bottom: 8px;">
+        <!-- Firma UNA-PUNO -->
+        <div style="border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px; text-align: center; background: #fff;">
+          <div style="height: 55px;"></div>
+          <div style="border-top: 1px solid #334155; padding-top: 4px;">
+            <div style="font-weight: bold; font-size: 7.8pt; color: #0f172a;">Dr. Bladimiro Centeno Herrera</div>
+            <div style="font-size: 6.8pt; color: #64748b;">Director de Admisión — UNA-PUNO<br>DNI: 29679918</div>
+          </div>
+        </div>
+
+        <!-- Firma CSJ Puno -->
+        <div style="border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px; text-align: center; background: #fff;">
+          <div style="height: 55px;"></div>
+          <div style="border-top: 1px solid #334155; padding-top: 4px;">
+            <div style="font-weight: bold; font-size: 7.8pt; color: #0f172a;">Abog. Edson Teofilo Mamani Quispe</div>
+            <div style="font-size: 6.8pt; color: #64748b;">Comisión de Selección / Veedor — CSJ Puno<br>DNI: 46829313</div>
+          </div>
+        </div>
+
+        <!-- Huella Digital del Postulante -->
+        <div>
+          <div class="recuadro-huella">
+            <span>HUELLA DACTILAR<br>(Índice Derecho)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pie de Seguridad -->
+      <footer style="border-top: 1px solid #cbd5e1; padding-top: 3px; font-size: 6.8pt; color: #64748b; display: flex; justify-content: space-between;">
+        <span>Sistema de Calificación UNA-PUNO — Corte Superior de Justicia de Puno</span>
+        <span>Acta Individual de Incorporación — Paso 1</span>
+        <span>Página 1 de 1</span>
+      </footer>
+    </div>
+  </div>
+
+</body>
+</html>

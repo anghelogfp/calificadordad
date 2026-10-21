@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Control de Recepción Física - Fichas de RESPUESTAS (RESP) — Turno 1</title>
+  <link rel="stylesheet" href="assets/print.css">
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 8mm 10mm 8mm 10mm;
+    }
+    .pagina-manual {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 281mm;
+      box-sizing: border-box;
+    }
+    @media print {
+      .pagina-manual {
+        height: 281mm !important;
+        max-height: 281mm !important;
+        overflow: hidden !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+    }
+    .datos-mesa-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 6px;
+      background-color: #f8fafc;
+      border: 1px solid #cbd5e1;
+      padding: 4px 8px;
+      font-size: 7.4pt;
+      margin-bottom: 4px;
+    }
+    .datos-mesa-item {
+      display: flex;
+      gap: 4px;
+    }
+    .datos-mesa-item .label {
+      font-weight: bold;
+      color: #1e3a5f;
+    }
+    .datos-mesa-item .linea-llenado {
+      flex: 1;
+      border-bottom: 1px dotted #475569;
+    }
+    .tabla-manual {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 7.6pt;
+      margin: 2px 0;
+    }
+    .tabla-manual th,
+    .tabla-manual td {
+      border: 1px solid #334155;
+      padding: 2px 4px;
+      line-height: 1.15;
+    }
+    .tabla-manual thead th {
+      color: #ffffff;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 7pt;
+      text-align: center;
+      padding: 3px 2px;
+    }
+    .th-resp {
+      background-color: #0f766e !important;
+    }
+    .casilla-manual {
+      background-color: #ffffff;
+      height: 18px;
+    }
+    .linea-firma-entrega {
+      background-color: #ffffff;
+      border-bottom: 1px dotted #94a3b8 !important;
+    }
+    .fila-total-manual {
+      background-color: #f1f5f9;
+      font-weight: bold;
+      font-size: 8pt;
+      border-top: 2px solid #0f172a;
+    }
+    .caja-obs-manual {
+      border: 1px solid #cbd5e1;
+      background-color: #fafafa;
+      padding: 4px 8px;
+      font-size: 7pt;
+      margin-top: 4px;
+    }
+    .renglon-linea {
+      border-bottom: 1px dotted #94a3b8;
+      height: 13px;
+      margin-top: 2px;
+    }
+    .seccion-firmas-manual {
+      margin-top: 6px;
+      display: flex;
+      justify-content: space-around;
+      gap: 20px;
+    }
+    .firma-manual-box {
+      flex: 1;
+      max-width: 250px;
+      text-align: center;
+    }
+    .firma-manual-box .linea-firma {
+      border-top: 1.2px solid #334155;
+      margin-top: 48px;
+      margin-bottom: 2px;
+    }
+    .firma-manual-box .nombre {
+      font-weight: bold;
+      font-size: 7.6pt;
+      color: #0f172a;
+    }
+    .firma-manual-box .cargo {
+      font-size: 6.8pt;
+      color: #334155;
+      font-weight: 600;
+      line-height: 1.15;
+    }
+    .firma-manual-box .dni {
+      font-size: 6.5pt;
+      font-weight: 600;
+      color: #475569;
+      font-family: var(--fuente-mono, monospace);
+    }
+    .firma-manual-box .entidad {
+      font-size: 6.5pt;
+      font-weight: bold;
+      color: #0a2446;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="hoja-a4 pagina-manual">
+    <!-- Encabezado Institucional Doble -->
+    <header class="encabezado-institucional">
+      <img src="assets/logo-unap.png" alt="UNA-PUNO" class="logo-entidad">
+      <div class="texto-encabezado">
+        <div class="universidad">UNIVERSIDAD NACIONAL DEL ALTIPLANO - PUNO</div>
+        <div class="area-rectora">Dirección de Admisión — Centro de Cómputo y Calificación</div>
+        <div class="subtitulo-convenio">Proceso de Selección de Personal a Plazo Indeterminado N.° 001-2026-UE-PUNO</div>
+      </div>
+      <img src="assets/logo-pj.jpg" alt="Poder Judicial" class="logo-entidad">
+    </header>
+
+    <div class="titulo-documento-box" style="margin: 12px 0 8px 0; padding: 2px 0;">
+      <h1 class="titulo-documento" style="font-size: 11pt; margin-bottom: 3px; color: #0f766e;">
+        CONTROL DE RECEPCIÓN FÍSICA: FICHAS DE RESPUESTAS (RESP)
+      </h1>
+      <div class="meta-documento" style="font-size: 7.2pt;">
+        <span>TURNO 1 (GRUPO 1) — 25 AULAS DE EVALUACIÓN</span>
+        <span>FECHA: 16 DE OCTUBRE DE 2026</span>
+        <span>PADRÓN PROGRAMADO: 998 POSTULANTES</span>
+      </div>
+    </div>
+
+    <!-- Metadatos de la Mesa para Llenar a Mano -->
+    <div class="datos-mesa-grid">
+      <div class="datos-mesa-item">
+        <span class="label">Responsable de Mesa (Receptor):</span>
+        <div class="linea-llenado"></div>
+      </div>
+      <div class="datos-mesa-item">
+        <span class="label">Hora Inicio:</span>
+        <div class="linea-llenado"></div>
+      </div>
+      <div class="datos-mesa-item">
+        <span class="label">Hora Cierre:</span>
+        <div class="linea-llenado"></div>
+      </div>
+    </div>
+
+    <table class="tabla-manual">
+      <thead>
+        <tr>
+          <th class="th-resp" style="width: 6%;">N.°</th>
+          <th class="th-resp" style="width: 22%;">Aula de Evaluación</th>
+          <th class="th-resp" style="width: 14%;">Padrón (Prog.)</th>
+          <th class="th-resp" style="width: 20%;">Fichas RESP Recibidas<br><span style="font-size: 6pt; font-weight: normal;">(Conteo Manual a Lapicero)</span></th>
+          <th class="th-resp" style="width: 12%;">Ausentes<br><span style="font-size: 6pt; font-weight: normal;">(Fichas / Post.)</span></th>
+          <th class="th-resp" style="width: 12%;">N.° Sobre / Precinto</th>
+          <th class="th-resp" style="width: 14%;">Firma Entrega Aula<br><span style="font-size: 6pt; font-weight: normal;">(Responsable de Aula)</span></th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr>
+            <td class="text-center font-mono font-bold">01</td>
+            <td><strong>Aula A01</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">53</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">02</td>
+            <td><strong>Aula A02</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">53</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">03</td>
+            <td><strong>Aula A03</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">53</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">04</td>
+            <td><strong>Aula A04</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">53</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">05</td>
+            <td><strong>Aula A05</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">53</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">06</td>
+            <td><strong>Aula A06</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">54</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">07</td>
+            <td><strong>Aula A07</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">50</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">08</td>
+            <td><strong>Aula A08</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">49</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">09</td>
+            <td><strong>Aula A09</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">54</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">10</td>
+            <td><strong>Aula A10</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">51</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">11</td>
+            <td><strong>Aula A11</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">50</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">12</td>
+            <td><strong>Aula A12</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">39</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">13</td>
+            <td><strong>Aula A13</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">40</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">14</td>
+            <td><strong>Aula A14</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">39</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">15</td>
+            <td><strong>Aula A15</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">40</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">16</td>
+            <td><strong>Aula A16</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">40</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">17</td>
+            <td><strong>Aula A17</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">39</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">18</td>
+            <td><strong>Aula A18</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">35</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">19</td>
+            <td><strong>Aula A19</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">13</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">20</td>
+            <td><strong>Aula A20</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">27</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">21</td>
+            <td><strong>Aula A21</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">30</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">22</td>
+            <td><strong>Aula A22</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">30</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">23</td>
+            <td><strong>Aula A23</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">26</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">24</td>
+            <td><strong>Aula A24</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">19</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+          <tr>
+            <td class="text-center font-mono font-bold">25</td>
+            <td><strong>Aula A25</strong></td>
+            <td class="text-center font-mono font-bold" style="background-color: #f8fafc;">8</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="casilla-manual text-center font-mono">&nbsp;</td>
+            <td class="linea-firma-entrega">&nbsp;</td>
+          </tr>
+      </tbody>
+      <tfoot>
+        <tr class="fila-total-manual">
+          <td colspan="2" class="text-center font-bold">TOTALES TURNO 1</td>
+          <td class="text-center font-mono font-bold">998</td>
+          <td class="text-center font-mono font-bold">[ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ]</td>
+          <td class="text-center font-mono font-bold">[ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ]</td>
+          <td class="text-center" style="font-size: 6.6pt;">Precintos OK [ &nbsp; ]</td>
+          <td class="text-center" style="font-size: 6.6pt;">V.°B.° Mesa [ &nbsp; ]</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="caja-obs-manual">
+      <span style="font-weight: bold; color: #0f766e;">Observaciones / Incidencias en Entrega de Fichas de RESPUESTAS (RESP) (Turno 1):</span>
+      <div class="renglon-linea"></div>
+      <div class="renglon-linea"></div>
+    </div>
+
+    <div class="seccion-firmas-manual">
+      <div class="firma-manual-box">
+        <div class="linea-firma"></div>
+        <div class="nombre">Dr. Bladimiro Centeno Herrera</div>
+        <div class="cargo">Director de la Dirección de Admisión</div>
+        <div class="dni">DNI: 29679918</div>
+        <div class="entidad">UNIVERSIDAD NACIONAL DEL ALTIPLANO - PUNO</div>
+      </div>
+      <div class="firma-manual-box">
+        <div class="linea-firma"></div>
+        <div class="nombre">Abog. Edson Teofilo Mamani Quispe</div>
+        <div class="cargo">Coordinador de Seguridad Integral</div>
+        <div class="dni">DNI: 46829313</div>
+        <div class="entidad">CORTE SUPERIOR DE JUSTICIA DE PUNO</div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
