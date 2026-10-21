@@ -206,10 +206,10 @@ function visiblePages(current, total) {
                 v-else-if="column.badge"
                 class="badge"
                 :class="{
-                  'badge--ok': row[column.key] === 'Sin observaciones',
-                  'badge--warn': row[column.key] !== 'Sin observaciones',
+                  'badge--ok': (column.formatter ? column.formatter(row[column.key], row) : row[column.key]) === 'Sin observaciones',
+                  'badge--warn': (column.formatter ? column.formatter(row[column.key], row) : row[column.key]) !== 'Sin observaciones',
                 }"
-              >{{ row[column.key] }}</span>
+              >{{ column.formatter ? column.formatter(row[column.key], row) : row[column.key] }}</span>
               <button
                 v-else-if="column.type === 'button'"
                 type="button"

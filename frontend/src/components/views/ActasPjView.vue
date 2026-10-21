@@ -117,7 +117,7 @@ const DEFAULT_ACTA_CONFIG = Object.freeze({
   procesoNombre: 'Proceso de Selección de Personal D.L. 728 N.° 001-2026-UE-PUNO',
   oficioReferencia: 'OFICIO N.° 003-2025-AP-UAF-GAD-CSJPU-PJ',
   entidadSolicitante: 'Corte Superior de Justicia de Puno — Poder Judicial',
-  entidadEjecutora: 'Universidad Nacional del Altiplano de Puno — Dirección de Admisión',
+  entidadEjecutora: 'UNIVERSIDAD NACIONAL DEL ALTIPLANO - PUNO — Dirección de Admisión',
   modalidadTexto: 'Evaluación Técnica Presencial',
   codigoActa01: 'ACTA-01-INICIO-2026',
   codigoActa02: 'ACTA-02-DIGITAL-2026',
@@ -143,13 +143,13 @@ const DEFAULT_ACTA_CONFIG = Object.freeze({
     nombre: 'Dr. Bladimiro Centeno Herrera',
     dni: '01893412',
     cargo: 'Director de la Dirección de Admisión',
-    entidad: 'Universidad Nacional del Altiplano de Puno',
+    entidad: 'UNIVERSIDAD NACIONAL DEL ALTIPLANO - PUNO',
   },
   firmantePj: {
     nombre: 'Abog. Benny José Álvarez Quiñonez',
     dni: '01234567',
     cargo: 'Presidente CSJ Puno / Comisión de Selección D.L. 728',
-    entidad: 'Corte Superior de Justicia de Puno — Poder Judicial',
+    entidad: 'CORTE SUPERIOR DE JUSTICIA DE PUNO',
   },
   verificacionesApertura: [
     {
@@ -1335,8 +1335,17 @@ function printElementCleanly(targetMode, title) {
           font-size: 8.5pt;
         }
         .linea-firma .cargo {
-          color: #475569;
+          color: #334155;
           font-size: 7.5pt;
+          font-weight: 600;
+          margin-bottom: 1px;
+        }
+        .linea-firma .dni {
+          color: #475569;
+          font-size: 7.2pt;
+          font-weight: 600;
+          font-family: "SF Mono", Consolas, monospace;
+          margin-bottom: 1px;
         }
         .linea-firma .entidad {
           font-size: 7pt;
@@ -1954,7 +1963,7 @@ function handleOpenCleanWindow() {
         <header class="encabezado-institucional">
           <img src="/unap.png" alt="UNA-PUNO" class="logo-entidad" />
           <div class="texto-encabezado">
-            <div class="universidad">Universidad Nacional del Altiplano de Puno</div>
+            <div class="universidad">UNIVERSIDAD NACIONAL DEL ALTIPLANO - PUNO</div>
             <div class="area-rectora">Dirección de Admisión — Centro de Cómputo y Calificación</div>
             <div class="subtitulo-convenio">
               Convenio de Cooperación Interinstitucional con la Corte Superior de Justicia de Puno
@@ -2065,20 +2074,22 @@ function handleOpenCleanWindow() {
           </p>
         </section>
 
-        <div class="bloque-firmas">
+        <div class="bloque-firmas" style="margin-top: 40px">
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 95) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmanteUnap.nombre }}</div>
-              <div class="cargo">DNI {{ actaConfig.firmanteUnap.dni }} — {{ actaConfig.firmanteUnap.cargo }}</div>
+              <div class="cargo">{{ actaConfig.firmanteUnap.cargo }}</div>
+              <div class="dni">DNI: {{ actaConfig.firmanteUnap.dni }}</div>
               <div class="entidad">{{ actaConfig.firmanteUnap.entidad }}</div>
             </div>
           </div>
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 95) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmantePj.nombre }}</div>
-              <div class="cargo">DNI {{ actaConfig.firmantePj.dni }} — {{ actaConfig.firmantePj.cargo }}</div>
+              <div class="cargo">{{ actaConfig.firmantePj.cargo }}</div>
+              <div class="dni">DNI: {{ actaConfig.firmantePj.dni }}</div>
               <div class="entidad">{{ actaConfig.firmantePj.entidad }}</div>
             </div>
           </div>
@@ -2103,7 +2114,7 @@ function handleOpenCleanWindow() {
         <header class="encabezado-institucional">
           <img src="/unap.png" alt="UNA-PUNO" class="logo-entidad" />
           <div class="texto-encabezado">
-            <div class="universidad">Universidad Nacional del Altiplano de Puno</div>
+            <div class="universidad">UNIVERSIDAD NACIONAL DEL ALTIPLANO - PUNO</div>
             <div class="area-rectora">Dirección de Admisión — Centro de Cómputo y Calificación</div>
             <div class="subtitulo-convenio">
               Convenio de Cooperación Interinstitucional con la Corte Superior de Justicia de Puno
@@ -2225,20 +2236,22 @@ function handleOpenCleanWindow() {
           </p>
         </section>
 
-        <div class="bloque-firmas">
+        <div class="bloque-firmas" style="margin-top: 40px">
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 95) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmanteUnap.nombre }}</div>
-              <div class="cargo">DNI {{ actaConfig.firmanteUnap.dni }} — RECIBE CONFORME</div>
+              <div class="cargo">{{ actaConfig.firmanteUnap.cargo }}</div>
+              <div class="dni">DNI: {{ actaConfig.firmanteUnap.dni }}</div>
               <div class="entidad">{{ actaConfig.firmanteUnap.entidad }}</div>
             </div>
           </div>
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 95) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmantePj.nombre }}</div>
-              <div class="cargo">DNI {{ actaConfig.firmantePj.dni }} — ENTREGA CONFORME</div>
+              <div class="cargo">{{ actaConfig.firmantePj.cargo }}</div>
+              <div class="dni">DNI: {{ actaConfig.firmantePj.dni }}</div>
               <div class="entidad">{{ actaConfig.firmantePj.entidad }}</div>
             </div>
           </div>
@@ -2263,7 +2276,7 @@ function handleOpenCleanWindow() {
         <header class="encabezado-institucional">
           <img src="/unap.png" alt="UNA-PUNO" class="logo-entidad" />
           <div class="texto-encabezado">
-            <div class="universidad">Universidad Nacional del Altiplano de Puno</div>
+            <div class="universidad">UNIVERSIDAD NACIONAL DEL ALTIPLANO - PUNO</div>
             <div class="area-rectora">Dirección de Admisión — Coordinación de Operaciones y Cómputo</div>
             <div class="subtitulo-convenio">
               Corte Superior de Justicia de Puno — {{ actaConfig.procesoNombre }}
@@ -2422,7 +2435,7 @@ function handleOpenCleanWindow() {
         <header class="encabezado-institucional">
           <img src="/unap.png" alt="UNA-PUNO" class="logo-entidad" />
           <div class="texto-encabezado">
-            <div class="universidad">Universidad Nacional del Altiplano de Puno</div>
+            <div class="universidad">UNIVERSIDAD NACIONAL DEL ALTIPLANO - PUNO</div>
             <div class="area-rectora">Dirección de Admisión — Centro de Cómputo y Calificación</div>
             <div class="subtitulo-convenio">
               Convenio de Cooperación Interinstitucional con la Corte Superior de Justicia de Puno
@@ -2630,7 +2643,7 @@ function handleOpenCleanWindow() {
         <header class="encabezado-institucional">
           <img src="/unap.png" alt="UNA-PUNO" class="logo-entidad" />
           <div class="texto-encabezado">
-            <div class="universidad">Universidad Nacional del Altiplano de Puno</div>
+            <div class="universidad">UNIVERSIDAD NACIONAL DEL ALTIPLANO - PUNO</div>
             <div class="area-rectora">Dirección de Admisión — Centro de Cómputo y Calificación</div>
             <div class="subtitulo-convenio">
               Convenio de Cooperación Interinstitucional con la Corte Superior de Justicia de Puno
@@ -2837,7 +2850,7 @@ function handleOpenCleanWindow() {
         <header class="encabezado-institucional">
           <img src="/unap.png" alt="UNA-PUNO" class="logo-entidad" />
           <div class="texto-encabezado">
-            <div class="universidad">Universidad Nacional del Altiplano de Puno</div>
+            <div class="universidad">UNIVERSIDAD NACIONAL DEL ALTIPLANO - PUNO</div>
             <div class="area-rectora">Dirección de Admisión — Centro de Cómputo y Calificación</div>
             <div class="subtitulo-convenio">
               Convenio de Cooperación Interinstitucional con la Corte Superior de Justicia de Puno
@@ -3034,7 +3047,7 @@ function handleOpenCleanWindow() {
         <header class="encabezado-institucional">
           <img src="/unap.png" alt="UNA-PUNO" class="logo-entidad" />
           <div class="texto-encabezado">
-            <div class="universidad">Universidad Nacional del Altiplano de Puno</div>
+            <div class="universidad">UNIVERSIDAD NACIONAL DEL ALTIPLANO - PUNO</div>
             <div class="area-rectora">Dirección de Admisión — Centro de Cómputo y Calificación</div>
             <div class="subtitulo-convenio">
               Convenio de Cooperación Interinstitucional con la Corte Superior de Justicia de Puno
@@ -3148,20 +3161,22 @@ function handleOpenCleanWindow() {
           </p>
         </section>
 
-        <div class="bloque-firmas" style="margin-top: 28px">
+        <div class="bloque-firmas" style="margin-top: 40px">
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 95) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmanteUnap.nombre }}</div>
-              <div class="cargo">DNI {{ actaConfig.firmanteUnap.dni }} — {{ actaConfig.firmanteUnap.cargo }} (ENTREGA)</div>
+              <div class="cargo">{{ actaConfig.firmanteUnap.cargo }}</div>
+              <div class="dni">DNI: {{ actaConfig.firmanteUnap.dni }}</div>
               <div class="entidad">{{ actaConfig.firmanteUnap.entidad }}</div>
             </div>
           </div>
           <div class="cuadro-firma">
-            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 75) + 'px' }"></div>
+            <div class="espacio-sello-firma" :style="{ height: (actaConfig.espacioFirmaPx || 95) + 'px' }"></div>
             <div class="linea-firma">
               <div class="nombre">{{ actaConfig.firmantePj.nombre }}</div>
-              <div class="cargo">DNI {{ actaConfig.firmantePj.dni }} — {{ actaConfig.firmantePj.cargo }} (RECIBE CONFORME)</div>
+              <div class="cargo">{{ actaConfig.firmantePj.cargo }}</div>
+              <div class="dni">DNI: {{ actaConfig.firmantePj.dni }}</div>
               <div class="entidad">{{ actaConfig.firmantePj.entidad }}</div>
             </div>
           </div>

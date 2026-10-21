@@ -196,6 +196,8 @@ export const DEFAULT_DAT_FORMAT = Object.freeze({
   dniLength: 8,
   aulaOffset: 15,
   aulaLength: 3,
+  requireAula: false,
+  requireTipo: false,
   answersOffset: 18,
   responseAnswersOffset: 7,
 })
@@ -212,6 +214,8 @@ export const PJ_DAT_FORMAT = Object.freeze({
   dniLength: 8,
   aulaOffset: 15,
   aulaLength: 3,
+  requireAula: false,
+  requireTipo: false,
   answersOffset: 18,
   responseAnswersOffset: 7,
 })

@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { watchDebounced } from '@vueuse/core'
 import { useTableState } from './useTableState'
 import { DEFAULT_DAT_FORMAT } from '@/constants'
@@ -7,12 +7,13 @@ import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
 import {
   createIdentifierRow,
   buildIdentifierObservation,
+  cleanAulaObservations,
   parseIdentifierLine,
 } from '@/utils/parsers'
 import { apiFetch } from '@/utils/apiFetch'
 import { sha256Hex } from '@/utils/cryptoHash'
 
-export { createIdentifierRow, buildIdentifierObservation }
+export { createIdentifierRow, buildIdentifierObservation, cleanAulaObservations }
 
 function summarizeObservations(rows) {
   const summary = new Map()
@@ -26,9 +27,8 @@ function summarizeObservations(rows) {
 
     const hasMissingTipo = issues.includes('Tipo sin marcar')
     const hasMissingDni = issues.includes('DNI sin marcar')
-    const hasMissingAula = issues.includes('Aula sin marcar')
 
-    if (hasMissingTipo && hasMissingDni && hasMissingAula) {
+    if (hasMissingTipo && hasMissingDni) {
       add('Sin identificación completa')
       return
     }
@@ -97,10 +97,54 @@ export function useIdentifiers(formatConfig) {
   // Computed
   const identifierHasData = computed(() => tableState.rows.value.length > 0)
 
-  const observations = computed(() =>
-    tableState.rows.value.filter(
-      (row) => row.observaciones && row.observaciones !== 'Sin observaciones'
-    )
+  // Limpieza reactiva de observaciones de campos no requeridos (aula y tipo)
+  const observations = computed(() => {
+    const cfg = effectiveFormatConfig()
+    const isAulaRequired = Boolean(cfg.requireAula && (cfg.aulaLength ?? 0) > 0)
+    const isTipoRequired = Boolean(cfg.requireTipo && (cfg.tipoLength ?? 0) > 0)
+
+    return tableState.rows.value
+      .map((row) => {
+        if (
+          (!isAulaRequired && row.observaciones && (row.observaciones.includes('Aula sin marcar') || row.observaciones.includes('Aula incompleta'))) ||
+          (!isTipoRequired && row.observaciones && row.observaciones.includes('Tipo sin marcar'))
+        ) {
+          row.observaciones = cleanAulaObservations(row.observaciones, cfg)
+        }
+        return row
+      })
+      .filter(
+        (row) => row.observaciones && row.observaciones !== 'Sin observaciones'
+      )
+  })
+
+  // Watcher reactivo para sanitizar filas ya cargadas en memoria/DB
+  watch(
+    () => tableState.rows.value,
+    (currentRows) => {
+      const cfg = effectiveFormatConfig()
+      const isAulaRequired = Boolean(cfg.requireAula && (cfg.aulaLength ?? 0) > 0)
+      const isTipoRequired = Boolean(cfg.requireTipo && (cfg.tipoLength ?? 0) > 0)
+      if ((isAulaRequired && isTipoRequired) || !currentRows?.length) return
+
+      let changed = false
+      currentRows.forEach((row) => {
+        if (
+          (!isAulaRequired && row.observaciones && (row.observaciones.includes('Aula sin marcar') || row.observaciones.includes('Aula incompleta'))) ||
+          (!isTipoRequired && row.observaciones && row.observaciones.includes('Tipo sin marcar'))
+        ) {
+          const cleaned = cleanAulaObservations(row.observaciones, cfg)
+          if (cleaned !== row.observaciones) {
+            row.observaciones = cleaned
+            changed = true
+          }
+        }
+      })
+      if (changed) {
+        syncIdentifiersToApi()
+      }
+    },
+    { immediate: true, deep: true }
   )
 
   const observationCount = computed(() => observations.value.length)

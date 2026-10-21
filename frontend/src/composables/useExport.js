@@ -532,7 +532,7 @@ export function useExport() {
     sheetResumen.getCell('A1').alignment = { horizontal: 'center' }
 
     sheetResumen.mergeCells('A2:H2')
-    sheetResumen.getCell('A2').value = `RESUMEN EJECUTIVO DE CALIFICACIÓN — ${convocatoriaName || 'PROCESO DE SELECCIÓN D.L. 728 N.° 001-2026-UE-PUNO'}`
+    sheetResumen.getCell('A2').value = `RESUMEN EJECUTIVO DE CALIFICACIÓN — ${convocatoriaName || 'PROCESO DE SELECCIÓN DE PERSONAL A PLAZO INDETERMINADO N.° 001-2026-UE-PUNO'}`
     sheetResumen.getCell('A2').font = { bold: true, size: 11, color: { argb: 'FF1E3A5F' } }
     sheetResumen.getCell('A2').alignment = { horizontal: 'center' }
     sheetResumen.addRow([])
@@ -547,7 +547,7 @@ export function useExport() {
     const avgScore = scoresList.length ? scoresList.reduce((a, b) => a + b, 0) / scoresList.length : 0
 
     const metaRows = [
-      ['Proceso / Convocatoria', convocatoriaName || 'PROCESO DE SELECCIÓN D.L. 728 N.° 001-2026-UE-PUNO'],
+      ['Proceso / Convocatoria', convocatoriaName || 'PROCESO DE SELECCIÓN DE PERSONAL A PLAZO INDETERMINADO N.° 001-2026-UE-PUNO'],
       ['Modalidad', 'Concurso Poder Judicial (Por Código de Examen y Puesto)'],
       ['Fecha y Hora de Procesamiento', summary.timestamp ? new Date(summary.timestamp).toLocaleString('es-PE') : new Date().toLocaleString('es-PE')],
       ['Total de Preguntas por Examen', answersLength],
@@ -1402,7 +1402,7 @@ export function useExport() {
       doc.setFontSize(10)
       doc.setTextColor(10, 36, 70)
       doc.text(
-        `RESULTADOS OFICIALES POR PUESTO — ${convocatoriaName || 'PROCESO DE SELECCIÓN D.L. 728 N.° 001-2026-UE-PUNO'}`,
+        `RESULTADOS OFICIALES POR PUESTO — ${convocatoriaName || 'PROCESO DE SELECCIÓN DE PERSONAL A PLAZO INDETERMINADO N.° 001-2026-UE-PUNO'}`,
         pageW / 2,
         21,
         { align: 'center' },
@@ -1427,13 +1427,13 @@ export function useExport() {
       doc.setTextColor(15, 23, 42)
       doc.setFont(undefined, 'bold')
       doc.text('Dr. Bladimiro Centeno Herrera', 55, sigY + 3.5, { align: 'center' })
-      doc.text('Abog. Benny José Álvarez Quiñonez', pageW - 55, sigY + 3.5, { align: 'center' })
+      doc.text('Abog. Edson Teofilo Mamani Quispe', pageW - 55, sigY + 3.5, { align: 'center' })
 
       doc.setFont(undefined, 'normal')
       doc.setFontSize(6.5)
       doc.setTextColor(100, 116, 139)
-      doc.text('Director de Admisión — UNA-PUNO', 55, sigY + 7, { align: 'center' })
-      doc.text('Presidente CSJ Puno / Comisión D.L. 728', pageW - 55, sigY + 7, { align: 'center' })
+      doc.text('Director de Admisión — UNA-PUNO (DNI 29679918)', 55, sigY + 7, { align: 'center' })
+      doc.text('Coordinador de Seguridad Integral — CSJ Puno (DNI 46829313)', pageW - 55, sigY + 7, { align: 'center' })
 
       doc.line(10, pageH - 9.5, pageW - 10, pageH - 9.5)
       doc.text(`Sistema de Calificación Óptica UNA-PUNO — Fecha: ${dateStr}`, 10, pageH - 6)

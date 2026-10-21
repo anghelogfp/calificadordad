@@ -165,8 +165,75 @@ function closeSheetPreview() {
   showSheetModal.value = false
 }
 
-// Cobertura de áreas
+const hasExamCodes = computed(() =>
+  Boolean(answerKeys.hasExamCodes || props.reconciliation?.mode === 'exam-codes' || props.processType === 'poder_judicial')
+)
+
+const examCodesList = computed(() => {
+  if (Array.isArray(answerKeys.examCodesInPadron) && answerKeys.examCodesInPadron.length) {
+    return answerKeys.examCodesInPadron
+  }
+  return []
+})
+
+const examCodesCoverage = computed(() => {
+  return examCodesList.value.map(code => {
+    const norm = String(code || '').trim().toLowerCase()
+    const matchingKey = (answerKeys.rows || []).find(r => {
+      const rCode = String(r.cod_examen || r.area || r.tipo || '').trim().toLowerCase()
+      return rCode === norm
+    })
+    const answersLength = matchingKey ? String(matchingKey.answers || '').replace(/\s/g, '').length : 0
+    const expected = answerKeys.expectedAnswersLength ?? 60
+    return {
+      code,
+      hasKey: Boolean(matchingKey),
+      answersLength,
+      isComplete: answersLength === expected,
+      keyRow: matchingKey || null,
+    }
+  })
+})
+
+function selectExamForUpload(code) {
+  answerKeys.answerKeyArea = code
+  showUploadForm.value = true
+}
+
+const showManualKeyModal = ref(false)
+const manualKeyExamCode = ref('')
+const manualKeyAnswers = ref('')
+
+function openManualKeyModal(code = '') {
+  manualKeyExamCode.value = code || (examCodesList.value[0] || answerKeys.answerKeyAreaOptions?.[0] || '')
+  const existing = (answerKeys.rows || []).find(r => {
+    const rCode = String(r.cod_examen || r.area || r.tipo || '').trim().toLowerCase()
+    return rCode === String(manualKeyExamCode.value).trim().toLowerCase()
+  })
+  manualKeyAnswers.value = existing?.answers || ''
+  showManualKeyModal.value = true
+}
+
+function saveManualKey() {
+  if (!manualKeyAnswers.value.trim()) return
+  if (answerKeys.addManualAnswerKey) {
+    answerKeys.addManualAnswerKey({
+      area: manualKeyExamCode.value,
+      cod_examen: manualKeyExamCode.value,
+      answers: manualKeyAnswers.value.trim().toUpperCase(),
+    })
+  }
+  showManualKeyModal.value = false
+}
+
+// Cobertura de áreas o códigos de examen
 const areaCoverage = computed(() => {
+  if (hasExamCodes.value && examCodesList.value.length) {
+    return examCodesCoverage.value.map(item => ({
+      name: item.code,
+      hasKey: item.hasKey && item.isComplete,
+    }))
+  }
   const loaded = new Set(answerKeys.sources.map(s => s.area).filter(Boolean))
   const generalKeyCoversSimulacro = props.reconciliation?.generalKeyCoversSimulacro
   return (answerKeys.answerKeyAreaOptions || []).map(area => ({
@@ -180,9 +247,10 @@ const hasMissingAreaCoverage = computed(() =>
   !props.reconciliation?.generalKeyCoversSimulacro &&
   coveredCount.value < areaCoverage.value.length
 )
-const coverageUnit = computed(() =>
-  props.reconciliation?.mode === 'simulacro-areas' ? 'áreas' : 'pares'
-)
+const coverageUnit = computed(() => {
+  if (hasExamCodes.value) return 'exámenes'
+  return props.reconciliation?.mode === 'simulacro-areas' ? 'áreas' : 'pares'
+})
 
 const stepState = computed(() => {
   if (!answerKeys.answerKeyHasData && !(props.reconciliation?.keysTotal)) {
@@ -269,15 +337,20 @@ const stepState = computed(() => {
         </div>
 
         <div v-if="importMode === 'area'" class="form-field">
-          <label for="answer-key-area" class="form-field__label">Área</label>
+          <label for="answer-key-area" class="form-field__label">
+            {{ hasExamCodes ? 'Código de examen' : 'Área' }}
+          </label>
           <select
             id="answer-key-area"
             v-model="answerKeys.answerKeyArea"
             class="form-field__select"
             required
           >
+            <option v-if="hasExamCodes" value="__ALL__">
+              -- Todos los exámenes (Carga masiva: todas las cartillas en un solo archivo) --
+            </option>
             <option v-for="option in answerKeys.answerKeyAreaOptions" :key="option" :value="option">
-              {{ option }}
+              {{ hasExamCodes ? `Examen ${option}` : option }}
             </option>
           </select>
         </div>
@@ -349,7 +422,7 @@ const stepState = computed(() => {
       eyebrow="Verificación de claves"
       :title="stepState.title"
       :summary="areaCoverage.length && !reconciliation?.generalKeyCoversSimulacro
-        ? `${coveredCount} / ${areaCoverage.length} áreas con clave`
+        ? `${coveredCount} / ${areaCoverage.length} ${hasExamCodes ? 'exámenes' : 'áreas'} con clave`
         : reconciliation?.generalKeyCoversSimulacro
           ? 'Clave general activa'
           : ''"
@@ -415,6 +488,72 @@ const stepState = computed(() => {
           : 'Este cruce compara las claves cargadas con las áreas y tipos detectados en las respuestas.' }}
       </template>
     </StepVerificationPanel>
+
+    <!-- Panel interactivo de códigos de examen cuando hay códigos en el padrón -->
+    <section v-if="hasExamCodes && examCodesCoverage.length" class="exam-codes-panel">
+      <div class="exam-codes-panel__header">
+        <div class="exam-codes-panel__title">
+          <strong>Códigos de examen requeridos en el padrón ({{ examCodesCoverage.length }})</strong>
+          <span>Selecciona un examen para cargar su .dat individual, usa la carga masiva para todas las cartillas, o ingresa las respuestas directamente.</span>
+        </div>
+        <div class="exam-codes-panel__actions">
+          <button type="button" class="btn btn--sm btn--primary" @click="openManualKeyModal()">
+            <svg class="btn__icon" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
+            </svg>
+            Ingreso manual directo
+          </button>
+        </div>
+      </div>
+
+      <div class="exam-codes-grid">
+        <div
+          v-for="item in examCodesCoverage"
+          :key="item.code"
+          class="exam-code-card"
+          :class="{
+            'exam-code-card--ok': item.hasKey && item.isComplete,
+            'exam-code-card--warn': item.hasKey && !item.isComplete,
+            'exam-code-card--missing': !item.hasKey,
+            'exam-code-card--selected': answerKeys.answerKeyArea === item.code
+          }"
+        >
+          <div class="exam-code-card__top">
+            <span class="exam-code-card__code">Examen {{ item.code }}</span>
+            <span v-if="item.hasKey && item.isComplete" class="exam-badge exam-badge--ok">Listo ({{ item.answersLength }})</span>
+            <span v-else-if="item.hasKey" class="exam-badge exam-badge--warn">{{ item.answersLength }} resp.</span>
+            <span v-else class="exam-badge exam-badge--missing">Falta clave</span>
+          </div>
+
+          <div class="exam-code-card__actions">
+            <button
+              v-if="item.hasKey"
+              type="button"
+              class="btn btn--xs btn--ghost"
+              @click="openSheetPreview(item.keyRow)"
+            >
+              Ver
+            </button>
+            <button
+              type="button"
+              class="btn btn--xs"
+              :class="item.hasKey ? 'btn--ghost' : 'btn--primary'"
+              @click="selectExamForUpload(item.code)"
+            >
+              {{ item.hasKey ? 'Recargar' : 'Cargar .dat' }}
+            </button>
+            <button
+              type="button"
+              class="btn btn--xs btn--ghost"
+              title="Tipear respuestas directamente"
+              @click="openManualKeyModal(item.code)"
+            >
+              Tipear
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <div v-if="answerKeys.importError" class="alert alert--error">
       {{ answerKeys.importError }}
@@ -538,6 +677,49 @@ const stepState = computed(() => {
       :mode="sheetModalMode"
       @close="closeSheetPreview"
     />
+
+    <Teleport to="body">
+      <div v-if="showManualKeyModal" class="modal-overlay" @click.self="showManualKeyModal = false">
+        <div class="modal" role="dialog" style="max-width: 540px;">
+          <div class="modal-header">
+            <div>
+              <h2>Ingreso manual de clave oficial</h2>
+              <p>Escribe o pega la cadena de respuestas para el examen</p>
+            </div>
+            <button type="button" class="modal-close" @click="showManualKeyModal = false">✕</button>
+          </div>
+          <div class="modal-body" style="display: flex; flex-direction: column; gap: 1rem; padding: 1.25rem 1.5rem;">
+            <div class="form-field">
+              <label class="form-field__label">Código de examen / Área</label>
+              <select v-model="manualKeyExamCode" class="form-field__select" style="width: 100%;">
+                <option v-for="c in (examCodesList.length ? examCodesList : answerKeys.answerKeyAreaOptions)" :key="c" :value="c">
+                  {{ hasExamCodes ? `Examen ${c}` : c }}
+                </option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label class="form-field__label">Cadena de respuestas (letras A-E o asterisco)</label>
+              <textarea
+                v-model="manualKeyAnswers"
+                rows="4"
+                class="form-field__input"
+                placeholder="Pega aquí la cadena de respuestas (ej: ABCDE...)"
+                style="font-family: monospace; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; width: 100%;"
+              />
+              <span class="form-field__hint">
+                Longitud: {{ manualKeyAnswers.replace(/\s/g, '').length }} / {{ answerKeys.expectedAnswersLength || 60 }} caracteres esperados.
+              </span>
+            </div>
+          </div>
+          <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.75rem; padding: 1rem 1.5rem;">
+            <button type="button" class="btn btn--ghost" @click="showManualKeyModal = false">Cancelar</button>
+            <button type="button" class="btn btn--primary" :disabled="!manualKeyAnswers.trim()" @click="saveManualKey">
+              Guardar clave
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </section>
 </template>
 
@@ -1338,5 +1520,127 @@ const stepState = computed(() => {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* ── Panel interactivo de códigos de examen ──────────────────────────────── */
+.exam-codes-panel {
+  background: white;
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-xl);
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+
+.exam-codes-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.exam-codes-panel__title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.exam-codes-panel__title strong {
+  font-size: 0.95rem;
+  color: var(--slate-900);
+}
+
+.exam-codes-panel__title span {
+  font-size: 0.8rem;
+  color: var(--slate-500);
+}
+
+.exam-codes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.exam-code-card {
+  border: 1px solid var(--slate-200);
+  border-radius: var(--radius-lg);
+  padding: 0.65rem 0.75rem;
+  background: var(--slate-50);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  transition: all 0.15s ease;
+}
+
+.exam-code-card--selected {
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 2px var(--primary-100);
+}
+
+.exam-code-card--ok {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.exam-code-card--warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.exam-code-card--missing {
+  background: #fafafa;
+  border-color: var(--slate-200);
+}
+
+.exam-code-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.exam-code-card__code {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--slate-800);
+}
+
+.exam-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.exam-badge--ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.exam-badge--warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.exam-badge--missing {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.exam-code-card__actions {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  margin-top: auto;
+}
+
+.exam-code-card__actions .btn--xs {
+  padding: 2px 6px;
+  font-size: 0.72rem;
+  border-radius: 4px;
 }
 </style>

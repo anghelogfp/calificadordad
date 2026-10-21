@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { IDENTIFIER_SUBTABS } from '@/constants'
 import WorkflowIntroCard from '@/components/shared/WorkflowIntroCard.vue'
 import FileUploader from '@/components/shared/FileUploader.vue'
@@ -21,11 +21,53 @@ const props = defineProps({
 const emit = defineEmits(['update:subTab'])
 
 const identifiers = reactive(props.identifiers)
-const showOnlyObserved = ref(false)
+const activeFilterMode = ref('all') // 'all' | 'observed' | 'outside_padron'
 
-const displayedRows = computed(() => (
-  showOnlyObserved.value ? identifiers.observations : identifiers.pagedRows
-))
+const outsidePadronRows = computed(() => {
+  if (!props.reconciliation?.verificationRows) return []
+  return props.reconciliation.verificationRows
+    .filter((r) => r.issueCodes?.includes('IDENTIFIER_OUTSIDE_PADRON') && r.identifier)
+    .map((r) => r.identifier)
+})
+
+const outsidePadronRowIds = computed(() => {
+  return new Set(outsidePadronRows.value.map((r) => r.id))
+})
+
+watch(
+  () => outsidePadronRows.value.length,
+  (newCount) => {
+    if (newCount === 0 && activeFilterMode.value === 'outside_padron') {
+      activeFilterMode.value = 'all'
+    }
+  }
+)
+
+function toggleFilterOutsidePadron() {
+  if (activeFilterMode.value === 'outside_padron') {
+    activeFilterMode.value = 'all'
+  } else {
+    activeFilterMode.value = 'outside_padron'
+  }
+}
+
+function toggleFilterObserved() {
+  if (activeFilterMode.value === 'observed') {
+    activeFilterMode.value = 'all'
+  } else {
+    activeFilterMode.value = 'observed'
+  }
+}
+
+const displayedRows = computed(() => {
+  if (activeFilterMode.value === 'outside_padron') {
+    return outsidePadronRows.value
+  }
+  if (activeFilterMode.value === 'observed') {
+    return identifiers.observations
+  }
+  return identifiers.pagedRows
+})
 
 const stepState = computed(() => {
   if (!props.reconciliation || (!props.reconciliation.padronTotal && !props.reconciliation.identifiersTotal)) {
@@ -111,18 +153,34 @@ function cancelPending() {
   pendingAction.value = null
 }
 
-const tableColumns = [
+const tableColumns = computed(() => [
   { key: 'lectura', label: 'N° lectura', class: 'column--code', width: '16%', minWidth: '110px' },
   { key: 'dni', label: 'DNI', maxlength: 8, class: 'column--dni', width: '16%', minWidth: '120px' },
   { key: 'aula', label: 'Aula', maxlength: 3, class: 'column--code', width: '10%', minWidth: '80px' },
   { key: 'tipo', label: 'Tip', maxlength: 1, tight: true, class: 'column--code', width: '8%', minWidth: '65px' },
   { key: 'litho', label: 'Litho', maxlength: 6, class: 'column--code', width: '14%', minWidth: '105px' },
-  { key: 'observaciones', label: 'Observaciones', badge: true, class: 'column--observations', width: '36%', minWidth: '220px', maxWidth: '360px' },
-]
+  {
+    key: 'observaciones',
+    label: 'Observaciones',
+    badge: true,
+    class: 'column--observations',
+    width: '36%',
+    minWidth: '220px',
+    maxWidth: '360px',
+    formatter: (value, row) => {
+      if (outsidePadronRowIds.value.has(row.id)) {
+        const base = value && value !== 'Sin observaciones' ? value : ''
+        return base ? `⚠️ Fuera de padrón · ${base}` : '⚠️ No figura en padrón oficial'
+      }
+      return value
+    },
+  },
+])
 
 function getRowClass(row) {
   return {
-    'row--issue': Boolean(identifiers.observationByRowId?.get(row.id))
+    'row--issue': Boolean(identifiers.observationByRowId?.get(row.id)),
+    'row--outside-padron': outsidePadronRowIds.value.has(row.id),
   }
 }
 </script>
@@ -179,13 +237,36 @@ function getRowClass(row) {
       eyebrow="Verificación de identificadores"
       :title="stepState.title"
     >
-      <template v-if="identifiers.observationCount" #actions>
-          <button type="button" class="btn btn--ghost" @click="showOnlyObserved = !showOnlyObserved">
-            {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
-          </button>
-          <button type="button" class="btn btn--primary" @click="identifiers.exportIdentifierObservationsToExcel">
-            Exportar observados
-          </button>
+      <template v-if="identifiers.observationCount || identifierDatClosure.outsidePadron || activeFilterMode !== 'all'" #actions>
+        <button
+          v-if="identifierDatClosure.outsidePadron || activeFilterMode === 'outside_padron'"
+          type="button"
+          class="btn"
+          :class="activeFilterMode === 'outside_padron' ? 'btn--warn-active' : 'btn--warn'"
+          @click="toggleFilterOutsidePadron"
+        >
+          <span v-if="activeFilterMode === 'outside_padron'">✕ Quitar filtro (Ver todos)</span>
+          <span v-else>⚠️ Ver fuera del padrón ({{ identifierDatClosure.outsidePadron }})</span>
+        </button>
+
+        <button
+          v-if="identifiers.observationCount || activeFilterMode === 'observed'"
+          type="button"
+          class="btn btn--ghost"
+          :class="{ 'btn--ghost-active': activeFilterMode === 'observed' }"
+          @click="toggleFilterObserved"
+        >
+          {{ activeFilterMode === 'observed' ? '✕ Quitar filtro (Ver todos)' : `Ver observados (${identifiers.observationCount})` }}
+        </button>
+
+        <button
+          v-if="identifiers.observationCount"
+          type="button"
+          class="btn btn--primary"
+          @click="identifiers.exportIdentifierObservationsToExcel"
+        >
+          Exportar observados
+        </button>
       </template>
 
       <template v-if="reconciliation && (reconciliation.padronTotal || reconciliation.identifiersTotal)" #chips>
@@ -193,7 +274,19 @@ function getRowClass(row) {
           <span class="verification-group__title">DAT identificadores</span>
           <span class="verification-chip verification-chip--info"><strong>{{ identifierDatClosure.total }}</strong> registros cargados</span>
           <span class="verification-chip verification-chip--ok"><strong>{{ identifierDatClosure.linked }}</strong> vinculados al padrón</span>
-          <span class="verification-chip" :class="identifierDatClosure.outsidePadron ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ identifierDatClosure.outsidePadron }}</strong> fuera del padrón</span>
+          <button
+            v-if="identifierDatClosure.outsidePadron"
+            type="button"
+            class="verification-chip verification-chip--clickable verification-chip--warn"
+            :class="{ 'verification-chip--active': activeFilterMode === 'outside_padron' }"
+            :title="activeFilterMode === 'outside_padron' ? 'Haz clic para ver todos los registros' : 'Haz clic para aislar los DNI fuera del padrón'"
+            @click="toggleFilterOutsidePadron"
+          >
+            <strong>{{ identifierDatClosure.outsidePadron }}</strong> fuera del padrón
+            <span v-if="activeFilterMode === 'outside_padron'">✕</span>
+            <span v-else>🔍</span>
+          </button>
+          <span v-else class="verification-chip verification-chip--muted"><strong>0</strong> fuera del padrón</span>
           <span class="verification-chip" :class="identifierDatClosure.withoutDni ? 'verification-chip--warn' : 'verification-chip--muted'"><strong>{{ identifierDatClosure.withoutDni }}</strong> sin DNI leído</span>
         </div>
 
@@ -215,7 +308,17 @@ function getRowClass(row) {
       <template v-if="identifiers.observationCount" #detail>
         <div class="verification-group verification-group--quality">
           <span class="verification-group__title">Calidad del DAT</span>
-          <span class="verification-chip verification-chip--warn"><strong>{{ identifiers.observationCount }}</strong> registros observados</span>
+          <button
+            type="button"
+            class="verification-chip verification-chip--clickable verification-chip--warn"
+            :class="{ 'verification-chip--active': activeFilterMode === 'observed' }"
+            :title="activeFilterMode === 'observed' ? 'Haz clic para ver todos' : 'Haz clic para ver solo observados'"
+            @click="toggleFilterObserved"
+          >
+            <strong>{{ identifiers.observationCount }}</strong> registros observados
+            <span v-if="activeFilterMode === 'observed'">✕</span>
+            <span v-else>🔍</span>
+          </button>
           <span v-for="item in identifiers.observationSummary" :key="item.label" class="verification-chip verification-chip--warn">
             <strong>{{ item.count }}</strong> {{ item.label }}
           </span>
@@ -224,7 +327,10 @@ function getRowClass(row) {
 
       <template #hint>
         Este cruce confirma si los DNI del archivo de identificación corresponden al padrón cargado en el Paso 1.
-        <span v-if="identifiers.observationCount">Corrige los campos en la tabla si cambia DNI, lectura, aula o tipo.</span>
+        <span v-if="identifierDatClosure.outsidePadron">
+          Hay {{ identifierDatClosure.outsidePadron }} DNI que no figura en el padrón. Usa el botón "⚠️ Ver fuera del padrón" para ubicarlo y corregirlo.
+        </span>
+        <span v-else-if="identifiers.observationCount">Corrige los campos en la tabla si cambia DNI, lectura, aula o tipo.</span>
       </template>
     </StepVerificationPanel>
 
@@ -305,6 +411,26 @@ function getRowClass(row) {
     />
 
     <template v-if="subTab === 'list'">
+      <div v-if="activeFilterMode === 'outside_padron'" class="banner-filtro-activo banner-filtro-activo--warn">
+        <div class="banner-filtro-activo__info">
+          <strong>⚠️ Filtrando DNI fuera del padrón oficial ({{ outsidePadronRows.length }} registro)</strong>
+          <span>Este DNI fue leído en las hojas de identificación pero no coincide con ningún postulante del padrón. Puedes corregir el DNI haciendo clic en el lápiz de edición si fue un error de burbujeo.</span>
+        </div>
+        <button type="button" class="btn btn--sm btn--warn-active" @click="toggleFilterOutsidePadron">
+          ✕ Quitar filtro y ver todos ({{ identifiers.totalRows }})
+        </button>
+      </div>
+
+      <div v-else-if="activeFilterMode === 'observed'" class="banner-filtro-activo banner-filtro-activo--info">
+        <div class="banner-filtro-activo__info">
+          <strong>🔍 Filtrando registros observados ({{ identifiers.observations.length }} registro/s)</strong>
+          <span>Mostrando únicamente los registros que presentan observaciones de lectura o formato.</span>
+        </div>
+        <button type="button" class="btn btn--sm btn--ghost-active" @click="toggleFilterObserved">
+          ✕ Quitar filtro y ver todos ({{ identifiers.totalRows }})
+        </button>
+      </div>
+
       <DataTable
         v-if="identifiers.identifierHasData"
         :columns="tableColumns"
@@ -315,7 +441,7 @@ function getRowClass(row) {
         :is-indeterminate="identifiers.isSomeVisibleSelected"
         :selected-count="identifiers.totalSelected"
         :row-class="getRowClass"
-        :pagination="showOnlyObserved ? null : identifiers.pagination"
+        :pagination="activeFilterMode === 'all' ? identifiers.pagination : null"
         @toggle-selection="identifiers.toggleSelection"
         @toggle-select-all="identifiers.toggleSelectAll"
         @toggle-edit="identifiers.toggleEdit"
@@ -767,6 +893,114 @@ function getRowClass(row) {
 .icon svg {
   width: 16px;
   height: 16px;
+}
+
+.verification-chip--clickable {
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  border: 1px solid #f59e0b;
+}
+
+.verification-chip--clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+  background: #fef3c7;
+}
+
+.verification-chip--active {
+  background: #f59e0b !important;
+  color: white !important;
+  border-color: #d97706 !important;
+}
+
+.verification-chip--active strong {
+  color: white !important;
+}
+
+.btn--warn {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  font-weight: 700;
+}
+
+.btn--warn:hover:not(:disabled) {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+.btn--warn-active {
+  background: #f59e0b;
+  color: #ffffff;
+  border: 1px solid #d97706;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.btn--warn-active:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.btn--ghost-active {
+  background: var(--slate-200);
+  border-color: var(--slate-400);
+  color: var(--slate-900);
+  font-weight: 700;
+}
+
+.banner-filtro-activo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  animation: slideUp 0.2s ease-out;
+}
+
+.banner-filtro-activo--warn {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.banner-filtro-activo--info {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+}
+
+.banner-filtro-activo__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.banner-filtro-activo__info strong {
+  font-size: 0.85rem;
+}
+
+.banner-filtro-activo__info span {
+  font-size: 0.8rem;
+  opacity: 0.95;
+}
+
+:deep(tr.row--outside-padron) {
+  background-color: #fffbeb !important;
+}
+
+:deep(tr.row--outside-padron:hover) {
+  background-color: #fef3c7 !important;
+}
+
+:deep(tr.row--outside-padron td) {
+  color: #92400e;
+}
+
+:deep(tr.row--outside-padron .cell-input) {
+  color: #92400e;
+  font-weight: 600;
 }
 
 @media (max-width: 768px) {

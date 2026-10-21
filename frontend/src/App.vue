@@ -23,6 +23,7 @@ import { useExport } from '@/composables/useExport'
 import { useVacantesPrograma } from '@/composables/useVacantesPrograma'
 import { useToast } from '@/composables/useToast'
 import { GENERAL_SIMULACRO_AREA, REAL_TEST_TYPES } from '@/utils/calificationHelpers'
+import { normalize } from '@/utils/helpers'
 import {
   buildIdentifierReconciliation,
   buildResponseReconciliation,
@@ -190,8 +191,11 @@ const responseReconciliation = computed(() => {
 })
 
 const answerKeyReconciliation = computed(() => {
+  const isPj = calification.processType.value === 'poder_judicial'
   const processIsReal = calification.processType.value === 'real'
-  const isGeneralSimulacro = !processIsReal && calification.simulacroScope.value === 'general'
+  const isGeneralSimulacro = !processIsReal && !isPj && calification.simulacroScope.value === 'general'
+  const examCodes = answerKeys.examCodesInPadron?.value || []
+  const hasExamCodes = isPj || examCodes.length > 0
   const activeAreas = areas.areaNames.value.length ? areas.areaNames.value : []
   const expectedAreas = activeAreas.filter(area =>
     archives.rows.value.some(row => String(row.area || '').trim().toLowerCase() === area.toLowerCase())
@@ -220,7 +224,9 @@ const answerKeyReconciliation = computed(() => {
   })
 
   const requiredPairs = []
-  if (processIsReal) {
+  if (hasExamCodes) {
+    examCodes.forEach(code => requiredPairs.push({ area: code, type: '' }))
+  } else if (processIsReal) {
     areasToCheck.forEach((area) => {
       REAL_TEST_TYPES.forEach(type => requiredPairs.push({ area, type }))
     })
@@ -233,19 +239,30 @@ const answerKeyReconciliation = computed(() => {
     expectedAreaKeys.forEach(area => requiredPairs.push({ area, type: '' }))
   }
 
-  const missingPairs = isGeneralSimulacro && generalKeys > 0
-    ? []
-    : isGeneralSimulacro
-      ? (requiredPairs.length && answerKeys.rows.value.length === 0 ? requiredPairs : [])
-      : processIsReal
-        ? requiredPairs.filter(({ area, type }) =>
-          !keyByAreaType.has(`${area.toLowerCase()}|${type}`)
-        )
-        : requiredPairs.filter(({ area }) =>
-          !keyByArea.has(area.toLowerCase())
-        )
+  const missingPairs = hasExamCodes
+    ? requiredPairs.filter(({ area }) => {
+        const norm = normalize(area)
+        return !answerKeys.rows.value.some((row) => {
+          const rowCode = normalize(row.cod_examen || row.area || row.tipo || '')
+          return rowCode === norm
+        })
+      })
+    : isGeneralSimulacro && generalKeys > 0
+      ? []
+      : isGeneralSimulacro
+        ? (requiredPairs.length && answerKeys.rows.value.length === 0 ? requiredPairs : [])
+        : processIsReal
+          ? requiredPairs.filter(({ area, type }) =>
+            !keyByAreaType.has(`${area.toLowerCase()}|${type}`)
+          )
+          : requiredPairs.filter(({ area }) =>
+            !keyByArea.has(area.toLowerCase())
+          )
   const duplicatePairs = countDuplicates(
     answerKeys.rows.value.map(row => {
+      if (hasExamCodes) {
+        return normalize(row.cod_examen || row.area || '')
+      }
       const area = String(row.area || '').trim().toLowerCase()
       const type = firstLetter(row.tipo)
       if (processIsReal) return area && type ? `${area}|${type}` : ''
@@ -265,7 +282,7 @@ const answerKeyReconciliation = computed(() => {
     duplicatePairs,
     incompleteKeys,
     issues,
-    mode: processIsReal ? 'real' : isGeneralSimulacro ? 'simulacro-general' : 'simulacro-areas',
+    mode: hasExamCodes ? 'exam-codes' : processIsReal ? 'real' : isGeneralSimulacro ? 'simulacro-general' : 'simulacro-areas',
     generalKeyCoversSimulacro: isGeneralSimulacro && generalKeys > 0,
     status: issues === 0 && answerKeys.rows.value.length > 0 ? 'ok' : issues > 0 ? 'warn' : 'empty',
   }

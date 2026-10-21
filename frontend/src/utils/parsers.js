@@ -2,9 +2,36 @@ import { generateId, stripDigits, removeWhitespace } from './helpers'
 import { DEFAULT_DAT_FORMAT } from '@/constants'
 
 /**
+/**
+ * Limpia observaciones de campos no requeridos (aula y tipo) cuando el proceso no los utiliza en la ficha
+ * @param {string} observaciones
+ * @param {object} [formatConfig]
+ * @returns {string}
+ */
+export function cleanAulaObservations(observaciones = '', formatConfig = DEFAULT_DAT_FORMAT) {
+  if (!observaciones || observaciones === 'Sin observaciones') return 'Sin observaciones'
+  const isAulaRequired = Boolean(formatConfig?.requireAula && (formatConfig?.aulaLength ?? 0) > 0)
+  const isTipoRequired = Boolean(formatConfig?.requireTipo && (formatConfig?.tipoLength ?? 0) > 0)
+
+  const filtered = String(observaciones)
+    .split(' · ')
+    .map((s) => s.trim())
+    .filter((s) => {
+      if (!s) return false
+      if (!isAulaRequired && (s.startsWith('Aula sin marcar') || s.startsWith('Aula incompleta'))) return false
+      if (!isTipoRequired && s.startsWith('Tipo sin marcar')) return false
+      return true
+    })
+  return filtered.length ? filtered.join(' · ') : 'Sin observaciones'
+}
+
+/**
  * Crea una fila de identificador con valores por defecto
  */
-export function createIdentifierRow(data = {}) {
+export function createIdentifierRow(data = {}, formatConfig = DEFAULT_DAT_FORMAT) {
+  const rawObs = data.observaciones ?? 'Sin observaciones'
+  const observaciones = cleanAulaObservations(rawObs, formatConfig)
+
   return {
     id: data.id ?? generateId(),
     rawLine: data.rawLine ?? '',
@@ -18,7 +45,7 @@ export function createIdentifierRow(data = {}) {
     dni: data.dni ?? '',
     aula: data.aula ?? '',
     answers: data.answers ?? '',
-    observaciones: data.observaciones ?? 'Sin observaciones',
+    observaciones,
     sourceId: data.sourceId ?? '',
   }
 }
@@ -36,9 +63,13 @@ export function buildIdentifierObservation(row, formatConfig = DEFAULT_DAT_FORMA
     issues.push(`Litho incompleto (${lithoDigits})`)
   }
 
-  const tipo = (row.tipo || '').trim()
-  if (!tipo) {
-    issues.push('Tipo sin marcar')
+  // Omitir validación de tipo si el proceso no utiliza tipo en la ficha (como Concurso PJ)
+  // Solo se valida si formatConfig.requireTipo está explícitamente activo en true y tipoLength > 0
+  if (formatConfig?.requireTipo && (formatConfig?.tipoLength ?? 0) > 0) {
+    const tipo = (row.tipo || '').trim()
+    if (!tipo) {
+      issues.push('Tipo sin marcar')
+    }
   }
 
   const dniDigits = stripDigits(row.dni)
@@ -48,11 +79,15 @@ export function buildIdentifierObservation(row, formatConfig = DEFAULT_DAT_FORMA
     issues.push(`DNI incompleto (${dniDigits})`)
   }
 
-  const aulaDigits = stripDigits(row.aula)
-  if (!aulaDigits) {
-    issues.push('Aula sin marcar')
-  } else if (aulaDigits.length !== formatConfig.aulaLength) {
-    issues.push(`Aula incompleta (${aulaDigits})`)
+  // Omitir validación de aula si el proceso no utiliza aulas en la ficha
+  // Solo se valida si formatConfig.requireAula está explícitamente activo en true y aulaLength > 0
+  if (formatConfig?.requireAula && (formatConfig?.aulaLength ?? 0) > 0) {
+    const aulaDigits = stripDigits(row.aula)
+    if (!aulaDigits) {
+      issues.push('Aula sin marcar')
+    } else if (aulaDigits.length !== formatConfig.aulaLength) {
+      issues.push(`Aula incompleta (${aulaDigits})`)
+    }
   }
 
   return issues.length ? issues.join(' · ') : 'Sin observaciones'

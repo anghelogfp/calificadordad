@@ -80,14 +80,24 @@ describe('buildIdentifierObservation', () => {
     expect(buildIdentifierObservation(row, DEFAULT_DAT_FORMAT)).toContain('Litho sin marcar')
   })
 
-  it('detecta tipo sin marcar', () => {
+  it('omite tipo sin marcar por defecto en procesos sin tipo (como Concurso PJ)', () => {
     const row = {
       litho: '123456',
       tipo: '',
       dni: '12345678',
       aula: 'A101',
     }
-    expect(buildIdentifierObservation(row, DEFAULT_DAT_FORMAT)).toContain('Tipo sin marcar')
+    expect(buildIdentifierObservation(row, DEFAULT_DAT_FORMAT)).toBe('Sin observaciones')
+  })
+
+  it('detecta tipo sin marcar solo si requireTipo está activo', () => {
+    const row = {
+      litho: '123456',
+      tipo: '',
+      dni: '12345678',
+      aula: 'A101',
+    }
+    expect(buildIdentifierObservation(row, { ...DEFAULT_DAT_FORMAT, requireTipo: true })).toContain('Tipo sin marcar')
   })
 
   it('detecta DNI incompleto', () => {
@@ -100,18 +110,28 @@ describe('buildIdentifierObservation', () => {
     expect(buildIdentifierObservation(row, DEFAULT_DAT_FORMAT)).toContain('DNI incompleto')
   })
 
-  it('detecta aula incompleto', () => {
+  it('omite observación de aula por defecto en procesos sin aulas', () => {
+    const row = {
+      litho: '123456',
+      tipo: 'P',
+      dni: '12345678',
+      aula: '',
+    }
+    expect(buildIdentifierObservation(row, DEFAULT_DAT_FORMAT)).toBe('Sin observaciones')
+  })
+
+  it('detecta aula incompleto solo si requireAula está activo', () => {
     const row = {
       litho: '123456',
       tipo: 'P',
       dni: '12345678',
       aula: 'A1',
     }
-    const obs = buildIdentifierObservation(row, DEFAULT_DAT_FORMAT)
-    expect(obs).toContain('Aula incomplet')
+    const obs = buildIdentifierObservation(row, { ...DEFAULT_DAT_FORMAT, requireAula: true })
+    expect(obs).toContain('Aula incompleta')
   })
 
-  it('acumula múltiples observaciones', () => {
+  it('acumula múltiples observaciones respetando omisión de aula y tipo por defecto', () => {
     const row = {
       litho: '',
       tipo: '',
@@ -119,7 +139,9 @@ describe('buildIdentifierObservation', () => {
       aula: '',
     }
     const obs = buildIdentifierObservation(row, DEFAULT_DAT_FORMAT)
-    expect(obs.split(' · ').length).toBe(4)
+    expect(obs.split(' · ').length).toBe(2)
+    const obsAll = buildIdentifierObservation(row, { ...DEFAULT_DAT_FORMAT, requireTipo: true, requireAula: true })
+    expect(obsAll.split(' · ').length).toBe(4)
   })
 })
 

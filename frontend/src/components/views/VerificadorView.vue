@@ -905,25 +905,41 @@ function exportHistoryCsv() {
 // ── PDF ───────────────────────────────────────────────────────────────────────
 function abbrevCurso(name) {
   if (!name) return '—'
-  const words = name.trim().split(/\s+/)
-  if (words.length > 1) return words.map(w => w[0].toUpperCase()).join('.')
-  return name.slice(0, 3).toUpperCase()
+  const trimmed = name.trim()
+  if (trimmed.length <= 11) return trimmed
+  const words = trimmed.split(/\s+/)
+  if (words.length > 1) {
+    if (words[0].length <= 3) return `${words[0]} ${words.slice(1).map(w => w.slice(0, 4)).join('.')}`
+    return `${words[0].slice(0, 1)}. ${words.slice(1).join(' ')}`.slice(0, 12)
+  }
+  return trimmed.slice(0, 11)
+}
+
+function getRowStatusLabel(r) {
+  if (r.exceptionApplied) return exceptionBadgeLabel(r.exceptionApplied)
+  if (r.status === 'correct')   return 'Correcta'
+  if (r.status === 'incorrect') return 'Incorrecta'
+  if (r.status === 'blank')     return 'En blanco'
+  if (r.status === 'excluded')  return 'Excluida'
+  return '—'
 }
 
 function exceptionBadgeLabel(excType) {
   if (excType === 'ANULADA_OTORGAR') return 'Anulada (+pts)'
-  if (excType === 'ANULADA_EXCLUIR') return 'Anulada (Excluida)'
+  if (excType === 'ANULADA_EXCLUIR') return 'Anulada (Excl.)'
   if (excType === 'CLAVE_MULTIPLE') return 'Clave múltiple'
   return ''
 }
 
-async function _loadLogo() {
+async function _loadLogo(url) {
   try {
-    const res = await fetch('/unap.png')
+    const res = await fetch(url)
+    if (!res.ok) return null
     const blob = await res.blob()
     return await new Promise((resolve) => {
       const reader = new FileReader()
       reader.onload = () => resolve(reader.result)
+      reader.onerror = () => resolve(null)
       reader.readAsDataURL(blob)
     })
   } catch { return null }
@@ -941,160 +957,212 @@ async function exportPdf() {
 
   const { correctCount, incorrectCount, blankCount, score } = stats.value
   const { jsPDF, autoTable } = await loadPdfExportDeps()
-  const logoBase64 = await _loadLogo()
-  const allRows    = rows.value
 
-  const doc   = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const pageW = doc.internal.pageSize.getWidth()   // 210
-  const pageH = doc.internal.pageSize.getHeight()  // 297
+  // Carga de logos institucionales (UNAP obligatorio, PJ condicional)
+  const [unapLogo, pjLogo] = await Promise.all([
+    _loadLogo('/unap.png'),
+    verifierMode.value === 'poder_judicial' ? _loadLogo('/logo-pj.jpg') : Promise.resolve(null),
+  ])
 
-  // ── 1. Encabezado institucional ───────────────────────────────────────────────
-  const HDR_H = 28
-  doc.setFillColor(30, 41, 59)
-  doc.rect(0, 0, pageW, HDR_H, 'F')
+  const allRows = rows.value
+  const doc     = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const pageW   = doc.internal.pageSize.getWidth()   // 210 mm
+  const pageH   = doc.internal.pageSize.getHeight()  // 297 mm
 
-  if (logoBase64) doc.addImage(logoBase64, 'PNG', 7, 3, 20, 20)
-  const txtX = logoBase64 ? pageW / 2 + 5 : pageW / 2
+  // ── 1. Encabezado institucional (Estilo membretado formal limpio) ──────────────
+  // Logos institucionales
+  if (unapLogo) {
+    try {
+      const fmt = unapLogo.includes('image/png') ? 'PNG' : 'JPEG'
+      doc.addImage(unapLogo, fmt, 10, 4.5, 20, 20)
+    } catch { /* continuar si falla */ }
+  }
 
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(10)
+  if (pjLogo) {
+    try {
+      const fmt = pjLogo.includes('image/png') ? 'PNG' : 'JPEG'
+      doc.addImage(pjLogo, fmt, pageW - 30, 4.5, 20, 20)
+    } catch { /* continuar si falla */ }
+  }
+
+  const txtX = pageW / 2
+  doc.setTextColor(10, 36, 70) // Navy institucional UNAP
+  doc.setFontSize(11)
   doc.setFont('helvetica', 'bold')
-  doc.text('UNIVERSIDAD NACIONAL DEL ALTIPLANO DE PUNO', txtX, 8, { align: 'center' })
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(203, 213, 225)
+  doc.text('UNIVERSIDAD NACIONAL DEL ALTIPLANO DE PUNO', txtX, 9.5, { align: 'center' })
+
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(180, 83, 9) // Ámbar/dorado institucional
   doc.text(
     verifierMode.value === 'poder_judicial'
-      ? 'DIRECCIÓN DE ADMISIÓN · CONCURSO PODER JUDICIAL CSJ PUNO'
-      : 'DIRECCIÓN DE ADMISIÓN',
-    txtX, 14, { align: 'center' }
+      ? 'DIRECCIÓN DE ADMISIÓN · CONCURSO PÚBLICO PODER JUDICIAL (CSJ PUNO)'
+      : 'DIRECCIÓN DE ADMISIÓN · SISTEMA OFICIAL DE CALIFICACIÓN',
+    txtX, 14.8, { align: 'center' }
   )
+
+  doc.setFontSize(8.8)
   doc.setFont('helvetica', 'bold')
-  doc.setTextColor(255, 255, 255)
+  doc.setTextColor(15, 23, 42) // Slate oscuro
   doc.text(
     selectedPlantilla.value?.name ||
-      (verifierMode.value === 'poder_judicial' ? 'VERIFICACIÓN MANUAL — 30 PREGUNTAS' : 'VERIFICACIÓN DE RESPUESTAS'),
-    txtX, 20, { align: 'center' }
+      (verifierMode.value === 'poder_judicial'
+        ? 'ACTA DE VERIFICACIÓN MANUAL DE RESPUESTAS — 30 PREGUNTAS'
+        : 'ACTA DE VERIFICACIÓN DE HOJA DE RESPUESTAS'),
+    txtX, 20.5, { align: 'center' }
   )
-  doc.setFontSize(7)
+
+  doc.setFontSize(6.8)
   doc.setFont('helvetica', 'normal')
-  doc.setTextColor(148, 163, 184)
+  doc.setTextColor(100, 116, 139)
   const hdrSub = candidatoProceso.value.trim()
-    ? candidatoProceso.value.trim().toUpperCase()
-    : 'VERIFICADOR MANUAL DE RESPUESTAS'
+    ? `PROCESO: ${candidatoProceso.value.trim().toUpperCase()}  ·  AUDITORÍA Y CONTROL DE CALIDAD`
+    : 'VERIFICADOR INDEPENDIENTE DE AUDITORÍA Y CONTROL DE CALIDAD'
   doc.text(hdrSub, txtX, 25.5, { align: 'center' })
 
-  // ── 2. Card candidato ─────────────────────────────────────────────────────────
-  const CAND_Y = HDR_H + 3
-  const CAND_H = 38
-  doc.setFillColor(248, 250, 252)
-  doc.setDrawColor(226, 232, 240)
+  // Línea divisoria institucional (Navy + detalle Dorado)
+  doc.setDrawColor(10, 36, 70)
+  doc.setLineWidth(0.6)
+  doc.line(10, 28, pageW - 10, 28)
+
+  doc.setDrawColor(217, 119, 6)
   doc.setLineWidth(0.3)
-  doc.rect(10, CAND_Y, pageW - 20, CAND_H, 'FD')
-  doc.setFillColor(30, 41, 59)
-  doc.rect(10, CAND_Y, 3, CAND_H, 'F')
+  doc.line(10, 28.8, pageW - 10, 28.8)
+
+  // ── 2. Card del postulante / candidato ────────────────────────────────────────
+  const CAND_Y = 32
+  const CAND_H = 36
+  // Fondo de la tarjeta con borde sutil
+  doc.setFillColor(248, 250, 252)
+  doc.setDrawColor(203, 213, 225)
+  doc.setLineWidth(0.3)
+  doc.roundedRect(10, CAND_Y, pageW - 20, CAND_H, 2, 2, 'FD')
+
+  // Borde lateral izquierdo azul navy institucional
+  doc.setFillColor(10, 36, 70)
+  doc.roundedRect(10, CAND_Y, 3.2, CAND_H, 1, 1, 'F')
 
   const procesoStr = candidatoProceso.value.trim()
   if (procesoStr) {
     doc.setFontSize(6.5)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(30, 58, 138)
-    doc.text(procesoStr.toUpperCase(), 17, CAND_Y + 5)
+    doc.text(`CONVOCATORIA: ${procesoStr.toUpperCase()}`, 17, CAND_Y + 5.5)
   }
 
-  const nombre = candidatoNombre.value.trim() || 'Sin nombre'
+  const nombre = candidatoNombre.value.trim() || 'SIN NOMBRE IDENTIFICADO'
   doc.setFontSize(10.5)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(15, 23, 42)
-  doc.text(nombre.toUpperCase(), 17, CAND_Y + (procesoStr ? 11 : 8))
+  doc.text(nombre.toUpperCase(), 17, CAND_Y + (procesoStr ? 11.5 : 8.5))
 
-  const subLine = [candidatoArea.value.trim(), candidatoPrograma.value.trim()].filter(Boolean).join(' · ')
+  const subLine = [candidatoArea.value.trim(), candidatoPrograma.value.trim()].filter(Boolean).join('  ·  ')
   doc.setFontSize(7.5)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(71, 85, 105)
-  doc.text(subLine || '—', 17, CAND_Y + (procesoStr ? 17 : 14))
+  doc.text(subLine || 'MODALIDAD ORDINARIO / GENERAL', 17, CAND_Y + (procesoStr ? 17.5 : 14.5))
 
+  // Cuadro destacado de puntaje obtenido
   const scoreStr  = score.toFixed(3)
-  const scoreBoxW = 34
-  const scoreBoxH = 22
+  const scoreBoxW = 40
+  const scoreBoxH = 24
   const scoreBoxX = pageW - 13 - scoreBoxW
-  const scoreBoxY = CAND_Y + 2
-  doc.setDrawColor(202, 138, 4)
-  doc.setLineWidth(0.8)
-  doc.roundedRect(scoreBoxX, scoreBoxY, scoreBoxW, scoreBoxH, 2, 2, 'D')
-  doc.setFontSize(7)
+  const scoreBoxY = CAND_Y + 3
+  doc.setFillColor(254, 252, 232) // Fondo suave ambar dorado
+  doc.setDrawColor(217, 119, 6)
+  doc.setLineWidth(0.7)
+  doc.roundedRect(scoreBoxX, scoreBoxY, scoreBoxW, scoreBoxH, 2, 2, 'FD')
+
+  doc.setFontSize(6.5)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(146, 64, 14)
-  doc.text('PUNTAJE', scoreBoxX + scoreBoxW / 2, scoreBoxY + 7, { align: 'center' })
-  doc.setFontSize(14)
-  doc.setTextColor(120, 53, 15)
-  doc.text(scoreStr, scoreBoxX + scoreBoxW / 2, scoreBoxY + 17, { align: 'center' })
+  doc.text('PUNTAJE FINAL', scoreBoxX + scoreBoxW / 2, scoreBoxY + 6, { align: 'center' })
 
+  doc.setFontSize(14.5)
+  doc.setTextColor(120, 53, 15)
+  doc.text(scoreStr, scoreBoxX + scoreBoxW / 2, scoreBoxY + 16, { align: 'center' })
+
+  doc.setFontSize(5.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(21, 128, 61)
+  doc.text('PUNTAJE AUDITADO', scoreBoxX + scoreBoxW / 2, scoreBoxY + 21, { align: 'center' })
+
+  // Línea divisoria en tarjeta
   doc.setDrawColor(226, 232, 240)
   doc.setLineWidth(0.3)
-  doc.line(17, CAND_Y + 22, scoreBoxX - 3, CAND_Y + 22)
+  doc.line(17, CAND_Y + 22.5, scoreBoxX - 4, CAND_Y + 22.5)
 
+  // Metadatos en cuadrícula limpia
   const fieldDefs = [
-    ['DNI',          candidatoDni.value      || '—'],
-    ['Aula / Grupo', candidatoAula.value     || '—'],
-    ['Posición',     candidatoPosicion.value || '—'],
-    ['Cód. Examen',  candidatoTipo.value || candidatoArea.value || '—'],
+    ['DNI / CÓDIGO',  candidatoDni.value      || '—'],
+    ['AULA / GRUPO',  candidatoAula.value     || '—'],
+    ['POSICIÓN',      candidatoPosicion.value || '—'],
+    ['CÓD. EXAMEN',   candidatoTipo.value || candidatoArea.value || selectedExamCode.value || '—'],
   ]
-  const fieldColW = (scoreBoxX - 3 - 17) / fieldDefs.length
+  const fieldColW = (scoreBoxX - 4 - 17) / fieldDefs.length
   fieldDefs.forEach(([label, val], i) => {
     const fx = 17 + i * fieldColW
-    const fy = CAND_Y + 25
-    doc.setFontSize(6.5)
+    const fy = CAND_Y + 25.5
+    doc.setFontSize(6)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(100, 116, 139)
-    doc.text(label.toUpperCase(), fx, fy)
-    doc.setFontSize(8)
+    doc.text(label, fx, fy)
+    doc.setFontSize(7.8)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(15, 23, 42)
     doc.text(String(val), fx, fy + 5.5)
   })
 
-  // ── 3. Barra de estadísticas (inline) ────────────────────────────────────────
-  const STATS_Y = CAND_Y + CAND_H + 2
+  // ── 3. Franja KPI y Estadísticas de Calificación ───────────────────────────────
+  const STATS_Y = CAND_Y + CAND_H + 2.5
+  const STATS_H = 9.5
   doc.setFillColor(241, 245, 249)
-  doc.setDrawColor(226, 232, 240)
-  doc.setLineWidth(0.15)
-  doc.rect(10, STATS_Y, pageW - 20, 9, 'FD')
+  doc.setDrawColor(203, 213, 225)
+  doc.setLineWidth(0.2)
+  doc.roundedRect(10, STATS_Y, pageW - 20, STATS_H, 1.5, 1.5, 'FD')
 
-  doc.setFontSize(7.5)
-  const statPairs = [
-    ['Correctas: ',   `${correctCount}`,          [21, 128, 61]],
-    ['Incorrectas: ', `${incorrectCount}`,        [220, 38, 38]],
-    ['En blanco: ',   `${blankCount}`,            [100, 116, 139]],
-    ['C×',            `${correctValue.value}`,    [30, 41, 59]],
-    ['I×',            `${incorrectValue.value}`,  [30, 41, 59]],
-    ['B×',            `${blankValue.value}`,      [30, 41, 59]],
-    ['Excepciones: ', `${activeExceptionsForExam.value.length}`, [146, 64, 14]],
+  doc.setFontSize(7.2)
+  const statItems = [
+    { label: 'Correctas:',   val: `${correctCount}`,   color: [21, 128, 61] },
+    { label: 'Incorrectas:', val: `${incorrectCount}`, color: [220, 38, 38] },
+    { label: 'En blanco:',   val: `${blankCount}`,     color: [100, 116, 139] },
+    { label: 'Ponderación:', val: `C:+${correctValue.value} | I:${incorrectValue.value} | B:${blankValue.value}`, color: [10, 36, 70] },
+    { label: 'Excepciones:', val: `${activeExceptionsForExam.value.length}`, color: [180, 83, 9] },
   ]
+
   let sx = 14
-  statPairs.forEach(([label, val, rgb]) => {
+  statItems.forEach((item, idx) => {
     doc.setFont('helvetica', 'normal')
-    doc.setTextColor(100, 116, 139)
-    doc.text(label, sx, STATS_Y + 6)
-    sx += doc.getTextWidth(label)
+    doc.setTextColor(71, 85, 105)
+    doc.text(item.label, sx, STATS_Y + 6.2)
+    sx += doc.getTextWidth(item.label) + 1.2
+
     doc.setFont('helvetica', 'bold')
-    doc.setTextColor(...rgb)
-    doc.text(val, sx, STATS_Y + 6)
-    sx += doc.getTextWidth(val) + 5
+    doc.setTextColor(...item.color)
+    doc.text(item.val, sx, STATS_Y + 6.2)
+    sx += doc.getTextWidth(item.val) + (idx < statItems.length - 1 ? 6.5 : 0)
   })
 
-  // ── 4. Tablas dos columnas ────────────────────────────────────────────────────
-  const TABLE_Y = STATS_Y + 12
+  // ── 4. Tablas en dos columnas balanceadas ─────────────────────────────────────
+  const TABLE_Y = STATS_Y + STATS_H + 3
   const GAP     = 5
-  const halfW   = (pageW - 20 - GAP) / 2
+  const halfW   = (pageW - 20 - GAP) / 2 // 92.5 mm
 
-  const CW = { 0: 8, 1: 18, 2: 11, 3: 11, 4: 12, 5: 14, 6: 18.5 }
-  const HEAD = [['N°', 'Curso', 'Marc.', 'Corr.', 'Pond.', 'Pts', 'Acum.']]
+  // Anchos calculados exactamente para sumar 92.5 mm
+  const CW = { 0: 8, 1: 21, 2: 11, 3: 11, 4: 11.5, 5: 13, 6: 17 }
+
+  // Detectar si el examen tiene materias diferenciadas o un curso único (ej. Conocimientos en PJ)
+  const uniqueSubjects = new Set(allRows.map(r => (r.subject || '').trim()).filter(Boolean))
+  const isSingleSubject = uniqueSubjects.size <= 1
+  const col1Header = isSingleSubject ? 'Condición / Regla' : 'Curso / Regla'
+  const HEAD = [['N°', col1Header, 'Marc.', 'Corr.', 'Pond.', 'Pts', 'Acum.']]
 
   function buildBody(halfRows) {
     return halfRows.map(r => [
       r.n,
-      r.exceptionApplied ? exceptionBadgeLabel(r.exceptionApplied) : abbrevCurso(r.subject),
+      r.exceptionApplied
+        ? exceptionBadgeLabel(r.exceptionApplied)
+        : (isSingleSubject ? getRowStatusLabel(r) : abbrevCurso(r.subject)),
       r.status === 'blank' ? '—' : r.marked,
       r.correct,
       `×${Number(r.weight).toFixed(3)}`,
@@ -1112,9 +1180,21 @@ async function exportPdf() {
       const isLast = data.row.index === halfRows.length - 1
 
       if (row.status === 'correct')   data.cell.styles.fillColor = [240, 253, 244]
-      if (row.status === 'incorrect') data.cell.styles.fillColor = [255, 245, 245]
+      if (row.status === 'incorrect') data.cell.styles.fillColor = [254, 242, 242]
       if (row.status === 'excluded')  data.cell.styles.fillColor = [241, 245, 249]
 
+      if (col === 1 && isSingleSubject) {
+        if (row.exceptionApplied) {
+          data.cell.styles.textColor = [180, 83, 9]
+          data.cell.styles.fontStyle = 'bold'
+        } else if (row.status === 'correct') {
+          data.cell.styles.textColor = [21, 128, 61]
+        } else if (row.status === 'incorrect') {
+          data.cell.styles.textColor = [220, 38, 38]
+        } else if (row.status === 'blank') {
+          data.cell.styles.textColor = [100, 116, 139]
+        }
+      }
       if (col === 2) {
         data.cell.styles.fontStyle = 'bold'
         if (row.status === 'correct')   data.cell.styles.textColor = [21, 128, 61]
@@ -1125,8 +1205,10 @@ async function exportPdf() {
         data.cell.styles.textColor = [29, 78, 216]
         data.cell.styles.fontStyle = 'bold'
       }
-      if (col === 5 && row.status === 'correct') {
-        data.cell.styles.textColor = [21, 128, 61]
+      if (col === 5) {
+        if (row.status === 'correct') data.cell.styles.textColor = [21, 128, 61]
+        if (row.status === 'incorrect') data.cell.styles.textColor = [220, 38, 38]
+        data.cell.styles.fontStyle = 'bold'
       }
       if (isLastTable && col === 6 && isLast) {
         data.cell.styles.fillColor = [254, 249, 195]
@@ -1146,24 +1228,27 @@ async function exportPdf() {
     head: HEAD,
     body: buildBody(halfRows),
     styles: {
-      fontSize: 7.5,
-      cellPadding: 1.6,
+      fontSize: 7.2,
+      cellPadding: 1.5,
       halign: 'center',
       lineColor: [226, 232, 240],
       lineWidth: 0.15,
     },
     columnStyles: {
-      0: { cellWidth: CW[0] },
-      1: { cellWidth: CW[1], halign: 'left', fontSize: 7, overflow: 'ellipsize' },
+      0: { cellWidth: CW[0], fontStyle: 'bold' },
+      1: { cellWidth: CW[1], halign: 'left', fontSize: 6.8, overflow: 'ellipsize' },
       2: { cellWidth: CW[2] },
       3: { cellWidth: CW[3] },
-      4: { cellWidth: CW[4], fontSize: 7 },
+      4: { cellWidth: CW[4], fontSize: 6.8 },
       5: { cellWidth: CW[5] },
       6: { cellWidth: CW[6], fontStyle: 'bold' },
     },
     headStyles: {
-      fillColor: [30, 41, 59], textColor: 255,
-      fontStyle: 'bold', fontSize: 7.5, cellPadding: 2,
+      fillColor: [10, 36, 70],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 7.2,
+      cellPadding: 1.8,
     },
     didParseCell: makeDidParseCell(halfRows, isLastTable),
   })
@@ -1171,35 +1256,60 @@ async function exportPdf() {
   autoTable(doc, sharedCfg(leftRows,  10,              10 + halfW + GAP, false))
   autoTable(doc, sharedCfg(rightRows, 10 + halfW + GAP, 10,              true))
 
-  // Espacio de firmas en modo 30 preguntas
-  if (allRows.length <= 30) {
-    const signY = pageH - 22
-    doc.setDrawColor(148, 163, 184)
-    doc.setLineWidth(0.3)
-    doc.line(25, signY, 90, signY)
-    doc.line(120, signY, 185, signY)
-    doc.setFontSize(7)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(71, 85, 105)
-    doc.text('POR LA UNIVERSIDAD NACIONAL DEL ALTIPLANO', 57.5, signY + 4, { align: 'center' })
-    doc.text('POR LA COMISIÓN PODER JUDICIAL — CSJ PUNO', 152.5, signY + 4, { align: 'center' })
-  }
+  // ── 5. Bloque Oficial de Firmas y Validación ──────────────────────────────────
+  const signY = pageH - 24
+  doc.setDrawColor(148, 163, 184)
+  doc.setLineWidth(0.35)
+  // Línea firma 1
+  doc.line(22, signY, 92, signY)
+  // Línea firma 2
+  doc.line(118, signY, 188, signY)
 
-  // ── 5. Footer ─────────────────────────────────────────────────────────────────
+  doc.setFontSize(6.8)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(30, 41, 59)
+  doc.text('RESPONSABLE DE CALIFICACIÓN', 57, signY + 3.8, { align: 'center' })
+  doc.setFontSize(6)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(100, 116, 139)
+  doc.text('Dirección de Admisión — UNA Puno', 57, signY + 7, { align: 'center' })
+
+  doc.setFontSize(6.8)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(30, 41, 59)
+  const cargoFirmante = verifierMode.value === 'poder_judicial'
+    ? 'COMISIÓN DEL CONCURSO CSJ PUNO'
+    : 'COMISIÓN CENTRAL DE ADMISIÓN'
+  doc.text(cargoFirmante, 153, signY + 3.8, { align: 'center' })
+  doc.setFontSize(6)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(100, 116, 139)
+  doc.text('Veedor Oficial / Control Institucional', 153, signY + 7, { align: 'center' })
+
+  // ── 6. Pie de página de Auditoría y Seguridad ─────────────────────────────────
   const now   = new Date()
   const fecha = now.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  const hora  = now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
-  doc.setFontSize(6.5)
+  const hora  = now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+
+  // Línea separadora de pie
+  doc.setDrawColor(226, 232, 240)
+  doc.setLineWidth(0.2)
+  doc.line(10, pageH - 10, pageW - 10, pageH - 10)
+
+  doc.setFontSize(6.2)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(148, 163, 184)
-  doc.text(
-    `Generado: ${fecha}  ${hora}` + (props.currentUser ? `   ·   ${props.currentUser}` : ''),
-    14, pageH - 5
-  )
-  doc.text('Pág. 1 / 1', pageW - 12, pageH - 5, { align: 'right' })
+  const auditText = `Generado el ${fecha} a las ${hora}` +
+    (props.currentUser ? `  ·  Operador: ${props.currentUser}` : '') +
+    `  ·  Sistema de Calificación UNA Puno`
+  doc.text(auditText, 10, pageH - 5.5)
 
-  const safe = (candidatoDni.value || 'verificador').replace(/[^a-z0-9_-]/gi, '_').toLowerCase()
-  doc.save(`verificador-${safe}-${fecha.replace(/\//g, '')}.pdf`)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(100, 116, 139)
+  doc.text('Página 1 de 1', pageW - 10, pageH - 5.5, { align: 'right' })
+
+  const safeDni = (candidatoDni.value || 'verificador').replace(/[^a-z0-9_-]/gi, '_').toLowerCase()
+  doc.save(`acta-verificacion-${safeDni}-${fecha.replace(/\//g, '')}.pdf`)
 }
 
 function formatFecha(iso) {
@@ -1504,7 +1614,7 @@ function formatFecha(iso) {
           <div class="candidate-row candidate-row--top">
             <div class="cfield cfield--proceso">
               <label class="cfield__label">Proceso / Convocatoria</label>
-              <input v-model="candidatoProceso" type="text" placeholder="Ej: CONCURSO PODER JUDICIAL 001-2026-UE-PUNO" class="cfield__input" />
+              <input v-model="candidatoProceso" type="text" placeholder="Ej: Proceso de Selección de Personal a Plazo Indeterminado N.° 001-2026-UE-PUNO" class="cfield__input" />
             </div>
             <div class="cfield cfield--tipo">
               <label class="cfield__label">Código Examen / Tipo</label>

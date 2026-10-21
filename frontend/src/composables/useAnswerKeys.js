@@ -31,15 +31,25 @@ function summarizeObservations(rows) {
  */
 export function createAnswerKeyRow(data = {}, areaList = ANSWER_KEY_AREAS, formatConfig = DEFAULT_DAT_FORMAT) {
   const rawArea = data.area == null ? '' : String(data.area).trim()
+  const codExamen = String(data.cod_examen ?? data.codExamen ?? '').trim()
+  let resolvedArea = ''
+  if (rawArea) {
+    if (areaList.includes(rawArea)) {
+      resolvedArea = rawArea
+    } else {
+      resolvedArea = normalizeArea(rawArea, areaList) || rawArea
+    }
+  }
   const row = {
     id: data.id ?? generateId(),
-    area: rawArea ? normalizeArea(rawArea, areaList) : '',
+    area: codExamen || resolvedArea,
     tipo: data.tipo ?? '',
+    cod_examen: codExamen || (!ANSWER_KEY_AREAS.includes(resolvedArea) ? resolvedArea : ''),
     answers: data.answers ?? '',
     indicator: data.indicator ?? '',
     folio: data.folio ?? '',
     litho: data.litho ?? '',
-    scope: data.scope ?? (rawArea ? 'area' : 'general'),
+    scope: data.scope ?? (rawArea || codExamen ? 'area' : 'general'),
     observaciones: data.observaciones ?? 'Sin observaciones',
     sourceId: data.sourceId ?? '',
   }
@@ -88,8 +98,26 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
   )
   const effectiveFormatConfig = () => formatConfig?.value || DEFAULT_DAT_FORMAT
 
+  const examCodesInPadron = computed(() => {
+    const codes = new Set()
+    ;(archiveRows?.value || []).forEach((r) => {
+      const code = String(r?.cod_examen || r?.codExamen || '').trim()
+      if (code) codes.add(code)
+    })
+    return Array.from(codes).sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+  })
+
+  const hasExamCodes = computed(() => examCodesInPadron.value.length > 0)
+
+  const effectiveAvailableAreas = computed(() => {
+    if (examCodesInPadron.value.length > 0) {
+      return examCodesInPadron.value
+    }
+    return effectiveAreaNames.value
+  })
+
   function createConfiguredAnswerKeyRow(data = {}) {
-    return createAnswerKeyRow(data, effectiveAreaNames.value, effectiveFormatConfig())
+    return createAnswerKeyRow(data, effectiveAvailableAreas.value, effectiveFormatConfig())
   }
 
   const tableState = useTableState({
@@ -99,6 +127,7 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
       const needle = normalize(searchValue)
       return (
         normalize(row.area).includes(needle) ||
+        normalize(row.cod_examen).includes(needle) ||
         normalize(row.tipo).includes(needle) ||
         normalize(row.litho).includes(needle) ||
         normalize(row.answers).includes(needle) ||
@@ -161,8 +190,11 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
     return map
   })
 
-  // Opciones de área basadas en archivos cargados
+  // Opciones de área basadas en archivos cargados o códigos de examen
   const answerKeyAreaOptions = computed(() => {
+    if (examCodesInPadron.value.length > 0) {
+      return examCodesInPadron.value
+    }
     const archiveAreas = (archiveRows?.value || [])
       .map((row) => normalizeArea(row.area, effectiveAreaNames.value))
       .filter((area) => effectiveAreaNames.value.includes(area))
@@ -323,10 +355,29 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
         }
       }
 
+      const isAllExamsMode = area === '__ALL__' || !area
+      let resolvedCode = isAllExamsMode ? '' : area
+      if (isAllExamsMode && matched) {
+        const candidates = [
+          matched.aula,
+          matched.dni,
+          String(matched.dni || '').replace(/^0+/, ''),
+          matched.tipo,
+        ].map(v => String(v || '').trim()).filter(Boolean)
+
+        const foundInPadron = examCodesInPadron.value.find(code => {
+          const norm = normalize(code)
+          return candidates.some(c => normalize(c) === norm)
+        })
+        resolvedCode = foundInPadron || candidates[0] || ''
+      }
+
       const tipo = matched ? matched.tipo : ''
+      const targetArea = resolvedCode || (isAllExamsMode ? '' : area)
 
       const answerKeyRow = createConfiguredAnswerKeyRow({
-        area,
+        area: targetArea,
+        cod_examen: resolvedCode || (isAllExamsMode ? '' : area),
         tipo,
         answers: row.answers,
         indicator: row.indicator,
@@ -627,6 +678,33 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
     doc.save('observaciones-claves.pdf')
   }
 
+  function addManualAnswerKey({ area = '', tipo = '', answers = '', cod_examen = '' } = {}) {
+    const targetArea = area || cod_examen || ''
+    const targetCode = cod_examen || area || ''
+    const existingIndex = tableState.rows.value.findIndex(r => {
+      const rCode = normalize(r.cod_examen || r.area || '')
+      const tCode = normalize(targetCode)
+      if (rCode && tCode && rCode === tCode) return true
+      return normalize(r.area) === normalize(targetArea) && normalize(r.tipo) === normalize(tipo)
+    })
+
+    const row = createConfiguredAnswerKeyRow({
+      area: targetArea,
+      cod_examen: targetCode,
+      tipo,
+      answers: String(answers || '').toUpperCase(),
+      litho: '000000',
+      scope: targetArea ? 'area' : 'general',
+    })
+
+    if (existingIndex >= 0) {
+      tableState.rows.value.splice(existingIndex, 1, row)
+    } else {
+      tableState.rows.value = [...tableState.rows.value, row]
+    }
+    return row
+  }
+
   return {
     // Estado de tabla
     ...tableState,
@@ -650,6 +728,8 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
     detectedOffset,
     configuredResponseAnswersOffset,
     expectedAnswersLength,
+    examCodesInPadron,
+    hasExamCodes,
     answerKeyAreaOptions,
     answerKeyLookupByMatch,
     answerKeyLookupByAreaTipo,
@@ -663,6 +743,7 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
     onAnswerKeyIdentificationChange,
     onAnswerKeyResponsesChange,
     importAnswerKeyFiles,
+    addManualAnswerKey,
     detectFormat,
     removeAnswerKeySource,
     clearAllAnswerKeys,

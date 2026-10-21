@@ -371,4 +371,43 @@ describe('useAnswerKeys imports', () => {
     expect(answerKeys.answerKeyLookupByAreaTipo.value.get('INGENIERÍAS|P').answers).toBe(makeAnswers('A'))
     expect(answerKeys.answerKeyFallbackByArea.value.get('INGENIERÍAS').answers).toBe(makeAnswers('B'))
   })
+
+  it('detecta códigos de examen del padrón y adapta answerKeyAreaOptions', () => {
+    const padronConExamenes = [
+      { dni: '11111111', cod_examen: 'E01' },
+      { dni: '22222222', cod_examen: 'E02' },
+      { dni: '33333333', cod_examen: 'E01' },
+    ]
+    const answerKeys = makeSubject(padronConExamenes)
+
+    expect(answerKeys.hasExamCodes.value).toBe(true)
+    expect(answerKeys.examCodesInPadron.value).toEqual(['E01', 'E02'])
+    expect(answerKeys.answerKeyAreaOptions.value).toEqual(['E01', 'E02'])
+  })
+
+  it('permite registrar o actualizar clave manualmente con addManualAnswerKey', () => {
+    const answerKeys = makeSubject()
+    answerKeys.addManualAnswerKey({
+      area: 'E01',
+      cod_examen: 'E01',
+      answers: makeAnswers('C'),
+    })
+
+    expect(answerKeys.rows.value.length).toBe(1)
+    expect(answerKeys.rows.value[0]).toMatchObject({
+      area: 'E01',
+      cod_examen: 'E01',
+      answers: makeAnswers('C'),
+    })
+
+    // Actualiza si se llama con el mismo código
+    answerKeys.addManualAnswerKey({
+      area: 'E01',
+      cod_examen: 'E01',
+      answers: makeAnswers('D'),
+    })
+
+    expect(answerKeys.rows.value.length).toBe(1)
+    expect(answerKeys.rows.value[0].answers).toBe(makeAnswers('D'))
+  })
 })
