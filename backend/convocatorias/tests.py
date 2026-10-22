@@ -420,3 +420,75 @@ class GlobalAreaAndDatFormatTests(TestCase):
         self.assertEqual(response.data['litho_length'], 7)
         self.assertEqual(response.data['response_answers_offset'], 9)
         self.assertEqual(DatFormatConfig.objects.count(), 1)
+
+
+class AnswerWhitespacePreservationTests(TestCase):
+    """Los espacios de las respuestas son preguntas en blanco y deben guardarse tal cual."""
+
+    # Blancos al inicio, en medio y al final: 60 posiciones exactas.
+    SHEET = ' ' * 11 + 'BCDEA' * 8 + '   ' + 'E' + ' ' * 5
+
+    def setUp(self):
+        self.user = User.objects.create_user('blancos', password='test-pass-123')
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def test_sheet_fixture_has_sixty_positions_with_edge_blanks(self):
+        self.assertEqual(len(self.SHEET), 60)
+        self.assertTrue(self.SHEET.startswith(' '))
+        self.assertTrue(self.SHEET.endswith(' '))
+
+    def test_response_answers_keep_leading_and_trailing_blanks(self):
+        row = {**response_row_payload(), 'answers': self.SHEET}
+
+        response = self.client.post(
+            '/api/respuestas/bulk_replace/',
+            {'sources': [source_payload()], 'rows': [row]},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(ResponseRow.objects.get().answers, self.SHEET)
+        listed = self.client.get('/api/respuestas/').json()
+        listed_rows = listed['results'] if isinstance(listed, dict) else listed
+        self.assertEqual(listed_rows[0]['answers'], self.SHEET)
+
+    def test_identifier_answers_and_raw_line_keep_blanks(self):
+        raw_line = '  107000001001102126001   5330     1    N 000942P61703136101  '
+        row = {**identifier_row_payload(), 'answers': self.SHEET, 'rawLine': raw_line}
+
+        response = self.client.post(
+            '/api/identificadores/bulk_replace/',
+            {'sources': [source_payload()], 'rows': [row]},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        saved = IdentifierRow.objects.get()
+        self.assertEqual(saved.answers, self.SHEET)
+        self.assertEqual(saved.raw_line, raw_line)
+
+    def test_answer_key_keeps_blanks(self):
+        row = {**answer_key_row_payload(), 'answers': self.SHEET}
+
+        response = self.client.post(
+            '/api/answer-keys/bulk_replace/',
+            {'sources': [answer_key_source_payload()], 'rows': [row]},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(AnswerKeyRow.objects.get().answers, self.SHEET)
+
+    def test_every_answer_field_declared_by_the_serializers_preserves_whitespace(self):
+        from .serializers import (
+            AnswerKeyRowSerializer,
+            IdentifierRowSerializer,
+            ResponseRowSerializer,
+        )
+
+        for serializer_class in (IdentifierRowSerializer, ResponseRowSerializer, AnswerKeyRowSerializer):
+            with self.subTest(serializer=serializer_class.__name__):
+                field = serializer_class().fields['answers']
+                self.assertFalse(field.trim_whitespace)
+                self.assertEqual(field.run_validation(self.SHEET), self.SHEET)

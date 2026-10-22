@@ -10,6 +10,9 @@ import {
   parseResponseLine,
   parseLinkedResponseLine,
   detectResponseAnswersOffset,
+  inferResponseLayout,
+  auditParsedResponses,
+  findStoredAnswerMismatches,
 } from '@/utils/parsers'
 import { apiFetch } from '@/utils/apiFetch'
 
@@ -221,6 +224,24 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
     }
   }
 
+  // Relee lo guardado y lo compara con lo cargado: un desplazamiento o recorte
+  // en el camino al servidor queda a la vista en lugar de esconderse en los puntajes.
+  async function verifyStoredResponses() {
+    const res = await apiFetch('/respuestas/')
+    if (!res.ok) return
+    const stored = await res.json()
+    const mismatches = findStoredAnswerMismatches(
+      tableState.rows.value,
+      stored,
+      effectiveFormatConfig().answersLength,
+    )
+    if (mismatches.length) {
+      tableState.importError.value =
+        `Las respuestas guardadas no coinciden con el archivo en ${mismatches.length} hoja(s) ` +
+        `(${mismatches.slice(0, 5).join(', ')}). Recarga la página con Cmd+Shift+R y vuelve a cargar el archivo.`
+    }
+  }
+
   async function syncResponsesToApi() {
     if (!apiReady.value) return
     apiSyncing.value = true
@@ -233,6 +254,7 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
         }),
       })
       if (!res.ok) throw new Error('No se pudieron guardar las respuestas.')
+      await verifyStoredResponses()
     } catch (error) {
       console.warn('[responses] No se pudo sincronizar con API:', error)
     } finally {
@@ -295,6 +317,7 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
     tableState.importError.value = ''
     const aggregatedRows = []
     const aggregatedErrors = []
+    const auditWarnings = []
 
     for (const file of files) {
       const sourceId = generateId()
@@ -302,11 +325,12 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
         const text = await file.text()
         const sanitizedText = text.split('\u001a').join('')
         const lines = sanitizedText.split(/\r?\n/)
+        const parseOptions = { layoutHint: inferResponseLayout(lines, effectiveFormatConfig()) }
         const parsedRows = []
         const fileErrors = []
 
         lines.forEach((line, index) => {
-          const preliminary = parseResponseLine(line, index + 1, effectiveFormatConfig())
+          const preliminary = parseResponseLine(line, index + 1, effectiveFormatConfig(), parseOptions)
           let linkedIdentifier = null
           if (preliminary?.row) {
             const exactKey = buildResponseMatchKey(preliminary.row)
@@ -319,7 +343,7 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
           }
 
           const result = linkedIdentifier
-            ? parseLinkedResponseLine(line, index + 1, effectiveFormatConfig(), linkedIdentifier)
+            ? parseLinkedResponseLine(line, index + 1, effectiveFormatConfig(), linkedIdentifier, parseOptions)
             : preliminary
           if (!result) return
           if (result.error) {
@@ -339,6 +363,9 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
 
         if (parsedRows.length) {
           aggregatedRows.push(...parsedRows)
+          auditWarnings.push(
+            ...auditParsedResponses(lines, parsedRows, effectiveFormatConfig()).map((w) => `${file.name}: ${w}`),
+          )
         }
 
         if (fileErrors.length) {
@@ -370,6 +397,8 @@ export function useResponses(identifierLookup, identifierLookupByLitho, formatCo
       tableState.clearSelection()
       tableState.clearEditing()
     }
+
+    aggregatedErrors.push(...auditWarnings)
 
     if (aggregatedErrors.length) {
       const preview = aggregatedErrors.slice(0, 3).join(' | ')

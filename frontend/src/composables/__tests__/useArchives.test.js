@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { describe, expect, it } from 'vitest'
-import { mapArchiveRowToSchema, useArchives } from '../useArchives'
+import { mapArchiveRowToSchema, normalizeBirthDate, useArchives } from '../useArchives'
 
 describe('mapArchiveRowToSchema', () => {
   it('mapea columnas de padrón usando alias normalizados', () => {
@@ -134,5 +134,45 @@ describe('mapArchiveRowToSchema', () => {
     expect(archives.archiveIssueCount.value).toBe(1)
     expect(archives.archiveIssues.value[0].row.dni).toBe('87654321')
     expect(archives.archiveIssues.value[0].message).toContain('Área no configurada')
+  })
+})
+
+describe('normalizeBirthDate', () => {
+  it('convierte DD/MM/YYYY al formato ISO que acepta la API', () => {
+    expect(normalizeBirthDate('13/01/2014')).toBe('2014-01-13')
+    expect(normalizeBirthDate('1/2/2014')).toBe('2014-02-01')
+    expect(normalizeBirthDate('13-01-2014')).toBe('2014-01-13')
+  })
+
+  it('conserva fechas ISO y descarta la hora', () => {
+    expect(normalizeBirthDate('2014-01-13')).toBe('2014-01-13')
+    expect(normalizeBirthDate('2014-01-13 00:00:00')).toBe('2014-01-13')
+  })
+
+  it('descarta valores vacíos, imposibles o desconocidos en lugar de romper el guardado', () => {
+    expect(normalizeBirthDate('')).toBe('')
+    expect(normalizeBirthDate(null)).toBe('')
+    expect(normalizeBirthDate('31/02/2014')).toBe('')
+    expect(normalizeBirthDate('no es fecha')).toBe('')
+  })
+
+  it('el padrón mapeado queda con fecha_nacimiento lista para la API', () => {
+    const row = mapArchiveRowToSchema({
+      'Número de Documento': '78415016',
+      'Apellido Paterno': 'Calsin',
+      'Fecha de Nacimiento': '13/01/2014',
+    })
+
+    expect(row.fecha_nacimiento).toBe('2014-01-13')
+  })
+
+  it('una fecha inválida no impide mapear al postulante', () => {
+    const row = mapArchiveRowToSchema({
+      'Número de Documento': '78415016',
+      'Fecha de Nacimiento': '??',
+    })
+
+    expect(row.dni).toBe('78415016')
+    expect(row.fecha_nacimiento).toBeNull()
   })
 })

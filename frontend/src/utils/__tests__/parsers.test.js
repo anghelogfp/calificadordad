@@ -9,6 +9,9 @@ import {
   parseLinkedResponseLine,
   parseAnswerKeyResponseLine,
   detectResponseAnswersOffset,
+  inferResponseLayout,
+  auditParsedResponses,
+  findStoredAnswerMismatches,
   readLinesFromFile,
 } from '../parsers'
 import { DEFAULT_DAT_FORMAT } from '@/constants'
@@ -445,5 +448,185 @@ describe('readLinesFromFile', () => {
       [3, 'tres'],
     ])
     expect(results.map((item) => item.row.line)).toEqual(['uno', 'dos', 'tres'])
+  })
+})
+
+// Línea con el ancho fijo real de ScanTools: examen, folio e indicador separados por espacios.
+function buildScanLine({ litho = '000888', tipo = 'P', answers }) {
+  return `${HEADER}   5330     1    N ${litho}${tipo}${answers}${' '.repeat(30)}`
+}
+
+describe('alineación de respuestas con la columna tipo', () => {
+  const answers = 'ADEEECBECEDABDDBEDBCCEBACBDEACCDBCDEBECCEADADCEBAADEA BCBEC '
+  const linked = { litho: '000888', indicator: 'N', folio: '1', tipo: 'P' }
+
+  it('tipo en blanco no desplaza las respuestas ni pierde la pregunta 60', () => {
+    const line = buildScanLine({ tipo: ' ', answers })
+
+    const linkedResult = parseLinkedResponseLine(line, 1, DEFAULT_DAT_FORMAT, linked)
+    const plainResult = parseResponseLine(line, 1)
+
+    expect(linkedResult.row.answers).toBe(answers)
+    expect(linkedResult.row.detectedAnswersOffset).toBe(7)
+    expect(plainResult.row.answers).toBe(answers)
+    expect(plainResult.row.detectedAnswersOffset).toBe(7)
+  })
+
+  it('la última respuesta en blanco no cambia el offset (sin empate de marcas)', () => {
+    const withBlankLast = `${'A'.repeat(59)} `
+    const withMarkedLast = 'A'.repeat(60)
+
+    for (const tipo of ['P', ' ']) {
+      expect(parseResponseLine(buildScanLine({ tipo, answers: withBlankLast }), 1).row.answers).toBe(withBlankLast)
+      expect(parseResponseLine(buildScanLine({ tipo, answers: withMarkedLast }), 1).row.answers).toBe(withMarkedLast)
+    }
+  })
+
+  it('conserva los blancos iniciales de las respuestas', () => {
+    const leadingBlanks = `${' '.repeat(11)}${'B'.repeat(49)}`
+
+    const result = parseResponseLine(buildScanLine({ tipo: 'P', answers: leadingBlanks }), 1)
+
+    expect(result.row.answers).toBe(leadingBlanks)
+    expect(result.row.answers).toHaveLength(60)
+  })
+
+  it('sin columna tipo, una letra A-E en esa posición indica que las respuestas empiezan tras el litho', () => {
+    const noTipo = buildScanLine({ tipo: '', answers: 'CDCACBDBAABBABEECAEBBEBECEDBEDEDCBDEBCCCCEEEDEBDDCDEAECBDCAA' })
+
+    const result = parseResponseLine(noTipo, 1)
+
+    expect(result.row.detectedAnswersOffset).toBe(6)
+    expect(result.row.answers).toBe('CDCACBDBAABBABEECAEBBEBECEDBEDEDCBDEBCCCCEEEDEBDDCDEAECBDCAA')
+  })
+
+  it('una columna tipo ambigua (espacio) se resuelve con la disposición del archivo', () => {
+    const blankFirst = ` ${'C'.repeat(59)}`
+    const line = buildScanLine({ tipo: '', answers: blankFirst })
+
+    expect(parseResponseLine(line, 1, DEFAULT_DAT_FORMAT, { layoutHint: 'without-tipo' }).row.answers).toBe(blankFirst)
+    expect(parseResponseLine(line, 1, DEFAULT_DAT_FORMAT, { layoutHint: 'without-tipo' }).row.detectedAnswersOffset).toBe(6)
+    expect(parseResponseLine(line, 1, DEFAULT_DAT_FORMAT, { layoutHint: 'with-tipo' }).row.detectedAnswersOffset).toBe(7)
+  })
+
+  it('una marca inválida en la columna tipo no se confunde con una respuesta', () => {
+    const line = buildScanLine({ tipo: 'Z', answers })
+
+    expect(parseResponseLine(line, 1).row.detectedAnswersOffset).toBe(7)
+    expect(parseResponseLine(line, 1).row.answers).toBe(answers)
+  })
+
+  it('la clave oficial mantiene sus 60 respuestas', () => {
+    const key = 'CDCACBDBAABBABEECAEBBEBECEDBEDEDCBDEBCCCCEEEDEBDDCDEAECBDCAA'
+
+    const result = parseAnswerKeyResponseLine(buildScanLine({ litho: '243170', tipo: 'P', answers: key }), 1)
+
+    expect(result.row.answers).toBe(key)
+    expect(result.row.tipo).toBe('P')
+  })
+
+  it('reproduce cualquier combinación de blancos, marcas múltiples y tipo (prueba aleatoria)', () => {
+    let seed = 20261022
+    const random = () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296
+      return seed / 4294967296
+    }
+    const marks = ['A', 'B', 'C', 'D', 'E', ' ', ' ', '*']
+
+    for (let iteration = 0; iteration < 500; iteration += 1) {
+      const sheet = Array.from({ length: 60 }, () => marks[Math.floor(random() * marks.length)]).join('')
+      const tipo = random() < 0.5 ? 'P' : ' '
+      const line = buildScanLine({ tipo, answers: sheet })
+
+      const plain = parseResponseLine(line, 1, DEFAULT_DAT_FORMAT, { layoutHint: 'with-tipo' })
+      const withLink = parseLinkedResponseLine(line, 1, DEFAULT_DAT_FORMAT, linked, { layoutHint: 'with-tipo' })
+
+      expect(plain.row.answers).toBe(sheet)
+      expect(withLink.row.answers).toBe(sheet)
+    }
+  })
+})
+
+describe('inferResponseLayout', () => {
+  const answers = 'ABCDE'.repeat(12)
+
+  it('detecta archivos con columna tipo aunque algunas líneas la traigan en blanco', () => {
+    const lines = [
+      buildScanLine({ litho: '000001', tipo: 'P', answers }),
+      buildScanLine({ litho: '000002', tipo: ' ', answers }),
+      buildScanLine({ litho: '000003', tipo: 'P', answers }),
+    ]
+
+    expect(inferResponseLayout(lines)).toBe('with-tipo')
+  })
+
+  it('detecta archivos sin columna tipo', () => {
+    const lines = [
+      buildScanLine({ litho: '000001', tipo: '', answers }),
+      buildScanLine({ litho: '000002', tipo: '', answers }),
+    ]
+
+    expect(inferResponseLayout(lines)).toBe('without-tipo')
+  })
+
+  it('devuelve null si ninguna línea es concluyente', () => {
+    expect(inferResponseLayout([])).toBeNull()
+    expect(inferResponseLayout(['', 'corta'])).toBeNull()
+    expect(inferResponseLayout([buildScanLine({ tipo: ' ', answers })])).toBeNull()
+  })
+})
+
+describe('readLinesFromFile con contexto por archivo', () => {
+  it('entrega el resultado de prepare a cada línea', async () => {
+    const file = { text: async () => 'uno\ndos\n' }
+    const seen = []
+
+    await readLinesFromFile(
+      file,
+      (line, lineNumber, context) => {
+        seen.push([line, context])
+        return null
+      },
+      { prepare: (lines) => ({ total: lines.length }) },
+    )
+
+    expect(seen).toEqual([['uno', { total: 3 }], ['dos', { total: 3 }], ['', { total: 3 }]])
+  })
+})
+
+describe('auditoría de respuestas', () => {
+  const answers = 'ABCDE'.repeat(12)
+
+  it('no avisa nada en un archivo coherente', () => {
+    const lines = [buildScanLine({ answers }), buildScanLine({ litho: '000889', answers })]
+    const rows = lines.map((l, i) => parseResponseLine(l, i + 1, DEFAULT_DAT_FORMAT).row)
+    expect(auditParsedResponses(lines, rows)).toEqual([])
+  })
+
+  it('avisa si el archivo mezcla disposiciones de columna tipo', () => {
+    const lines = [buildScanLine({ answers }), buildScanLine({ tipo: 'B', answers: answers.slice(1) + 'A' })]
+    const rows = lines.map((l, i) => parseResponseLine(l, i + 1, DEFAULT_DAT_FORMAT).row).filter(Boolean)
+    expect(auditParsedResponses(lines, rows).join(' ')).toMatch(/mezcla/)
+  })
+
+  it('avisa si una hoja trae caracteres que no son respuestas', () => {
+    const rows = [{ litho: '000888', answers: `${'A'.repeat(59)}7` }]
+    expect(auditParsedResponses([], rows).join(' ')).toMatch(/000888/)
+  })
+})
+
+describe('comparación con lo guardado', () => {
+  const row = (litho, answers) => ({ litho, folio: '1', examCode: '5330', answers })
+
+  it('acepta blancos finales de diferencia', () => {
+    expect(findStoredAnswerMismatches([row('1', 'ABC  ')], [row('1', 'ABC')])).toEqual([])
+  })
+
+  it('detecta respuestas recortadas al inicio', () => {
+    expect(findStoredAnswerMismatches([row('1', '   ABC')], [row('1', 'ABC')])).toEqual(['1'])
+  })
+
+  it('detecta hojas que faltan en la base', () => {
+    expect(findStoredAnswerMismatches([row('1', 'A'), row('2', 'B')], [row('1', 'A')])).toEqual(['2'])
   })
 })

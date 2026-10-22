@@ -5,6 +5,11 @@ from .models import AreaCalificacion, ProcesoCalificacion, ResultadoCandidato, V
 class ResultadoCandidatoSerializer(serializers.ModelSerializer):
     class Meta:
         model = ResultadoCandidato
+        # Los espacios de las respuestas son preguntas en blanco; no deben recortarse.
+        extra_kwargs = {
+            'answers_raw': {'trim_whitespace': False},
+            'correct_answers_raw': {'trim_whitespace': False},
+        }
         fields = [
             'id', 'dni', 'paterno', 'materno', 'nombres',
             'area', 'programa', 'score',

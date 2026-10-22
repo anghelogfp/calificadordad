@@ -78,6 +78,31 @@ function inferAreaFromExamId(lookup) {
 }
 
 /**
+ * Convierte una fecha de nacimiento a YYYY-MM-DD, el único formato que acepta la API.
+ * Reconoce DD/MM/YYYY (como en el SIAGIE) y descarta lo no reconocible: es un dato opcional
+ * y un valor inválido no debe impedir guardar todo el padrón.
+ */
+export function normalizeBirthDate(value) {
+  const text = String(value ?? '').trim()
+  if (!text) return ''
+
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T].*)?$/)
+  const local = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
+  const [year, month, day] = iso
+    ? [iso[1], iso[2], iso[3]]
+    : local
+      ? [local[3], local[2].padStart(2, '0'), local[1].padStart(2, '0')]
+      : []
+  if (!year) return ''
+
+  const parsed = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)))
+  const isRealDate = parsed.getUTCFullYear() === Number(year)
+    && parsed.getUTCMonth() === Number(month) - 1
+    && parsed.getUTCDate() === Number(day)
+  return isRealDate ? `${year}-${month}-${day}` : ''
+}
+
+/**
  * Mapea una fila de Excel al esquema de archivo
  */
 export function mapArchiveRowToSchema(row) {
@@ -101,6 +126,8 @@ export function mapArchiveRowToSchema(row) {
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(mappedRow.fecha_inscripcion || '')) {
     mappedRow.fecha_inscripcion = mappedRow.fecha_inscripcion.replace(' ', 'T')
   }
+
+  mappedRow.fecha_nacimiento = normalizeBirthDate(mappedRow.fecha_nacimiento)
 
   const hasContent = Object.values(mappedRow).some(Boolean)
   return hasContent ? createArchiveRow(mappedRow) : null

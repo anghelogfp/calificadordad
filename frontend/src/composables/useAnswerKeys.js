@@ -12,7 +12,13 @@ import {
   buildUniqueLithoLookup,
 } from '@/utils/helpers'
 import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
-import { parseIdentifierLine, parseAnswerKeyResponseLine, readLinesFromFile, detectResponseAnswersOffset } from '@/utils/parsers'
+import {
+  parseIdentifierLine,
+  parseAnswerKeyResponseLine,
+  readLinesFromFile,
+  detectResponseAnswersOffset,
+  inferResponseLayout,
+} from '@/utils/parsers'
 import { apiFetch } from '@/utils/apiFetch'
 
 function summarizeObservations(rows) {
@@ -129,6 +135,11 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
   const expectedAnswersLength = computed(() =>
     effectiveFormatConfig().answersLength ?? DEFAULT_DAT_FORMAT.answersLength
   )
+
+  // Disposición (con o sin columna tipo) compartida por todas las líneas del archivo.
+  function prepareResponseLayout(lines) {
+    return { layoutHint: inferResponseLayout(lines, effectiveFormatConfig()) }
+  }
 
   async function detectFormat(file) {
     detectedOffset.value = null
@@ -286,8 +297,8 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
 
     const responseResults = await readLinesFromFile(
       responsesFileParam,
-      (line, lineNumber) => {
-        const preliminary = parseAnswerKeyResponseLine(line, lineNumber, effectiveFormatConfig())
+      (line, lineNumber, parseOptions) => {
+        const preliminary = parseAnswerKeyResponseLine(line, lineNumber, effectiveFormatConfig(), null, parseOptions)
         if (!preliminary?.row) return preliminary
 
         const key = buildResponseMatchKey(preliminary.row)
@@ -299,9 +310,10 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
         }
 
         return matched
-          ? parseAnswerKeyResponseLine(line, lineNumber, effectiveFormatConfig(), matched)
+          ? parseAnswerKeyResponseLine(line, lineNumber, effectiveFormatConfig(), matched, parseOptions)
           : preliminary
       },
+      { prepare: prepareResponseLayout },
     )
 
     const responseRowsOnly = responseResults.filter((item) => item && item.row)
@@ -393,7 +405,8 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
   async function readGeneralAnswerKeyFile(responsesFileParam) {
     const responseResults = await readLinesFromFile(
       responsesFileParam,
-      (line, lineNumber) => parseAnswerKeyResponseLine(line, lineNumber, effectiveFormatConfig()),
+      (line, lineNumber, parseOptions) => parseAnswerKeyResponseLine(line, lineNumber, effectiveFormatConfig(), null, parseOptions),
+      { prepare: prepareResponseLayout },
     )
     const responseRowsOnly = responseResults.filter((item) => item && item.row)
     const responseErrors = responseResults.filter((item) => item && item.error)

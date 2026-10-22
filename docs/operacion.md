@@ -112,6 +112,8 @@ Columnas extra como `nro` o `sede` no bloquean la importacion; se ignoran mientr
 - En convocatoria real, las respuestas con tipo distinto de `P`, `Q`, `R`, `S` o `T` quedan observadas y no se califican.
 - `0` vacantes significa que el programa no tiene vacantes y no marcará ingresantes.
 - Las respuestas con menos marcas al final deben aparecer como `Blancos finales asumidos`, no como error critico de cadena incompleta.
+- La alineacion de las respuestas depende de la columna tipo: una letra P-T indica que la columna existe, una letra A-E indica que no existe, y un espacio (tipo sin marcar) se resuelve con la disposicion del resto del archivo. Un blanco al inicio o al final de la hoja nunca cambia la posicion de las preguntas.
+- Las respuestas se guardan en la API sin recortar espacios (`trim_whitespace=False`): cada espacio es una pregunta en blanco.
 
 ## Cuidados
 

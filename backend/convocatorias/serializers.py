@@ -14,6 +14,11 @@ from .models import (
 )
 
 
+# En las hojas de respuestas cada espacio es un dato (pregunta en blanco). DRF recorta por
+# defecto los espacios de los CharField, lo que desplazaría las respuestas al guardarlas.
+PRESERVE_WHITESPACE = {'trim_whitespace': False}
+
+
 class AreaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Area
@@ -93,12 +98,13 @@ class IdentifierSourceSerializer(serializers.ModelSerializer):
 
 class IdentifierRowSerializer(serializers.ModelSerializer):
     id = serializers.CharField(source='client_id')
-    rawLine = serializers.CharField(source='raw_line', allow_blank=True, required=False)
+    rawLine = serializers.CharField(source='raw_line', allow_blank=True, required=False, trim_whitespace=False)
     examCode = serializers.CharField(source='exam_code', allow_blank=True, required=False)
     sourceId = serializers.CharField(source='source_client_id', allow_blank=True, required=False)
 
     class Meta:
         model = IdentifierRow
+        extra_kwargs = {'answers': PRESERVE_WHITESPACE}
         fields = [
             'id',
             'rawLine',
@@ -148,6 +154,7 @@ class ResponseRowSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ResponseRow
+        extra_kwargs = {'answers': PRESERVE_WHITESPACE}
         fields = [
             'id',
             'header',
@@ -198,6 +205,7 @@ class AnswerKeyRowSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AnswerKeyRow
+        extra_kwargs = {'answers': PRESERVE_WHITESPACE}
         fields = [
             'id',
             'area',

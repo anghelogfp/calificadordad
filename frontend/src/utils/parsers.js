@@ -206,77 +206,178 @@ export function buildResponseObservation(row, formatConfig = DEFAULT_DAT_FORMAT)
  * @param {number} lineNumber
  * @param {object} [formatConfig] - Configuración de formato DAT
  */
-export function parseResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_FORMAT) {
-  return parseResponseLineInternal(line, lineNumber, formatConfig, false)
+export function parseResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_FORMAT, options = {}) {
+  return parseResponseLineInternal(line, lineNumber, formatConfig, null, options)
 }
 
-export function parseLinkedResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_FORMAT, linkedIdentifier = null) {
-  return parseResponseLineInternal(line, lineNumber, formatConfig, false, linkedIdentifier)
+export function parseLinkedResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_FORMAT, linkedIdentifier = null, options = {}) {
+  return parseResponseLineInternal(line, lineNumber, formatConfig, linkedIdentifier, options)
 }
 
-export function parseAnswerKeyResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_FORMAT, linkedIdentifier = null) {
-  return parseResponseLineInternal(line, lineNumber, formatConfig, true, linkedIdentifier)
+export function parseAnswerKeyResponseLine(line, lineNumber, formatConfig = DEFAULT_DAT_FORMAT, linkedIdentifier = null, options = {}) {
+  return parseResponseLineInternal(line, lineNumber, formatConfig, linkedIdentifier, options)
 }
 
-function scoreAnswersSegment(segment, answersLength) {
-  if (segment.length < answersLength) return -1
-  const window = segment.slice(0, answersLength).toUpperCase()
-  const marked = window.replace(/\s/g, '')
-  if (/[^A-E*]/.test(marked)) return -1
-  return marked.length
-}
-
-function selectAnswerKeyAnswersOffset(remainder, formatConfig) {
-  const configuredOffset = formatConfig.responseAnswersOffset
-    ?? (formatConfig.tipoOffset + formatConfig.tipoLength)
-  const noTypeOffset = formatConfig.lithoOffset + formatConfig.lithoLength
-  const candidates = Array.from(new Set([configuredOffset, noTypeOffset]))
-
-  return candidates
-    .map(offset => ({
-      offset,
-      score: scoreAnswersSegment(remainder.slice(offset), formatConfig.answersLength),
-    }))
-    .sort((a, b) => b.score - a.score || a.offset - b.offset)[0]?.offset ?? configuredOffset
-}
-
-function selectResponseAnswersOffset(remainder, formatConfig) {
-  const configuredOffset = formatConfig.responseAnswersOffset
-    ?? (formatConfig.tipoOffset + formatConfig.tipoLength)
-  const noTypeOffset = formatConfig.lithoOffset + formatConfig.lithoLength
-  const candidates = Array.from(new Set([configuredOffset, noTypeOffset]))
-
-  return candidates
-    .map(offset => ({
-      offset,
-      score: scoreAnswersSegment(remainder.slice(offset), formatConfig.answersLength),
-    }))
-    .sort((a, b) => b.score - a.score || a.offset - b.offset)[0]?.offset ?? configuredOffset
-}
-
-function selectLinkedAnswersOffset(remainder, formatConfig, linkedIdentifier) {
-  const configuredOffset = formatConfig.responseAnswersOffset
-    ?? (formatConfig.tipoOffset + formatConfig.tipoLength)
-  const noTypeOffset = formatConfig.lithoOffset + formatConfig.lithoLength
-  const linkedTipo = (linkedIdentifier?.tipo || '').trim().toUpperCase().slice(0, 1)
-  if (!linkedTipo) return null
-
-  const responseTipo = remainder
+/**
+ * Clasifica el contenido de la columna "tipo" de una línea de respuestas.
+ *
+ * Los alfabetos de tipo (P-T) y de respuestas (A-E, *) no se solapan, así que:
+ * - 'with-tipo':    hay una marca en la columna tipo; las respuestas empiezan después.
+ * - 'without-tipo': hay una respuesta A-E o *; la línea no trae columna tipo y las
+ *                   respuestas empiezan justo después del litho.
+ * - 'ambiguous':    espacio. Puede ser tipo sin marcar (la columna existe) o una primera
+ *                   pregunta en blanco (la columna no existe); no se decide con una sola línea.
+ */
+function classifyTipoColumn(remainder, formatConfig) {
+  const mark = remainder
     .slice(formatConfig.tipoOffset, formatConfig.tipoOffset + formatConfig.tipoLength)
-    .trim()
     .toUpperCase()
+  if (!mark.trim()) return 'ambiguous'
+  if (/^[A-E*]$/.test(mark)) return 'without-tipo'
+  return 'with-tipo'
+}
 
-  if (responseTipo === linkedTipo) return configuredOffset
-  if (/^[PQRST]$/.test(responseTipo)) return configuredOffset
-  return noTypeOffset
+/**
+ * Offset donde empiezan las respuestas. Nunca depende de cuántas marcas haya en la ventana:
+ * un blanco al final de la línea no puede cambiar la alineación de todas las preguntas.
+ * Si la columna tipo es ambigua, manda la disposición del archivo (layoutHint) y, sin ella,
+ * se asume el offset configurado (la columna tipo existe, aunque venga sin marcar).
+ */
+function resolveAnswersOffset(remainder, formatConfig, layoutHint = null) {
+  const withTipoOffset = formatConfig.responseAnswersOffset
+    ?? (formatConfig.tipoOffset + formatConfig.tipoLength)
+  const withoutTipoOffset = formatConfig.lithoOffset + formatConfig.lithoLength
+
+  const column = classifyTipoColumn(remainder, formatConfig)
+  if (column === 'with-tipo') return withTipoOffset
+  if (column === 'without-tipo') return withoutTipoOffset
+  return layoutHint === 'without-tipo' ? withoutTipoOffset : withTipoOffset
+}
+
+/**
+ * Extrae lo que sigue al encabezado, examen, folio e indicador de una línea DAT.
+ * Devuelve null si la línea no tiene la estructura esperada.
+ */
+function extractLineRemainder(rawLine, formatConfig) {
+  const raw = rawLine.replace(/\r$/, '')
+  if (!raw.trim() || raw.trim().length <= 1 || raw.length < 40) return null
+  if (!/^\d+$/.test(raw.slice(0, formatConfig.headerLength))) return null
+
+  let remainder = raw.slice(formatConfig.headerLength)
+  const examMatch = remainder.match(/^\s*(\d{4})/)
+  if (!examMatch) return null
+  remainder = remainder.slice(examMatch[0].length)
+
+  const folioMatch = remainder.match(/^\s*#?(\d+)/)
+  if (!folioMatch) return null
+  remainder = remainder.slice(folioMatch[0].length)
+
+  const indicatorMatch = remainder.match(/^\s*([A-Z])/i)
+  if (!indicatorMatch) return null
+  remainder = remainder.slice(indicatorMatch[0].length)
+
+  return remainder.startsWith(' ') ? remainder.slice(1) : remainder
+}
+
+/**
+ * Determina la disposición de un archivo completo de respuestas o claves.
+ * Todas las líneas de un archivo comparten disposición, así que las líneas con columna
+ * tipo inequívoca deciden también las ambiguas (tipo sin marcar o 1ª pregunta en blanco).
+ * @param {string[]} lines - Líneas crudas del archivo
+ * @param {object} [formatConfig]
+ * @returns {'with-tipo' | 'without-tipo' | null} null si ninguna línea es concluyente
+ */
+export function inferResponseLayout(lines, formatConfig = DEFAULT_DAT_FORMAT) {
+  let withTipo = 0
+  let withoutTipo = 0
+  for (const line of lines) {
+    const remainder = extractLineRemainder(line, formatConfig)
+    if (remainder === null) continue
+    const column = classifyTipoColumn(remainder, formatConfig)
+    if (column === 'with-tipo') withTipo += 1
+    else if (column === 'without-tipo') withoutTipo += 1
+  }
+  if (!withTipo && !withoutTipo) return null
+  return withoutTipo > withTipo ? 'without-tipo' : 'with-tipo'
+}
+
+/**
+ * Auditoría de un archivo de respuestas ya parseado. Devuelve advertencias legibles;
+ * lista vacía = sin hallazgos. No modifica filas.
+ * @param {string[]} lines - Líneas crudas del archivo
+ * @param {object[]} rows - Filas producidas por el parser
+ * @param {object} [formatConfig]
+ * @returns {string[]}
+ */
+export function auditParsedResponses(lines, rows, formatConfig = DEFAULT_DAT_FORMAT) {
+  const warnings = []
+  const expectedLen = formatConfig.answersLength || 60
+
+  let withTipo = 0
+  let withoutTipo = 0
+  for (const line of lines) {
+    const remainder = extractLineRemainder(line, formatConfig)
+    if (remainder === null) continue
+    const column = classifyTipoColumn(remainder, formatConfig)
+    if (column === 'with-tipo') withTipo += 1
+    else if (column === 'without-tipo') withoutTipo += 1
+  }
+  if (withTipo && withoutTipo) {
+    warnings.push(
+      `El archivo mezcla dos disposiciones de columna tipo (${withTipo} con tipo, ${withoutTipo} sin tipo). Revisa la configuración de ScanTools.`,
+    )
+  }
+
+  const invalid = []
+  const tooLong = []
+  for (const row of rows) {
+    const answers = String(row.answers || '')
+    if (answers.length > expectedLen) tooLong.push(row.litho)
+    if (/[^A-E* ]/.test(answers)) invalid.push(row.litho)
+  }
+  if (invalid.length) {
+    warnings.push(
+      `${invalid.length} hoja(s) con caracteres que no son respuestas (posible desplazamiento): ${invalid.slice(0, 5).join(', ')}`,
+    )
+  }
+  if (tooLong.length) {
+    warnings.push(`${tooLong.length} hoja(s) con más de ${expectedLen} respuestas: ${tooLong.slice(0, 5).join(', ')}`)
+  }
+  return warnings
+}
+
+/**
+ * Compara respuestas locales con las guardadas en la base. Los blancos finales
+ * no cambian el puntaje, por eso se comparan rellenados al largo esperado.
+ * @returns {string[]} litho de las hojas que difieren
+ */
+export function findStoredAnswerMismatches(localRows, storedRows, answersLength = 60) {
+  const norm = (value) => String(value || '').padEnd(answersLength, ' ')
+  const stored = new Map()
+  for (const row of storedRows) {
+    const key = `${row.litho}|${row.folio || ''}|${row.examCode || row.exam_code || ''}`
+    const list = stored.get(key) || []
+    list.push(norm(row.answers))
+    stored.set(key, list)
+  }
+  const mismatches = []
+  for (const row of localRows) {
+    const key = `${row.litho}|${row.folio || ''}|${row.examCode || row.exam_code || ''}`
+    const list = stored.get(key)
+    const expected = norm(row.answers)
+    const index = list ? list.indexOf(expected) : -1
+    if (index === -1) mismatches.push(row.litho)
+    else list.splice(index, 1)
+  }
+  return mismatches
 }
 
 function parseResponseLineInternal(
   line,
   lineNumber,
   formatConfig = DEFAULT_DAT_FORMAT,
-  autoDetectAnswerKeyOffset = false,
   linkedIdentifier = null,
+  { layoutHint = null } = {},
 ) {
   const raw = line.endsWith('\r') ? line.slice(0, -1) : line
   if (!raw.trim() || raw.trim().length <= 1) {
@@ -324,13 +425,7 @@ function parseResponseLineInternal(
   }
 
   const lithoSegment = remainder.slice(formatConfig.lithoOffset, formatConfig.lithoOffset + formatConfig.lithoLength)
-  const responseAnswersOffset = formatConfig.responseAnswersOffset
-    ?? (formatConfig.tipoOffset + formatConfig.tipoLength)
-  const linkedAnswersOffset = selectLinkedAnswersOffset(remainder, formatConfig, linkedIdentifier)
-  const answersOffset = linkedAnswersOffset
-    ?? (autoDetectAnswerKeyOffset
-      ? selectAnswerKeyAnswersOffset(remainder, formatConfig)
-      : selectResponseAnswersOffset(remainder, formatConfig))
+  const answersOffset = resolveAnswersOffset(remainder, formatConfig, layoutHint)
   const typeOverlapsAnswers = answersOffset <= formatConfig.tipoOffset
   const tipoSegment = typeOverlapsAnswers
     ? (linkedIdentifier?.tipo || '')
@@ -376,33 +471,8 @@ export function detectResponseAnswersOffset(lines, formatConfig = DEFAULT_DAT_FO
 
   const remainders = []
   for (let i = 0; i < Math.min(lines.length, SAMPLE_SIZE); i++) {
-    const raw = lines[i].replace(/\r$/, '')
-    if (!raw.trim() || raw.trim().length <= 1) continue
-    if (raw.length < 40) continue
-
-    const header = raw.slice(0, formatConfig.headerLength)
-    if (!/^\d+$/.test(header)) continue
-
-    let remainder = raw.slice(formatConfig.headerLength)
-    let cursor = 0
-
-    const examMatch = remainder.slice(cursor).match(/^\s*(\d{4})/)
-    if (!examMatch) continue
-    cursor += examMatch[0].length
-    remainder = remainder.slice(cursor)
-
-    const folioMatch = remainder.match(/^\s*#?(\d+)/)
-    if (!folioMatch) continue
-    cursor = folioMatch[0].length
-    remainder = remainder.slice(cursor)
-
-    const indicatorMatch = remainder.match(/^\s*([A-Z])/i)
-    if (!indicatorMatch) continue
-    cursor = indicatorMatch[0].length
-    remainder = remainder.slice(cursor)
-
-    if (remainder.startsWith(' ')) remainder = remainder.slice(1)
-    remainders.push(remainder)
+    const remainder = extractLineRemainder(lines[i], formatConfig)
+    if (remainder !== null) remainders.push(remainder)
   }
 
   if (remainders.length < 3) return null
@@ -436,16 +506,21 @@ export function detectResponseAnswersOffset(lines, formatConfig = DEFAULT_DAT_FO
 
 /**
  * Lee líneas de un archivo y las parsea
+ * @param {File} file
+ * @param {(line: string, lineNumber: number, context?: any) => any} parser
+ * @param {{ prepare?: (lines: string[]) => any }} [options] - `prepare` recibe todas las líneas
+ *   una vez y su resultado se pasa como 3er argumento a `parser` (disposición del archivo).
  */
-export async function readLinesFromFile(file, parser) {
+export async function readLinesFromFile(file, parser, { prepare } = {}) {
   const text = await file.text()
   const sanitized = text.split('\u001a').join('')
   const normalized = sanitized.replaceAll('\r\n', '\n').replaceAll('\r', '\n')
   const lines = normalized.split('\n')
+  const context = prepare ? prepare(lines) : undefined
   const results = []
 
   lines.forEach((line, index) => {
-    const result = parser(line, index + 1)
+    const result = parser(line, index + 1, context)
     if (!result) {
       return
     }
