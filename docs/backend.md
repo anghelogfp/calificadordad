@@ -26,12 +26,12 @@ Decision vigente: el proceso de calificacion es la unidad operativa principal. N
 
 ## Correcciones De DNI
 
-`DniCorrection` (`/api/correcciones-dni/`, por usuario) registra que una hoja sin alumno en el padron fue atribuida a un DNI sugerido. No modifica la hoja ni el padron y no entra al ranking oficial.
+`DniCorrection` (`/api/correcciones-dni/`, por usuario) registra que una hoja sin alumno en el padron fue atribuida a un DNI sugerido y confirmada. No modifica la hoja ni el padron: el frontend aplica la correccion al calcular, de modo que la hoja entra al ranking oficial marcada como "DNI corregido".
 
 - El DNI original lo deriva el servidor de la hoja; el cliente solo envia `litho` y `correctedDni`.
 - Valida contra los datos del propio usuario: la hoja existe y no tiene alumno en el padron, el DNI corregido esta en el padron y no tiene hoja propia, y no esta asignado a otra hoja.
 - Deshacer revoca (`revoked_at`) en lugar de borrar, para conservar la auditoria. Hay restricciones unicas solo entre correcciones activas.
-- Limitacion conocida: el backup/restauracion no incluye estas correcciones.
+- Backup: el export incluye `dniCorrections` (solo las activas). La restauracion las reemplaza junto con el resto de los datos; un backup anterior sin esa clave deja al usuario sin correcciones. Se rechazan formatos invalidos y repetidos sin tocar nada.
 
 ## Seguridad Y Permisos
 

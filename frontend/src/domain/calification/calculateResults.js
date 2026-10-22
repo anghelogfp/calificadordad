@@ -5,6 +5,7 @@ import {
   buildAreaTipoKey,
   buildQuestionPlan,
 } from '@/utils/helpers'
+import { applyDniCorrections } from './dniCorrections'
 import {
   buildDniCounts,
   getCandidateDniIssue,
@@ -47,8 +48,17 @@ export function calculateAreaResults({
   answerKeyFallbackByArea,
   areaList,
   vacantesPrograma = {},
+  dniCorrections = [],
   timestamp = new Date().toISOString(),
 }) {
+  let dniCorrectionsApplied = 0
+  if (dniCorrections.length) {
+    const corrected = applyDniCorrections(responsesRows, dniCorrections)
+    responsesRows = corrected.responsesRows
+    responsesByDni = corrected.responsesByDni
+    dniCorrectionsApplied = corrected.applied
+  }
+
   const isRealProcess = processType === 'real'
   const generalSimulacro = !isRealProcess && simulacroScope === 'general'
   const calculationArea = generalSimulacro ? GENERAL_SIMULACRO_AREA : normalizeArea(area, areaList)
@@ -311,6 +321,8 @@ export function calculateAreaResults({
       tipo: responseRow.tipo || '',
       litho: responseRow.litho || '',
       corId: responseRow.examCode || '',
+      dniCorregido: Boolean(responseRow.dniCorregido),
+      dniOriginal: responseRow.dniOriginal || '',
     })
   })
 
@@ -361,6 +373,7 @@ export function calculateAreaResults({
       invalidResponseTypes,
       unlinkedResponses,
       sheetsWithoutCandidate,
+      dniCorrectionsApplied,
       noCalificados,
       totalWeight: Number(totalWeight.toFixed(3)),
       answersLength,

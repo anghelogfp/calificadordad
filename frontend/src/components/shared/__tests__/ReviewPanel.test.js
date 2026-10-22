@@ -193,7 +193,7 @@ describe('ReviewPanel', () => {
       expect(wrapper.find('[role="alert"]').text()).toContain('Ese alumno ya tiene su propia hoja.')
     })
 
-    it('una hoja confirmada se marca fuera del ranking oficial y permite deshacer', async () => {
+    it('una hoja confirmada se marca como incluida en el ranking y permite deshacer', async () => {
       const confirmedPreview = {
         rows: [{
           litho: '000910', aula: '101', dniRead: '63735500', reason: 'not-in-padron',
@@ -201,15 +201,39 @@ describe('ReviewPanel', () => {
         }],
         summary: { orphanSheets: 1, confirmed: 1 },
       }
-      const { wrapper, undoCorrection } = await openPanel({ buildPreview: () => confirmedPreview, orphanSheetCount: 1 })
+      const { wrapper, undoCorrection } = await openPanel({
+        buildPreview: () => confirmedPreview,
+        noCalificados: [],
+        orphanSheetCount: 0,
+        confirmedCount: 1,
+      })
 
-      expect(wrapper.text()).toContain('Confirmado · fuera del ranking oficial')
-      expect(wrapper.text()).toContain('1 confirmada(s). Siguen fuera del ranking oficial.')
+      expect(wrapper.text()).toContain('Confirmado · incluido en el ranking')
+      expect(wrapper.text()).toContain('1 confirmada(s), ya incluida(s) en el ranking.')
 
       await wrapper.find('.act').trigger('click')
       await flushPromises()
 
       expect(undoCorrection).toHaveBeenCalledWith('000910')
     })
+  })
+
+  it('si todo está confirmado sigue disponible para deshacer y ya no pide acción', async () => {
+    const wrapper = mountPanel({ noCalificados: [], orphanSheetCount: 0, confirmedCount: 2 })
+
+    expect(wrapper.find('.review').exists()).toBe(true)
+    expect(wrapper.find('.review--action').exists()).toBe(false)
+    expect(wrapper.find('.review__bar').text()).not.toContain('Hay datos por revisar')
+    expect(wrapper.find('.review__bar').text()).toContain('2 confirmadas en el ranking')
+
+    await wrapper.find('.review__bar').trigger('click')
+    expect(wrapper.find('.review__tab--active').text()).toContain('Hojas sin alumno')
+  })
+
+  it('con pendientes y confirmadas cuenta cada grupo por separado', () => {
+    const wrapper = mountPanel({ noCalificados: [], orphanSheetCount: 3, confirmedCount: 1 })
+    const bar = wrapper.find('.review__bar').text()
+    expect(bar).toContain('3 hojas sin alumno')
+    expect(bar).toContain('1 confirmada en el ranking')
   })
 })

@@ -145,6 +145,7 @@ export function useCalification(
   }
 
   async function initializeCalificationConfig() {
+    await loadDniCorrections()
     calificationConfigApiLoading.value = true
     try {
       const res = await apiFetch('/calification-configs/')
@@ -512,6 +513,7 @@ export function useCalification(
       answerKeyFallbackByArea: answerKeyFallbackByArea?.value,
       areaList: effectiveAreaNames.value,
       vacantesPrograma: vacantesPrograma?.value,
+      dniCorrections: confirmedCorrectionsForCalc(),
     })
   }
 
@@ -542,8 +544,68 @@ export function useCalification(
     }
   }
 
-  /** Confirma que el DNI sugerido es el correcto para la hoja. No cambia el ranking oficial. */
-  async function confirmDniCorrection(litho, correctedDni) {
+  function confirmedCorrectionsForCalc() {
+    return dniCorrections.value.map((item) => ({ litho: item.litho, correctedDni: item.correctedDni }))
+  }
+
+  /**
+   * Recalcula las áreas ya calificadas con los mismos parámetros (plantilla y valores)
+   * para que las correcciones confirmadas o deshechas se reflejen en el ranking.
+   * Si algo falla, no cambia el resultado actual.
+   */
+  function recalculateActiveAreas() {
+    const current = activeProcess.value
+    const entries = Object.entries(current?.areas || {})
+    if (!entries.length) return { ok: true }
+
+    const next = {}
+    for (const [area, data] of entries) {
+      const summary = data?.summary
+      const plantilla = summary ? ponderationsComposable.getPlantillaById(summary.plantillaId) : null
+      if (!plantilla) {
+        return { ok: false, error: `No se encontró la plantilla "${summary?.plantillaName || ''}" para recalcular ${area}.` }
+      }
+      try {
+        const result = _calcForArea(
+          area,
+          plantilla,
+          Number(summary.correctValue),
+          Number(summary.incorrectValue),
+          Number(summary.blankValue),
+        )
+        auditCalificationResult(result)
+        next[area] = result
+      } catch (error) {
+        console.error('[calification] No se pudo recalcular con las correcciones:', error)
+        return { ok: false, error: error?.message || String(error) }
+      }
+    }
+
+    activeProcess.value = { ...current, areas: next }
+    _saveProcesoToApi()
+    return { ok: true }
+  }
+
+  /** Ejecuta el cambio de correcciones y actualiza el ranking. Devuelve { ok, error? }. */
+  async function syncCorrectionsIntoResults(action) {
+    const result = await action()
+    if (!result.ok) return result
+    const recalculated = recalculateActiveAreas()
+    if (!recalculated.ok) {
+      return {
+        ok: false,
+        error: `La corrección se guardó, pero no se pudo actualizar el ranking: ${recalculated.error}`,
+      }
+    }
+    return { ok: true }
+  }
+
+  /** Confirma que el DNI sugerido es el correcto para la hoja y la incluye en el ranking. */
+  function confirmDniCorrection(litho, correctedDni) {
+    return syncCorrectionsIntoResults(() => postDniCorrection(litho, correctedDni))
+  }
+
+  async function postDniCorrection(litho, correctedDni) {
     try {
       const res = await apiFetch('/correcciones-dni/', {
         method: 'POST',
@@ -557,8 +619,12 @@ export function useCalification(
     }
   }
 
-  /** Deshace una confirmación (queda registrada como revocada, no se borra). */
-  async function undoDniCorrection(litho) {
+  /** Deshace una confirmación y la quita del ranking (queda registrada como revocada, no se borra). */
+  function undoDniCorrection(litho) {
+    return syncCorrectionsIntoResults(() => deleteDniCorrection(litho))
+  }
+
+  async function deleteDniCorrection(litho) {
     const correction = dniCorrections.value.find((item) => item.litho === litho)
     if (!correction) return { ok: false, error: 'La corrección ya no existe.' }
     try {

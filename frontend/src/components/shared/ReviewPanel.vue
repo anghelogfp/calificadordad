@@ -8,6 +8,8 @@ const props = defineProps({
   noCalificados: { type: Array, default: () => [] },
   // summary.sheetsWithoutCandidate: hojas cuyo DNI no está en el padrón
   orphanSheetCount: { type: Number, default: 0 },
+  // summary.dniCorrectionsApplied: hojas ya confirmadas e incluidas en el ranking
+  confirmedCount: { type: Number, default: 0 },
   // Devuelve { rows, summary } (useCalification.previewProvisionalMatches) o null
   buildPreview: { type: Function, default: null },
   // Correcciones de DNI confirmadas (useCalification)
@@ -34,13 +36,22 @@ const missingSheetRows = computed(() => props.noCalificados.filter((row) => row.
 const otherRows = computed(() => props.noCalificados.filter((row) => row.motivo !== MISSING_SHEET))
 
 const tabs = computed(() => [
-  { key: 'orphan', label: 'Hojas sin alumno', one: 'hoja sin alumno', count: props.orphanSheetCount, tone: 'action' },
+  {
+    key: 'orphan',
+    label: 'Hojas sin alumno',
+    one: 'hoja sin alumno',
+    // pendientes + confirmadas: una hoja confirmada debe poder deshacerse desde aquí
+    count: props.orphanSheetCount + props.confirmedCount,
+    pending: props.orphanSheetCount,
+    tone: props.orphanSheetCount > 0 ? 'action' : 'info',
+  },
   { key: 'other', label: 'Otras incidencias', one: 'otra incidencia', count: otherRows.value.length, tone: 'action' },
   { key: 'missing', label: 'Alumnos sin hoja', one: 'alumno sin hoja', count: missingSheetRows.value.length, tone: 'info' },
 ].filter((tab) => tab.count > 0))
 
 function chipLabel(tab) {
-  return tab.count === 1 ? tab.one : tab.label.toLowerCase()
+  const count = tab.pending ?? tab.count
+  return count === 1 ? tab.one : tab.label.toLowerCase()
 }
 
 const totalToReview = computed(() => tabs.value.reduce((sum, tab) => sum + tab.count, 0))
@@ -139,11 +150,14 @@ async function handleExport() {
   <section v-if="totalToReview > 0" class="review" :class="{ 'review--action': needsAction }">
     <button type="button" class="review__bar" :aria-expanded="open" @click="toggle">
       <span class="review__title">
-        {{ needsAction ? 'Hay datos por revisar' : 'Alumnos sin hoja de respuestas' }}
+        {{ needsAction ? 'Hay datos por revisar' : (confirmedCount > 0 ? 'Revisión' : 'Alumnos sin hoja de respuestas') }}
       </span>
       <span class="review__chips">
         <span v-for="tab in tabs" :key="tab.key" class="review__chip" :class="`review__chip--${tab.tone}`">
-          <strong>{{ tab.count }}</strong> {{ chipLabel(tab) }}
+          <strong>{{ tab.pending ?? tab.count }}</strong> {{ chipLabel(tab) }}
+        </span>
+        <span v-if="confirmedCount > 0" class="review__chip review__chip--done">
+          <strong>{{ confirmedCount }}</strong> {{ confirmedCount === 1 ? 'confirmada' : 'confirmadas' }} en el ranking
         </span>
       </span>
       <span class="review__toggle">{{ open ? 'Ocultar' : 'Revisar' }}</span>
@@ -242,6 +256,7 @@ async function handleExport() {
   font-size: 0.75rem; border: 1px solid var(--slate-200); background: white; color: var(--slate-600);
 }
 .review__chip--action { border-color: #fcd34d; color: #92400e; }
+.review__chip--done { border-color: #86efac; color: #166534; background: #f0fdf4; }
 .review__toggle { font-size: 0.78rem; font-weight: 700; color: var(--slate-600); }
 
 .review__body { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); }

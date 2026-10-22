@@ -517,4 +517,97 @@ describe('useCalification', () => {
       expect(apiFetch).not.toHaveBeenCalled()
     })
   })
+
+  describe('correcciones confirmadas y ranking', () => {
+    const jsonResponse = (body) => ({ ok: true, status: 200, json: async () => body })
+
+    function calificadoConHojaMalMarcada() {
+      const subject = makeSubject({
+        archiveRows: [
+          { dni: '11111111', paterno: 'A', materno: '', nombres: 'Uno' },
+          { dni: '22222222', paterno: 'B', materno: '', nombres: 'Dos' },
+        ],
+        responsesRows: [
+          { dni: '11111111', tipo: 'P', answers: makeAnswers('A'), aula: '001', litho: '100001' },
+          { dni: '22222229', tipo: 'P', answers: makeAnswers('A'), aula: '002', litho: '100002' },
+        ],
+        answerKeyRows: [{ area: '', tipo: '', answers: makeAnswers('A') }],
+        plantillas: [makePlantilla({ id: 'tpl-general', area: '', name: 'General' })],
+      })
+      const { calification } = subject
+      calification.startNewProcess({ name: 'Simulacro', type: 'simulacro' })
+      calification.calificationPlantillaId.value = 'tpl-general'
+      calification.calificationCorrectValue.value = 10
+      calification.calificationIncorrectValue.value = 0
+      calification.calificationBlankValue.value = 2
+      calification.runCalification()
+      return calification
+    }
+
+    it('antes de confirmar, la hoja mal marcada no entra al ranking', () => {
+      const calification = calificadoConHojaMalMarcada()
+
+      expect(calification.calificationResults.value.map((r) => r.dni)).toEqual(['11111111'])
+      expect(calification.calificationSummary.value).toMatchObject({ sheetsWithoutCandidate: 1, dniCorrectionsApplied: 0 })
+    })
+
+    it('al confirmar, el alumno entra al ranking oficial con la marca de DNI corregido', async () => {
+      const calification = calificadoConHojaMalMarcada()
+      apiFetch
+        .mockResolvedValueOnce(jsonResponse({ id: 1 }))
+        .mockResolvedValueOnce(jsonResponse([{ id: 1, litho: '100002', correctedDni: '22222222' }]))
+
+      const result = await calification.confirmDniCorrection('100002', '22222222')
+
+      expect(result).toEqual({ ok: true })
+      expect(calification.calificationResults.value.map((r) => r.dni).sort()).toEqual(['11111111', '22222222'])
+      expect(calification.calificationResults.value.find((r) => r.dni === '22222222')).toMatchObject({
+        score: 600,
+        dniCorregido: true,
+        dniOriginal: '22222229',
+      })
+      expect(calification.calificationSummary.value).toMatchObject({
+        sheetsWithoutCandidate: 0,
+        dniCorrectionsApplied: 1,
+        missingResponses: 0,
+      })
+    })
+
+    it('al deshacer, el alumno sale del ranking', async () => {
+      const calification = calificadoConHojaMalMarcada()
+      apiFetch
+        .mockResolvedValueOnce(jsonResponse({ id: 1 }))
+        .mockResolvedValueOnce(jsonResponse([{ id: 1, litho: '100002', correctedDni: '22222222' }]))
+      await calification.confirmDniCorrection('100002', '22222222')
+
+      apiFetch
+        .mockResolvedValueOnce({ ok: true, status: 204 })
+        .mockResolvedValueOnce(jsonResponse([]))
+      const result = await calification.undoDniCorrection('100002')
+
+      expect(result).toEqual({ ok: true })
+      expect(calification.calificationResults.value.map((r) => r.dni)).toEqual(['11111111'])
+      expect(calification.calificationSummary.value.dniCorrectionsApplied).toBe(0)
+    })
+
+    it('si el servidor rechaza la confirmación, el ranking no cambia', async () => {
+      const calification = calificadoConHojaMalMarcada()
+      apiFetch.mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ litho: ['La hoja ya tiene un alumno en el padrón.'] }) })
+
+      const result = await calification.confirmDniCorrection('100002', '22222222')
+
+      expect(result.ok).toBe(false)
+      expect(calification.calificationResults.value.map((r) => r.dni)).toEqual(['11111111'])
+    })
+
+    it('una calificación nueva ya incluye las correcciones confirmadas', async () => {
+      const calification = calificadoConHojaMalMarcada()
+      apiFetch.mockResolvedValueOnce(jsonResponse([{ id: 1, litho: '100002', correctedDni: '22222222' }]))
+      await calification.loadDniCorrections()
+
+      calification.runCalification()
+
+      expect(calification.calificationResults.value.map((r) => r.dni).sort()).toEqual(['11111111', '22222222'])
+    })
+  })
 })

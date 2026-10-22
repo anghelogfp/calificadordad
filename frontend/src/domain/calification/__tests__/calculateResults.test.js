@@ -92,6 +92,67 @@ describe('calculateAreaResults', () => {
     expect(result.results).toHaveLength(1)
   })
 
+  describe('con correcciones de DNI confirmadas', () => {
+    const wrongSheet = { dni: '99999999', tipo: 'P', answers: makeAnswers('A'), litho: '100009' }
+
+    function inputWithCorrection() {
+      const base = makeInput({
+        simulacroScope: 'areas',
+        archiveRows: [
+          { dni: '12345678', area: 'Ingeniería', programa: 'Civil', paterno: 'A' },
+          { dni: '22222222', area: 'Ingeniería', programa: 'Civil', paterno: 'B' },
+        ],
+        responsesRows: [
+          { dni: '12345678', tipo: 'P', answers: makeAnswers('A'), litho: '100001' },
+          wrongSheet,
+        ],
+        responsesByDni: new Map([
+          ['12345678', [{ dni: '12345678', tipo: 'P', answers: makeAnswers('A'), litho: '100001' }]],
+          ['99999999', [wrongSheet]],
+        ]),
+      })
+      return base
+    }
+
+    it('sin la corrección el alumno queda sin hoja y la hoja sin alumno', () => {
+      const { results, summary } = calculateAreaResults(inputWithCorrection())
+
+      expect(results.map((r) => r.dni)).toEqual(['12345678'])
+      expect(summary.missingResponses).toBe(1)
+      expect(summary.sheetsWithoutCandidate).toBe(1)
+      expect(summary.dniCorrectionsApplied).toBe(0)
+    })
+
+    it('con la corrección el alumno entra al ranking oficial, marcado como corregido', () => {
+      const { results, summary } = calculateAreaResults({
+        ...inputWithCorrection(),
+        dniCorrections: [{ litho: '100009', correctedDni: '22222222' }],
+      })
+
+      const corrected = results.find((r) => r.dni === '22222222')
+      expect(corrected).toMatchObject({ score: 600, dniCorregido: true, dniOriginal: '99999999', litho: '100009' })
+      expect(results.find((r) => r.dni === '12345678').dniCorregido).toBe(false)
+      expect(results.map((r) => r.position).sort()).toEqual([1, 2])
+      expect(summary).toMatchObject({ missingResponses: 0, sheetsWithoutCandidate: 0, dniCorrectionsApplied: 1 })
+      expect(summary.noCalificados).toEqual([])
+    })
+
+    it('el resultado corregido pasa la auditoría del cálculo', () => {
+      const result = calculateAreaResults({
+        ...inputWithCorrection(),
+        dniCorrections: [{ litho: '100009', correctedDni: '22222222' }],
+      })
+      expect(validateCalificationResult({ result })).toMatchObject({ valid: true })
+    })
+
+    it('no altera las hojas originales', () => {
+      const input = inputWithCorrection()
+      calculateAreaResults({ ...input, dniCorrections: [{ litho: '100009', correctedDni: '22222222' }] })
+      expect(wrongSheet.dni).toBe('99999999')
+      expect(wrongSheet.dniCorregido).toBeUndefined()
+    })
+  })
+
   it('no asigna áreas desconocidas a la primera área disponible', () => {
     expect(() => calculateAreaResults(makeInput({
       area: 'Biomédicas',

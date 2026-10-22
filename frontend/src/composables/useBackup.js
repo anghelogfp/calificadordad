@@ -83,6 +83,7 @@ async function exportServerData() {
     answerKeys: await readJson('/answer-keys/'),
     programaVacantes: await readJson('/programa-vacantes/'),
     calificationConfigs: await readJson('/calification-configs/'),
+    dniCorrections: await readJson('/correcciones-dni/'),
     datFormatConfig: await readJson('/dat-format-configs/'),
     plantillas: await readJson('/plantillas/'),
     procesos: await readProcesosFull(),

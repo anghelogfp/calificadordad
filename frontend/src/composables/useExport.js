@@ -213,7 +213,7 @@ export function useExport() {
     const reasonLabels = { 'not-in-padron': 'DNI no está en el padrón', incomplete: 'DNI incompleto' }
     const statusLabels = {
       ok: 'Posible: verificar con el colegio',
-      confirmed: 'Confirmado (fuera del ranking oficial)',
+      confirmed: 'Confirmado (incluido en el ranking)',
       'blocked-confirmed': 'Ese alumno ya fue confirmado con otra hoja',
       'blocked-has-sheet': 'Ese alumno ya tiene su propia hoja',
       conflict: 'Otra hoja sugiere al mismo alumno',
@@ -336,6 +336,8 @@ export function useExport() {
     sheet.getCell('A1').alignment = { horizontal: 'center' }
     sheet.addRow([])
 
+    // Solo si hay hojas con DNI corregido se agrega la columna de observación.
+    const hasCorrections = rows.some((row) => row.dniCorregido)
     const header = sheet.addRow([
       'Posición',
       'DNI',
@@ -354,6 +356,7 @@ export function useExport() {
       'Longitud',
       'Respuestas DAT',
       'Respuestas visibles',
+      ...(hasCorrections ? ['Observación'] : []),
     ])
     styleHeaderRow(header)
 
@@ -377,6 +380,9 @@ export function useExport() {
         String(row.answersRaw || '').length,
         row.answersRaw || '',
         visibleAnswerArray(row.answersRaw),
+        ...(hasCorrections
+          ? [row.dniCorregido ? `DNI corregido: la hoja decía ${row.dniOriginal || 'sin DNI'}` : '']
+          : []),
       ])
       dataRow.getCell(10).font = { bold: true }
       dataRow.getCell(16).font = { name: 'Courier New', size: 9 }
@@ -390,9 +396,10 @@ export function useExport() {
       { width: 15 }, { width: 8 }, { width: 8 }, { width: 12 }, { width: 12 },
       { width: 10 }, { width: 12 }, { width: 10 }, { width: 10 }, { width: 10 },
       { width: 68 }, { width: 68 },
+      ...(hasCorrections ? [{ width: 38 }] : []),
     ]
     sheet.views = [{ state: 'frozen', ySplit: 3 }]
-    sheet.autoFilter = 'A3:Q3'
+    sheet.autoFilter = hasCorrections ? 'A3:R3' : 'A3:Q3'
   }
 
   async function exportSimulacroAreasToExcel(areaResultsMap = {}, convocatoriaName = '', options = {}) {

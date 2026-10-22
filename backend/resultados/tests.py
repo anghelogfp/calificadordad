@@ -294,3 +294,56 @@ class BackupTransactionTests(TestCase):
         self.assertTrue(ProcesoCalificacion.objects.filter(
             created_by=self.admin, local_id='restored-process'
         ).exists())
+
+    def _correction(self, litho='000910', corrected='63737500'):
+        from convocatorias.models import DniCorrection
+        return DniCorrection.objects.create(
+            created_by=self.admin, litho=litho, original_dni='63735500', corrected_dni=corrected,
+        )
+
+    def test_restore_recreates_dni_corrections_replacing_the_current_ones(self):
+        from convocatorias.models import DniCorrection
+        self._correction(litho='old-sheet', corrected='11111111')
+
+        payload = {'dniCorrections': [{'litho': '000910', 'originalDni': '63735500', 'correctedDni': '63737500'}]}
+        response = self.client.post('/api/backup/restore/', payload, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        saved = DniCorrection.objects.filter(created_by=self.admin)
+        self.assertEqual([(c.litho, c.original_dni, c.corrected_dni) for c in saved], [('000910', '63735500', '63737500')])
+        self.assertTrue(all(c.revoked_at is None for c in saved))
+
+    def test_backup_export_format_can_be_restored(self):
+        from convocatorias.models import DniCorrection
+        self._correction()
+        exported = self.client.get('/api/correcciones-dni/').json()
+        DniCorrection.objects.all().delete()
+
+        response = self.client.post('/api/backup/restore/', {'dniCorrections': exported}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(DniCorrection.objects.filter(created_by=self.admin).count(), 1)
+
+    def test_invalid_corrections_are_rejected_without_replacing_anything(self):
+        from convocatorias.models import DniCorrection
+        self._correction()
+        bad_payloads = [
+            {'dniCorrections': [{'litho': '000910', 'correctedDni': '123'}]},
+            {'dniCorrections': [
+                {'litho': '000910', 'correctedDni': '63737500'},
+                {'litho': '000910', 'correctedDni': '11111111'},
+            ]},
+            {'dniCorrections': [
+                {'litho': 'a', 'correctedDni': '63737500'},
+                {'litho': 'b', 'correctedDni': '63737500'},
+            ]},
+        ]
+        for payload in bad_payloads:
+            response = self.client.post(
+                '/api/backup/restore/', {**payload, 'candidatos': [{'id': 'replacement', 'dni': '87654321'}]}, format='json',
+            )
+            self.assertEqual(response.status_code, 400, payload)
+
+        self.assertTrue(Candidato.objects.filter(created_by=self.admin, client_id='original').exists())
+        self.assertEqual(DniCorrection.objects.get(created_by=self.admin).litho, '000910')
+

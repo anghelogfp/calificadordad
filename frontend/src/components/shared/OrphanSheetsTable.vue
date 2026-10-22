@@ -73,13 +73,13 @@ function formatScore(value) {
 <template>
   <div class="orphan">
     <p class="orphan__lead">
-      Estas hojas no se califican porque su DNI no coincide con ningún alumno del padrón.
+      Estas hojas no entran al ranking porque su DNI no coincide con ningún alumno del padrón.
       Si el DNI sugerido fuera el correcto, el puntaje sería el que se muestra
-      <strong>(provisional: no cambia el ranking)</strong>.
+      <strong>(provisional hasta que confirmes: al confirmar, la hoja entra al ranking)</strong>.
     </p>
 
     <p v-if="preview.summary?.confirmed" class="orphan__confirmed-note">
-      {{ preview.summary.confirmed }} confirmada(s). Siguen fuera del ranking oficial.
+      {{ preview.summary.confirmed }} confirmada(s), ya incluida(s) en el ranking.
     </p>
     <p v-if="actionError" class="orphan__error" role="alert">{{ actionError }}</p>
 
@@ -112,7 +112,7 @@ function formatScore(value) {
               <td>
                 {{ fullName(suggestion) || '—' }}
                 <span class="sub mono">{{ suggestion.dni }}</span>
-                <span v-if="suggestion.status === 'confirmed'" class="ok-flag">Confirmado · fuera del ranking oficial</span>
+                <span v-if="suggestion.status === 'confirmed'" class="ok-flag">Confirmado · incluido en el ranking</span>
                 <span v-if="STATUS_LABELS[suggestion.status]" class="flag">
                   {{ STATUS_LABELS[suggestion.status] }}
                   <template v-if="suggestion.conflictWith"> ({{ suggestion.conflictWith.join(', ') }})</template>
@@ -132,7 +132,7 @@ function formatScore(value) {
               <td class="num">
                 <template v-if="suggestion.status === 'ok'">
                   <span v-if="pendingKey === keyOf(row.litho, suggestion.dni)" class="ask">
-                    ¿Es este alumno?
+                    ¿Es este alumno? Entrará al ranking.
                     <button type="button" class="act act--primary" :disabled="busy" @click="doConfirm(row.litho, suggestion.dni)">Sí, confirmar</button>
                     <button type="button" class="act" @click="pendingKey = ''">Cancelar</button>
                   </span>

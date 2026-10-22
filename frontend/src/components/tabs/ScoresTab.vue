@@ -491,6 +491,7 @@ function handleExportIngresantesPdf() {
       <ReviewPanel
         :no-calificados="noCalificados"
         :orphan-sheet-count="calification.calificationSummary?.sheetsWithoutCandidate ?? 0"
+        :confirmed-count="calification.calificationSummary?.dniCorrectionsApplied ?? 0"
         :build-preview="calification.previewProvisionalMatches"
         :load-corrections="calification.loadDniCorrections"
         :confirm-correction="calification.confirmDniCorrection"
@@ -569,7 +570,14 @@ function handleExportIngresantesPdf() {
             :class="{ 'row--ingresante': row.isIngresante }"
           >
             <td class="col-number">{{ row.position }}</td>
-            <td class="mono">{{ row.dni }}</td>
+            <td class="mono">
+              {{ row.dni }}
+              <span
+                v-if="row.dniCorregido"
+                class="dni-fixed"
+                :title="`La hoja decía ${row.dniOriginal || 'sin DNI'}; el DNI se corrigió y se confirmó`"
+              >DNI corregido</span>
+            </td>
             <td>{{ row.paterno || '—' }}</td>
             <td>{{ row.materno || '—' }}</td>
             <td>{{ row.nombres || '—' }}</td>
@@ -673,7 +681,14 @@ function handleExportIngresantesPdf() {
               :class="{ 'row--ingresante': row.isIngresante }"
             >
               <td class="col-number">{{ row.positionInPrograma }}</td>
-              <td class="mono">{{ row.dni }}</td>
+              <td class="mono">
+              {{ row.dni }}
+              <span
+                v-if="row.dniCorregido"
+                class="dni-fixed"
+                :title="`La hoja decía ${row.dniOriginal || 'sin DNI'}; el DNI se corrigió y se confirmó`"
+              >DNI corregido</span>
+            </td>
               <td>{{ row.paterno || '—' }}</td>
               <td>{{ row.materno || '—' }}</td>
               <td>{{ row.nombres || '—' }}</td>
@@ -835,6 +850,11 @@ function handleExportIngresantesPdf() {
 .area-tabs--compact { padding: var(--space-1); border: 0; box-shadow: none; background: var(--slate-50); }
 .area-tabs--compact .area-tab { flex: 1; justify-content: center; }
 
+.dni-fixed {
+  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: var(--radius-full);
+  background: #dcfce7; color: #166534; font-family: inherit; font-size: 0.65rem; font-weight: 700;
+  vertical-align: middle; white-space: nowrap;
+}
 .summary-strip {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   border: 1px solid var(--slate-200); border-radius: var(--radius-lg); overflow: hidden;

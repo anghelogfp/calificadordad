@@ -7,7 +7,7 @@ from rest_framework.response import Response
 
 from convocatorias.models import (
     AnswerKeyRow, AnswerKeySource, CalificationConfig, Candidato,
-    DatFormatConfig, IdentifierRow, IdentifierSource, ProgramaVacante,
+    DatFormatConfig, DniCorrection, IdentifierRow, IdentifierSource, ProgramaVacante,
     ResponseRow, ResponseSource,
 )
 from convocatorias.serializers import (
@@ -20,6 +20,13 @@ from ponderaciones.serializers import PlantillaPonderacionWriteSerializer
 from resultados.models import AreaCalificacion, ProcesoCalificacion, ResultadoCandidato
 
 
+class DniCorrectionBackupSerializer(serializers.Serializer):
+    """Formato de una corrección en el backup. No se valida contra la base: esta se está reemplazando."""
+    litho = serializers.CharField(max_length=40)
+    originalDni = serializers.CharField(max_length=20, allow_blank=True, required=False, default='')
+    correctedDni = serializers.RegexField(r'^\d{8}$')
+
+
 class BackupPayloadSerializer(serializers.Serializer):
     candidatos = CandidatoSerializer(many=True, required=False)
     identifierSources = IdentifierSourceSerializer(many=True, required=False)
@@ -30,6 +37,7 @@ class BackupPayloadSerializer(serializers.Serializer):
     answerKeys = AnswerKeyRowSerializer(many=True, required=False)
     programaVacantes = serializers.ListField(child=serializers.DictField(), required=False)
     calificationConfigs = CalificationConfigSerializer(many=True, required=False)
+    dniCorrections = DniCorrectionBackupSerializer(many=True, required=False)
     datFormatConfig = serializers.DictField(required=False)
     plantillas = PlantillaPonderacionWriteSerializer(many=True, required=False)
     procesos = serializers.ListField(child=serializers.DictField(), required=False)
@@ -115,6 +123,12 @@ def restore_backup(request):
     data = serializer.validated_data
     user = request.user
 
+    corrections = data.get('dniCorrections', [])
+    for field in ('litho', 'correctedDni'):
+        values = [item[field] for item in corrections]
+        if len(values) != len(set(values)):
+            raise serializers.ValidationError({'dniCorrections': f'Hay correcciones repetidas por {field}.'})
+
     with transaction.atomic():
         Candidato.objects.filter(created_by=user).delete()
         Candidato.objects.bulk_create([
@@ -132,6 +146,16 @@ def restore_backup(request):
             ProgramaVacante(created_by=user, programa=str(row.get('programa', '')).strip(),
                             vacantes=max(0, int(row.get('vacantes', 0) or 0)))
             for row in data.get('programaVacantes', []) if str(row.get('programa', '')).strip()
+        ])
+        DniCorrection.objects.filter(created_by=user).delete()
+        DniCorrection.objects.bulk_create([
+            DniCorrection(
+                created_by=user,
+                litho=item['litho'],
+                original_dni=item.get('originalDni', ''),
+                corrected_dni=item['correctedDni'],
+            )
+            for item in corrections
         ])
         CalificationConfig.objects.filter(created_by=user).delete()
         CalificationConfig.objects.bulk_create([

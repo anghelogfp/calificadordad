@@ -32,20 +32,26 @@ En la pantalla de resultados los no calificados formaban una lista larga (129 fi
 - `calculateResults.test.js`: conteo de hojas sin alumno.
 - Suite completa: 228 pruebas y `vite build` correctos. Revisión visual con datos de ejemplo (129 sin hoja, 27 hojas sin alumno).
 
-## Confirmar un DNI sugerido (Sí/No)
+## Confirmar un DNI sugerido (Sí/No) e incluirlo en el ranking
 
-En la pestaña "Hojas sin alumno", cada sugerencia viable tiene un botón **Confirmar**. Pide una confirmación en pantalla ("¿Es este alumno?") antes de guardar; no usa diálogos del navegador.
+En la pestaña "Hojas sin alumno", cada sugerencia viable tiene un botón **Confirmar**. Pide una confirmación en pantalla ("¿Es este alumno? Entrará al ranking.") antes de guardar; no usa diálogos del navegador.
 
-- La corrección confirmada se muestra aparte: "Confirmado · fuera del ranking oficial", con su puntaje y la posición que tendría. **No entra al ranking oficial.** (Decisión: separada y marcada hasta que el colegio la verifique.)
-- **Deshacer** la revoca; queda registrada, no se borra.
+- **Al confirmar, la hoja entra al ranking oficial.** El sistema recalcula las áreas ya calificadas con la misma plantilla y valores. El alumno aparece en el ranking con la marca "DNI corregido" (el detalle indica el DNI que traía la hoja) y la columna "Observación" en el Excel de resultados.
+- **Deshacer** la revoca y el alumno sale del ranking; la corrección queda registrada, no se borra.
 - Un alumno confirmado con una hoja queda bloqueado para otras hojas.
-- Solo se confirman sugerencias viables: no las bloqueadas ni las que chocan con otra hoja. "No" equivale a no confirmar.
-- Las correcciones confirmadas salen en la hoja "Hojas sin alumno" del Excel de revisión.
+- Solo se confirman sugerencias viables. "No" equivale a no confirmar.
+- Una calificación nueva ya incluye las correcciones confirmadas (se cargan al iniciar).
 - Sin restricción de rol: el sistema lo usa el administrador; los datos siguen aislados por usuario.
+- El resumen del cálculo agrega `dniCorrectionsApplied`; `sheetsWithoutCandidate` cuenta solo las pendientes. La barra de revisión muestra "N confirmadas en el ranking" y sigue disponible para deshacer.
+- Si el recálculo falla, la corrección queda guardada pero el ranking no cambia, y se avisa.
 
-Backend: modelo `DniCorrection`, migración `0012_dnicorrection`, endpoint `/api/correcciones-dni/` (listar, crear, deshacer). Ver `docs/backend.md`.
+**Código.** Dominio: `domain/calification/dniCorrections.js` (`applyDniCorrections`) y parámetro `dniCorrections` en `calculateAreaResults`. Composable: `confirmDniCorrection`, `undoDniCorrection`, `recalculateActiveAreas`. Backend: modelo `DniCorrection`, migración `0012_dnicorrection`, endpoint `/api/correcciones-dni/`.
 
-Pruebas: 12 de backend (validaciones, auditoría al deshacer, aislamiento por usuario, autenticación), 3 de dominio, 5 de composable y 6 del panel. Verificado también contra el servidor real. Suite: 242 de frontend y 66 de backend.
+**Backup.** El export incluye `dniCorrections` y la restauración las reemplaza (ver `docs/backend.md`).
+
+**Limitación conocida.** El historial guardado de resultados no conserva la marca "DNI corregido" por fila (la tabla de resultados del backend no tiene ese campo); la marca vive en el resultado activo y en sus exportaciones.
+
+**Pruebas.** Backend: 69 (12 de la API de correcciones, 3 de backup). Frontend: 257, incluidas las del dominio, el recálculo del ranking al confirmar y deshacer, y el panel. Verificado con el simulacro real: al confirmar las 7 hojas viables, calificados 152 → 159, sin hoja 129 → 122, hojas sin alumno 27 → 20; cada puntaje coincide con el cálculo independiente y ninguno de los 152 anteriores cambió.
 
 ## Aviso: base de datos de la raíz
 
@@ -55,6 +61,5 @@ La base que había en la raíz venía de la rama `feat/calificacion-pj`, con col
 
 ## Pendiente
 
+- Persistir la marca "DNI corregido" en el historial de resultados.
 - Agrupar las acciones de la cabecera y revisar tablas en pantallas pequeñas.
-- Decidir si los confirmados deben poder incluirse en el ranking oficial.
-- Incluir las correcciones en el backup/restauración.
