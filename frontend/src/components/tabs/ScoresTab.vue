@@ -8,6 +8,7 @@ import CandidateDetailModal from '@/components/shared/CandidateDetailModal.vue'
 import PaginationBar from '@/components/shared/PaginationBar.vue'
 import StepVerificationPanel from '@/components/shared/StepVerificationPanel.vue'
 import ProcessPathBadge from '@/components/shared/ProcessPathBadge.vue'
+import ProvisionalMatchesPanel from '@/components/shared/ProvisionalMatchesPanel.vue'
 
 const props = defineProps({
   calification: { type: Object, required: true },
@@ -572,6 +573,8 @@ function handleExportIngresantesPdf() {
           El Excel de resultados incluye una hoja “No calificados” con este detalle.
         </p>
       </section>
+
+      <ProvisionalMatchesPanel :build-preview="calification.previewProvisionalMatches" />
 
       <div class="results-filters">
         <div class="results-search">

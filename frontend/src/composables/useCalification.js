@@ -13,6 +13,7 @@ import {
 import { calculateAreaResults } from '@/domain/calification/calculateResults'
 import { buildCalificationPreflight } from '@/domain/calification/preflight'
 import { validateCalificationResult } from '@/domain/calification/validateResults'
+import { buildProvisionalPreview } from '@/domain/calification/provisionalMatches'
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
@@ -514,6 +515,39 @@ export function useCalification(
     })
   }
 
+  /**
+   * Vista previa de hojas sin alumno en el padrón: qué puntaje tendrían si el DNI
+   * sugerido fuera el correcto. No guarda ni cambia ningún resultado.
+   * Usa la misma plantilla y valores con los que se calificó el área mostrada.
+   */
+  function previewProvisionalMatches() {
+    const summary = calificationSummary.value
+    if (!summary) return null
+    const plantilla = ponderationsComposable.getPlantillaById(summary.plantillaId)
+    if (!plantilla) return null
+
+    return buildProvisionalPreview({
+      archiveRows: archiveRows.value,
+      responsesRows: responsesRows.value,
+      officialScores: calificationResults.value.map((row) => row.score),
+      scoreParams: {
+        area: summary.area,
+        plantilla,
+        correctValue: summary.correctValue,
+        incorrectValue: summary.incorrectValue,
+        blankValue: summary.blankValue,
+        processType: processType.value,
+        simulacroScope: simulacroScope.value,
+        answersLength: effectiveAnswersLength.value,
+        answerKeyRows: answerKeyRows.value,
+        answerKeyLookupByAreaTipo: answerKeyLookupByAreaTipo.value,
+        answerKeyFallbackByArea: answerKeyFallbackByArea?.value,
+        areaList: effectiveAreaNames.value,
+        vacantesPrograma: vacantesPrograma?.value,
+      },
+    })
+  }
+
   function auditCalificationResult(areaResult) {
     const validation = validateCalificationResult({
       result: areaResult,
@@ -758,6 +792,7 @@ export function useCalification(
     closeCalificationModal,
     runCalification,
     runAllAreas,
+    previewProvisionalMatches,
     resetCalificationResults,
     startNewProcess,
     switchDisplayArea,
