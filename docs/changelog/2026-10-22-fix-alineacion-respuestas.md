@@ -70,6 +70,11 @@ Para que un fallo similar no pase desapercibido:
 
 Tras desplegar cambios del frontend hay que recargar la pestaña con recarga forzada (Cmd+Shift+R). Una pestaña abierta antes del cambio sigue ejecutando el parser anterior en memoria y vuelve a guardar las respuestas desplazadas. Tras recargar, volver a cargar padrón, identificadores, respuestas y claves.
 
-## Pendiente conocido
+## Importador de padrón: tablas con filtros
 
-- El importador de padrón (`exceljs` 3.4) falla con libros que contienen tablas con filtros aplicados (`Unexpected xml node in parseClose: filters`). Alternativa actual: guardar una copia con una sola hoja y sin la tabla.
+`exceljs` 3.4 fallaba con libros que tienen una tabla con filtros aplicados (`Unexpected xml node in parseClose: filters`), como el Excel exportado por SIAGIE. Ya no hace falta guardar una copia limpia.
+
+- `frontend/package.json`: `exceljs` sube a 4.4.0, que sí lee esos libros.
+- `frontend/src/composables/__tests__/excelFilteredTable.test.js`: arma un libro con una tabla filtrada. Falla con 3.4 con el mismo error y pasa con 4.4.0.
+- Verificado con `ESTUDIANTES OCTUBRE.xlsx` original: 281 alumnos leídos, sin error, con la fecha de nacimiento ya en formato ISO. El importador usa la primera hoja del libro.
+- Suite completa: 201 pruebas y `vite build` correctos.
