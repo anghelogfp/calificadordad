@@ -196,6 +196,49 @@ export function useExport() {
     sheet.getColumn(includeProgram ? 8 : 7).alignment = { wrapText: true }
   }
 
+  function addOrphanSheetsSheet(workbook, orphanRows = []) {
+    const sheet = workbook.addWorksheet('Hojas sin alumno')
+    const header = sheet.addRow([
+      'Hoja (litho)',
+      'Aula',
+      'DNI marcado',
+      'Situación',
+      'DNI sugerido',
+      'Alumno sugerido',
+      'Puntaje provisional',
+      'Estado de la sugerencia',
+    ])
+    styleHeaderRow(header, 'FF92400E')
+
+    const reasonLabels = { 'not-in-padron': 'DNI no está en el padrón', incomplete: 'DNI incompleto' }
+    const statusLabels = {
+      ok: 'Posible: verificar con el colegio',
+      'blocked-has-sheet': 'Ese alumno ya tiene su propia hoja',
+      conflict: 'Otra hoja sugiere al mismo alumno',
+      'not-scored': 'No se pudo calcular',
+    }
+    orphanRows.forEach((row) => {
+      const base = [row.litho, row.aula, row.dniRead, reasonLabels[row.reason] || row.reason]
+      if (!row.suggestions.length) {
+        sheet.addRow([...base, '', '', '', 'Sin coincidencia parecida en el padrón'])
+        return
+      }
+      row.suggestions.forEach((suggestion) => {
+        sheet.addRow([
+          ...base,
+          suggestion.dni,
+          [suggestion.paterno, suggestion.materno, suggestion.nombres].filter(Boolean).join(' '),
+          suggestion.status === 'ok' ? suggestion.provisionalScore : '',
+          statusLabels[suggestion.status] || suggestion.status,
+        ])
+      })
+    })
+    sheet.columns = [
+      { width: 14 }, { width: 8 }, { width: 14 }, { width: 26 },
+      { width: 14 }, { width: 38 }, { width: 18 }, { width: 38 },
+    ]
+  }
+
   function addSimulacroGeneralSummarySheet(workbook, areaEntries, convocatoriaName) {
     const sheet = workbook.addWorksheet('Resumen general')
     const allRows = areaEntries.flatMap((entry) => entry.results)
@@ -382,6 +425,25 @@ export function useExport() {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     })
     saveAs(blob, buildFilename('simulacro-resultados-todo', convocatoriaName, 'todas', 'xlsx'))
+  }
+
+  /**
+   * Descarga solo la lista de revisión: alumnos sin hoja / otras incidencias y,
+   * si se pasan, las hojas sin alumno con su sugerencia (puntaje provisional, no oficial).
+   */
+  async function exportReviewListToExcel(noCalificados = [], orphanRows = [], convocatoriaName = '', options = {}) {
+    if (!noCalificados.length && !orphanRows.length) return
+
+    const { ExcelJS, saveAs } = await loadExcelExportDeps()
+    const workbook = new ExcelJS.Workbook()
+    if (noCalificados.length) addNoCalificadosSheet(workbook, noCalificados, { includeProgram: false })
+    if (orphanRows.length) addOrphanSheetsSheet(workbook, orphanRows)
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    saveAs(blob, buildFilename('revision-incidencias', convocatoriaName, options.area || 'todas', 'xlsx'))
   }
 
   async function exportScoresToExcel(rankedResults, convocatoriaName = '', options = {}) {
@@ -999,6 +1061,7 @@ export function useExport() {
 
   return {
     exportScoresToExcel,
+    exportReviewListToExcel,
     exportSimulacroAreasToExcel,
     exportScoresToPdf,
     exportSimulacroAreasToPdf,

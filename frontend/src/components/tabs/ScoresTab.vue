@@ -6,9 +6,8 @@ import Toolbar from '@/components/shared/Toolbar.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import CandidateDetailModal from '@/components/shared/CandidateDetailModal.vue'
 import PaginationBar from '@/components/shared/PaginationBar.vue'
-import StepVerificationPanel from '@/components/shared/StepVerificationPanel.vue'
 import ProcessPathBadge from '@/components/shared/ProcessPathBadge.vue'
-import ProvisionalMatchesPanel from '@/components/shared/ProvisionalMatchesPanel.vue'
+import ReviewPanel from '@/components/shared/ReviewPanel.vue'
 
 const props = defineProps({
   calification: { type: Object, required: true },
@@ -104,32 +103,11 @@ const hasIngresanteData = computed(() =>
   (currentAreaStats.value?.ingresantes ?? 0) > 0
 )
 
-const issueCount = computed(() => {
-  const summary = calification.calificationSummary
-  if (!summary) return 0
-  return (summary.missingResponses || 0) +
-    (summary.missingKeys || 0) +
-    (summary.duplicateResponses || 0) +
-    (summary.invalidCandidates || 0) +
-    (summary.missingPrograms || 0) +
-    (summary.invalidResponseTypes || 0) +
-    (summary.unlinkedResponses || 0)
-})
-
 const noCalificados = computed(() =>
   Array.isArray(calification.calificationSummary?.noCalificados)
     ? calification.calificationSummary.noCalificados
     : []
 )
-
-const noCalificadosByMotivo = computed(() => {
-  const counts = new Map()
-  noCalificados.value.forEach((row) => {
-    const motivo = row.motivo || 'Sin motivo'
-    counts.set(motivo, (counts.get(motivo) || 0) + 1)
-  })
-  return Array.from(counts.entries()).map(([motivo, count]) => ({ motivo, count }))
-})
 
 // ── Filtros locales ──────────────────────────────────────────────────────────
 
@@ -298,6 +276,15 @@ function handleExportAllSimulacroExcel() {
     {
       statsByArea: props.dashboard.statsByArea.value,
     },
+  )
+}
+
+function handleExportReview({ orphanRows = [] } = {}) {
+  props.exporter.exportReviewListToExcel(
+    noCalificados.value,
+    orphanRows,
+    props.convocatoriaName,
+    { area: calification.calificationDisplayArea },
   )
 }
 
@@ -488,8 +475,8 @@ function handleExportIngresantesPdf() {
 
       <div class="summary-strip">
         <div class="summary-item">
-          <strong>{{ calification.calificationSummary?.totalCandidates ?? 0 }}</strong>
-          <span>Postulantes</span>
+          <strong>{{ calification.calificationResults.length }}</strong>
+          <span>Calificados de {{ calification.calificationSummary?.totalCandidates ?? 0 }}</span>
         </div>
         <div class="summary-item summary-item--success" v-if="currentAreaStats">
           <strong>{{ currentAreaStats.ingresantes }}</strong>
@@ -499,82 +486,14 @@ function handleExportIngresantesPdf() {
           <strong class="mono">{{ currentAreaStats.avg.toFixed(3) }}</strong>
           <span>Promedio</span>
         </div>
-        <div class="summary-item" :class="{ 'summary-item--danger': noCalificados.length > 0 }">
-          <strong>{{ noCalificados.length }}</strong>
-          <span>No calificados</span>
-        </div>
-        <div class="summary-item" :class="{ 'summary-item--warning': issueCount > 0 }">
-          <strong>{{ issueCount }}</strong>
-          <span>Observaciones</span>
-        </div>
       </div>
 
-      <StepVerificationPanel
-        eyebrow="Verificación del cálculo"
-        :title="noCalificados.length || issueCount
-          ? 'Revisa las incidencias antes de publicar o exportar resultados oficiales.'
-          : 'El cálculo no reporta incidencias pendientes.'"
-      >
-        <template #chips>
-          <span class="verification-chip" :class="noCalificados.length ? 'verification-chip--error' : 'verification-chip--muted'">
-            <strong>{{ noCalificados.length }}</strong> no calificados
-          </span>
-          <span class="verification-chip" :class="issueCount ? 'verification-chip--warn' : 'verification-chip--muted'">
-            <strong>{{ issueCount }}</strong> observaciones
-          </span>
-          <span class="verification-chip verification-chip--info">
-            <strong>{{ localFilteredResults.length }}</strong> visibles
-          </span>
-        </template>
-      </StepVerificationPanel>
-
-      <section v-if="noCalificados.length" class="not-qualified-panel">
-        <div class="not-qualified-panel__header">
-          <div>
-            <span class="not-qualified-panel__eyebrow">No calificados</span>
-            <h3>{{ noCalificados.length }} postulante(s) quedaron fuera del cálculo</h3>
-          </div>
-          <button type="button" class="btn btn--ghost" @click="handleExportExcel">
-            Exportar Excel
-          </button>
-        </div>
-
-        <div class="not-qualified-panel__chips">
-          <span v-for="item in noCalificadosByMotivo" :key="item.motivo" class="not-qualified-chip">
-            <strong>{{ item.count }}</strong> {{ item.motivo }}
-          </span>
-        </div>
-
-        <div class="not-qualified-table-wrap">
-          <table class="not-qualified-table">
-            <thead>
-              <tr>
-                <th>DNI</th>
-                <th>Apellidos y nombres</th>
-                <th>Área</th>
-                <th>Programa</th>
-                <th>Motivo</th>
-                <th>Detalle</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in noCalificados" :key="`${row.dni}-${row.motivo}-${row.detalle}`">
-                <td class="mono">{{ row.dni || '—' }}</td>
-                <td>{{ [row.paterno, row.materno, row.nombres].filter(Boolean).join(' ') || '—' }}</td>
-                <td>{{ row.area || '—' }}</td>
-                <td>{{ row.programa || '—' }}</td>
-                <td><span class="not-qualified-reason">{{ row.motivo || 'Sin motivo' }}</span></td>
-                <td>{{ row.detalle || '—' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="not-qualified-panel__hint">
-          El Excel de resultados incluye una hoja “No calificados” con este detalle.
-        </p>
-      </section>
-
-      <ProvisionalMatchesPanel :build-preview="calification.previewProvisionalMatches" />
+      <ReviewPanel
+        :no-calificados="noCalificados"
+        :orphan-sheet-count="calification.calificationSummary?.sheetsWithoutCandidate ?? 0"
+        :build-preview="calification.previewProvisionalMatches"
+        @export="handleExportReview"
+      />
 
       <div class="results-filters">
         <div class="results-search">
@@ -914,7 +833,7 @@ function handleExportIngresantesPdf() {
 .area-tabs--compact .area-tab { flex: 1; justify-content: center; }
 
 .summary-strip {
-  display: grid; grid-template-columns: repeat(5, minmax(110px, 1fr));
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   border: 1px solid var(--slate-200); border-radius: var(--radius-lg); overflow: hidden;
 }
 .summary-item {
@@ -1017,118 +936,6 @@ function handleExportIngresantesPdf() {
   border-radius: var(--radius-lg); color: var(--slate-600); font-size: 0.82rem;
 }
 
-.not-qualified-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid #fecaca;
-  border-left: 4px solid #dc2626;
-  border-radius: var(--radius-lg);
-  background: #fef2f2;
-}
-
-.not-qualified-panel__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.not-qualified-panel__eyebrow {
-  display: block;
-  margin-bottom: var(--space-1);
-  color: #b91c1c;
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.not-qualified-panel h3 {
-  margin: 0;
-  color: #7f1d1d;
-  font-size: 0.98rem;
-  line-height: 1.3;
-}
-
-.not-qualified-panel__chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.not-qualified-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid #fecaca;
-  border-radius: var(--radius-full);
-  background: white;
-  color: #991b1b;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.not-qualified-chip strong {
-  color: #7f1d1d;
-  font-family: var(--font-mono);
-}
-
-.not-qualified-table-wrap {
-  overflow-x: auto;
-  border: 1px solid #fecaca;
-  border-radius: var(--radius-md);
-  background: white;
-}
-
-.not-qualified-table {
-  width: 100%;
-  min-width: 760px;
-  border-collapse: collapse;
-  font-size: 0.78rem;
-}
-
-.not-qualified-table th {
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid #fecaca;
-  background: #fff7f7;
-  color: #991b1b;
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-align: left;
-  text-transform: uppercase;
-}
-
-.not-qualified-table td {
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--slate-100);
-  color: var(--slate-700);
-  vertical-align: top;
-}
-
-.not-qualified-table tr:last-child td {
-  border-bottom: 0;
-}
-
-.not-qualified-reason {
-  display: inline-flex;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-full);
-  background: #fee2e2;
-  color: #991b1b;
-  font-size: 0.72rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.not-qualified-panel__hint {
-  margin: 0;
-  color: #991b1b;
-  font-size: 0.78rem;
-}
 
 .results-filters {
   display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
@@ -1441,7 +1248,6 @@ tbody tr.row--ingresante:hover { background: #dcfce7; }
   .results-header__actions > .btn { flex: 1; }
   .review-board { flex-direction: column; }
   .review-board__chips { justify-content: flex-start; }
-  .not-qualified-panel__header { flex-direction: column; }
   .summary-strip { grid-template-columns: repeat(2, 1fr); }
   .summary-item { border-bottom: 1px solid var(--slate-200); }
   .summary-item:nth-child(even) { border-right: 0; }

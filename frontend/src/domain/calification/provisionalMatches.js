@@ -1,5 +1,8 @@
 import { stripDigits } from '@/utils/helpers'
+import { findOrphanResponses } from '@/utils/calificationHelpers'
 import { calculateAreaResults } from './calculateResults'
+
+export { findOrphanResponses }
 
 const MIN_READ_LENGTH = 6
 
@@ -38,17 +41,6 @@ export function suggestCandidatesForDni(dniRead, candidates) {
   return candidates.filter((candidate) => {
     const dni = stripDigits(candidate.dni)
     return dni.length === 8 && isSingleEditApart(read, dni)
-  })
-}
-
-/** Hojas cuyo DNI no pertenece a ningún postulante del padrón. */
-export function findOrphanResponses(responsesRows, archiveRows) {
-  const padronDnis = new Set(
-    archiveRows.map((row) => stripDigits(row.dni)).filter((dni) => dni.length === 8),
-  )
-  return responsesRows.filter((response) => {
-    const dni = stripDigits(response.dni)
-    return !(dni.length === 8 && padronDnis.has(dni))
   })
 }
 

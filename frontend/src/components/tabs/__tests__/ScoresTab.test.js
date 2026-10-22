@@ -2,6 +2,7 @@ import { shallowMount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import ScoresTab from '../ScoresTab.vue'
+import ReviewPanel from '@/components/shared/ReviewPanel.vue'
 
 function makeCalification(overrides = {}) {
   return {
@@ -47,6 +48,7 @@ function makeCalification(overrides = {}) {
       missingPrograms: 0,
       invalidResponseTypes: 0,
       unlinkedResponses: 0,
+      sheetsWithoutCandidate: 3,
       noCalificados: [
         {
           dni: '87654321',
@@ -93,6 +95,7 @@ function mountScoresTab(calification = makeCalification()) {
       },
       exporter: {
         exportScoresToExcel: vi.fn(),
+        exportReviewListToExcel: vi.fn(),
         exportSimulacroAreasToExcel: vi.fn(),
         exportScoresToPdf: vi.fn(),
         exportSimulacroAreasToPdf: vi.fn(),
@@ -116,14 +119,35 @@ function mountScoresTab(calification = makeCalification()) {
 }
 
 describe('ScoresTab', () => {
-  it('muestra el detalle de no calificados cuando el resumen lo incluye', () => {
+  it('entrega al panel de revisión los no calificados y las hojas sin alumno', () => {
+    const wrapper = mountScoresTab()
+    const review = wrapper.findComponent(ReviewPanel)
+
+    expect(review.exists()).toBe(true)
+    expect(review.props('noCalificados')).toHaveLength(1)
+    expect(review.props('orphanSheetCount')).toBe(3)
+  })
+
+  it('muestra cada cifra una sola vez en la franja de estado', () => {
     const wrapper = mountScoresTab()
 
-    expect(wrapper.find('.not-qualified-panel').exists()).toBe(true)
-    expect(wrapper.text()).toContain('1 postulante(s) quedaron fuera del cálculo')
-    expect(wrapper.text()).toContain('Sin respuesta')
-    expect(wrapper.text()).toContain('87654321')
-    expect(wrapper.text()).toContain('No se encontró respuesta vinculada al postulante.')
+    expect(wrapper.find('.summary-strip').text()).toContain('Calificados de 2')
+    expect(wrapper.text()).not.toContain('Observaciones')
+    expect(wrapper.text()).not.toContain('quedaron fuera del cálculo')
+  })
+
+  it('el botón de descarga exporta solo la lista de revisión', async () => {
+    const wrapper = mountScoresTab()
+    const exporter = wrapper.vm.$props.exporter
+    wrapper.findComponent(ReviewPanel).vm.$emit('export', { orphanRows: [{ litho: '1' }] })
+
+    expect(exporter.exportReviewListToExcel).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ dni: '87654321' })]),
+      [{ litho: '1' }],
+      'Convocatoria',
+      { area: 'Ingeniería' },
+    )
+    expect(exporter.exportScoresToExcel).not.toHaveBeenCalled()
   })
 
   it('no muestra el empty state si ya existen resultados calculados', () => {

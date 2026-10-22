@@ -79,6 +79,19 @@ describe('calculateAreaResults', () => {
     expect(validateCalificationResult({ result })).toMatchObject({ valid: true })
   })
 
+  it('cuenta las hojas cuyo DNI no pertenece a ningún postulante del padrón', () => {
+    const orphan = { dni: '99999999', tipo: 'P', answers: makeAnswers('A'), litho: '100002' }
+    const incomplete = { dni: '1234567', tipo: 'P', answers: makeAnswers('A'), litho: '100003' }
+    const base = makeInput()
+    const result = calculateAreaResults({
+      ...base,
+      responsesRows: [...base.responsesRows, orphan, incomplete],
+    })
+
+    expect(result.summary.sheetsWithoutCandidate).toBe(2)
+    expect(result.results).toHaveLength(1)
+  })
+
   it('no asigna áreas desconocidas a la primera área disponible', () => {
     expect(() => calculateAreaResults(makeInput({
       area: 'Biomédicas',

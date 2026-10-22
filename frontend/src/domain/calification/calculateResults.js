@@ -9,6 +9,7 @@ import {
   buildDniCounts,
   getCandidateDniIssue,
   getExactAnswerKey,
+  findOrphanResponses,
   REAL_TEST_TYPES,
   GENERAL_SIMULACRO_AREA,
 } from '@/utils/calificationHelpers'
@@ -337,6 +338,8 @@ export function calculateAreaResults({
   const unlinkedResponses = responsesRows.filter(
     (r) => !r.dni || r.dni.trim() === ''
   ).length
+  // Hojas que no se pudieron atribuir a ningún alumno del padrón: quedan fuera del ranking.
+  const sheetsWithoutCandidate = findOrphanResponses(responsesRows, archiveRows).length
 
   const plantillaSnapshot = (plantilla.items || []).map(i => ({
     subject: i.subject,
@@ -357,6 +360,7 @@ export function calculateAreaResults({
       missingPrograms,
       invalidResponseTypes,
       unlinkedResponses,
+      sheetsWithoutCandidate,
       noCalificados,
       totalWeight: Number(totalWeight.toFixed(3)),
       answersLength,

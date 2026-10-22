@@ -32,3 +32,14 @@ export function getExactAnswerKey(rows, area, tipo, areaList) {
       (row.tipo || '').trim().toUpperCase().slice(0, 1) === normalizedTipo
   )
 }
+
+/** Hojas cuyo DNI no pertenece a ningún postulante del padrón (o no es un DNI de 8 dígitos). */
+export function findOrphanResponses(responsesRows, archiveRows) {
+  const padronDnis = new Set(
+    archiveRows.map((row) => stripDigits(row.dni)).filter((dni) => dni.length === 8),
+  )
+  return responsesRows.filter((response) => {
+    const dni = stripDigits(response.dni)
+    return !(dni.length === 8 && padronDnis.has(dni))
+  })
+}
