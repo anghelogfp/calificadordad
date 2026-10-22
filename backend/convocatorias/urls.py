@@ -6,6 +6,7 @@ from .views import (
     CalificationConfigViewSet,
     CandidatoViewSet,
     DatFormatConfigViewSet,
+    DniCorrectionViewSet,
     IdentifierRowViewSet,
     IdentifierSourceViewSet,
     ProgramaVacanteViewSet,
@@ -25,5 +26,6 @@ router.register(r'answer-key-sources', AnswerKeySourceViewSet, basename='answer-
 router.register(r'answer-keys', AnswerKeyRowViewSet, basename='answer-key')
 router.register(r'programa-vacantes', ProgramaVacanteViewSet, basename='programa-vacante')
 router.register(r'calification-configs', CalificationConfigViewSet, basename='calification-config')
+router.register(r'correcciones-dni', DniCorrectionViewSet, basename='correccion-dni')
 
 urlpatterns = router.urls

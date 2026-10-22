@@ -1,4 +1,6 @@
 from django.db import transaction
+from django.utils import timezone
+from rest_framework import mixins
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -8,6 +10,7 @@ from .models import (
     CalificationConfig,
     Candidato,
     DatFormatConfig,
+    DniCorrection,
     AnswerKeyRow,
     AnswerKeySource,
     IdentifierRow,
@@ -21,6 +24,7 @@ from .serializers import (
     CalificationConfigSerializer,
     CandidatoSerializer,
     DatFormatConfigSerializer,
+    DniCorrectionSerializer,
     AnswerKeyRowSerializer,
     AnswerKeySourceSerializer,
     IdentifierRowSerializer,
@@ -448,3 +452,24 @@ class CalificationConfigViewSet(viewsets.ModelViewSet):
             CalificationConfig.objects.bulk_create(objects)
 
         return Response(CalificationConfigSerializer(objects, many=True).data)
+
+
+class DniCorrectionViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Correcciones de DNI confirmadas. Deshacer revoca (no borra) para conservar la auditoría."""
+    serializer_class = DniCorrectionSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return DniCorrection.objects.filter(created_by=self.request.user, revoked_at__isnull=True)
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    def perform_destroy(self, instance):
+        instance.revoked_at = timezone.now()
+        instance.save(update_fields=['revoked_at'])

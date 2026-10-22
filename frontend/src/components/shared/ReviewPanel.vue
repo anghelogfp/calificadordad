@@ -10,6 +10,10 @@ const props = defineProps({
   orphanSheetCount: { type: Number, default: 0 },
   // Devuelve { rows, summary } (useCalification.previewProvisionalMatches) o null
   buildPreview: { type: Function, default: null },
+  // Correcciones de DNI confirmadas (useCalification)
+  loadCorrections: { type: Function, default: null },
+  confirmCorrection: { type: Function, default: null },
+  undoCorrection: { type: Function, default: null },
 })
 
 const emit = defineEmits(['export'])
@@ -23,6 +27,8 @@ const page = ref(1)
 const pageSize = ref(10)
 const preview = ref(null)
 const previewError = ref('')
+const actionError = ref('')
+const busy = ref(false)
 
 const missingSheetRows = computed(() => props.noCalificados.filter((row) => row.motivo === MISSING_SHEET))
 const otherRows = computed(() => props.noCalificados.filter((row) => row.motivo !== MISSING_SHEET))
@@ -53,14 +59,36 @@ function fullName(row) {
   return [row.paterno, row.materno, row.nombres].filter(Boolean).join(' ') || '—'
 }
 
-function loadPreview() {
+async function loadPreview() {
   previewError.value = ''
   try {
+    await props.loadCorrections?.()
     preview.value = props.buildPreview ? props.buildPreview() : null
   } catch (error) {
     preview.value = null
     previewError.value = error?.message || String(error)
   }
+}
+
+async function runAction(action, payload) {
+  if (!action || busy.value) return
+  busy.value = true
+  actionError.value = ''
+  try {
+    const result = await action(...payload)
+    if (result?.ok === false) actionError.value = result.error || 'No se pudo completar la acción.'
+    await loadPreview()
+  } finally {
+    busy.value = false
+  }
+}
+
+function onConfirm({ litho, correctedDni }) {
+  return runAction(props.confirmCorrection, [litho, correctedDni])
+}
+
+function onUndo({ litho }) {
+  return runAction(props.undoCorrection, [litho])
 }
 
 function toggle() {
@@ -72,6 +100,7 @@ function selectTab(key) {
   activeTab.value = key
   search.value = ''
   page.value = 1
+  actionError.value = ''
   if (key === 'orphan') loadPreview()
 }
 
@@ -100,8 +129,8 @@ watch(tabs, (list) => {
   }
 })
 
-function handleExport() {
-  if (!preview.value && props.orphanSheetCount > 0) loadPreview()
+async function handleExport() {
+  if (!preview.value && props.orphanSheetCount > 0) await loadPreview()
   emit('export', { orphanRows: preview.value?.rows || [] })
 }
 </script>
@@ -145,7 +174,15 @@ function handleExport() {
 
       <template v-if="activeTab === 'orphan'">
         <p v-if="previewError" class="review__error">{{ previewError }}</p>
-        <OrphanSheetsTable v-else-if="preview" :preview="preview" :search="search" />
+        <OrphanSheetsTable
+          v-else-if="preview"
+          :preview="preview"
+          :search="search"
+          :busy="busy"
+          :action-error="actionError"
+          @confirm="onConfirm"
+          @undo="onUndo"
+        />
       </template>
 
       <template v-else-if="activeTab">

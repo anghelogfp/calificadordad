@@ -59,6 +59,8 @@ function rankAmong(officialScores, score) {
  * @param {object[]} input.responsesRows - Hojas de respuestas cargadas
  * @param {object} input.scoreParams - Parámetros de calculateAreaResults sin archiveRows/responsesRows/responsesByDni
  * @param {number[]} [input.officialScores] - Puntajes ya calificados, para estimar la posición
+ * @param {{ litho: string, correctedDni: string }[]} [input.confirmedCorrections] - Correcciones ya confirmadas.
+ *   Siguen fuera del ranking oficial: se muestran aparte con estado 'confirmed'.
  * @param {Function} [input.calculate]
  */
 export function buildProvisionalPreview({
@@ -66,6 +68,7 @@ export function buildProvisionalPreview({
   responsesRows,
   scoreParams,
   officialScores = [],
+  confirmedCorrections = [],
   calculate = calculateAreaResults,
 }) {
   const orphans = findOrphanResponses(responsesRows, archiveRows)
@@ -73,9 +76,21 @@ export function buildProvisionalPreview({
     responsesRows.map((response) => stripDigits(response.dni)).filter((dni) => dni.length === 8),
   )
 
+  const confirmedByLitho = new Map(
+    confirmedCorrections.map((item) => [String(item.litho), stripDigits(item.correctedDni)]),
+  )
+
+  // Alumnos ya asignados a una hoja por una corrección confirmada.
+  const assignedElsewhere = new Set(confirmedByLitho.values())
+
   const rows = orphans.map((response) => {
     const dniRead = stripDigits(response.dni)
-    const suggestions = suggestCandidatesForDni(dniRead, archiveRows).map((candidate) => {
+    const confirmedDni = confirmedByLitho.get(String(response.litho))
+    const candidatesForSheet = confirmedDni
+      ? archiveRows.filter((candidate) => stripDigits(candidate.dni) === confirmedDni)
+      : suggestCandidatesForDni(dniRead, archiveRows)
+
+    const suggestions = candidatesForSheet.map((candidate) => {
       const dni = stripDigits(candidate.dni)
       const suggestion = {
         dni,
@@ -93,6 +108,10 @@ export function buildProvisionalPreview({
         suggestion.status = 'blocked-has-sheet'
         return suggestion
       }
+      if (!confirmedDni && assignedElsewhere.has(dni)) {
+        suggestion.status = 'blocked-confirmed'
+        return suggestion
+      }
 
       try {
         const linked = { ...response, dni }
@@ -106,6 +125,7 @@ export function buildProvisionalPreview({
         if (Number.isFinite(score)) {
           suggestion.provisionalScore = score
           suggestion.wouldRank = rankAmong(officialScores, score)
+          if (confirmedDni) suggestion.status = 'confirmed'
         } else {
           suggestion.status = 'not-scored'
         }
@@ -148,6 +168,7 @@ export function buildProvisionalPreview({
     rows,
     summary: {
       orphanSheets: rows.length,
+      confirmed: rows.filter((row) => row.suggestions.some((s) => s.status === 'confirmed')).length,
       withViableSuggestion: rows.filter((row) => row.suggestions.some((s) => s.status === 'ok')).length,
       onlyBlockedSuggestions: rows.filter((row) => row.suggestions.length > 0
         && row.suggestions.every((s) => s.status !== 'ok')).length,

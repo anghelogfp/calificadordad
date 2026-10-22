@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useCalification } from '../useCalification'
 import { buildAreaTipoKey, normalizeArea, stripDigits } from '@/utils/helpers'
 import { DEFAULT_DAT_FORMAT } from '@/constants'
+import { apiFetch } from '@/utils/apiFetch'
 
 const validateCalificationResultMock = vi.hoisted(() => vi.fn())
 
@@ -451,5 +452,69 @@ describe('useCalification', () => {
       '[calification] Resultado calculado con invariantes inválidas:',
       expect.objectContaining({ valid: false }),
     )
+  })
+
+  describe('correcciones de DNI confirmadas', () => {
+    const jsonResponse = (ok, body, status = ok ? 200 : 400) => ({ ok, status, json: async () => body })
+
+    it('confirma con la API y recarga la lista', async () => {
+      const { calification } = makeSubject()
+      apiFetch
+        .mockResolvedValueOnce(jsonResponse(true, { id: 7 }, 201))
+        .mockResolvedValueOnce(jsonResponse(true, [{ id: 7, litho: '000910', correctedDni: '63737500' }]))
+
+      const result = await calification.confirmDniCorrection('000910', '63737500')
+
+      expect(result).toEqual({ ok: true })
+      expect(apiFetch).toHaveBeenNthCalledWith(1, '/correcciones-dni/', {
+        method: 'POST',
+        body: JSON.stringify({ litho: '000910', correctedDni: '63737500' }),
+      })
+      expect(calification.dniCorrections.value).toEqual([
+        { id: 7, litho: '000910', correctedDni: '63737500' },
+      ])
+    })
+
+    it('devuelve el mensaje de la API cuando rechaza la confirmación', async () => {
+      const { calification } = makeSubject()
+      apiFetch.mockResolvedValueOnce(jsonResponse(false, { correctedDni: ['Ese alumno ya tiene su propia hoja.'] }))
+
+      const result = await calification.confirmDniCorrection('000910', '11111111')
+
+      expect(result).toEqual({ ok: false, error: 'Ese alumno ya tiene su propia hoja.' })
+      expect(calification.dniCorrections.value).toEqual([])
+    })
+
+    it('avisa si no hay conexión en lugar de romper', async () => {
+      const { calification } = makeSubject()
+      apiFetch.mockRejectedValueOnce(new Error('network'))
+
+      const result = await calification.confirmDniCorrection('000910', '63737500')
+
+      expect(result).toEqual({ ok: false, error: 'No se pudo conectar con el servidor.' })
+    })
+
+    it('deshace usando el id de la corrección de esa hoja', async () => {
+      const { calification } = makeSubject()
+      calification.dniCorrections.value = [{ id: 7, litho: '000910', correctedDni: '63737500' }]
+      apiFetch
+        .mockResolvedValueOnce({ ok: true, status: 204 })
+        .mockResolvedValueOnce(jsonResponse(true, []))
+
+      const result = await calification.undoDniCorrection('000910')
+
+      expect(result).toEqual({ ok: true })
+      expect(apiFetch).toHaveBeenNthCalledWith(1, '/correcciones-dni/7/', { method: 'DELETE' })
+      expect(calification.dniCorrections.value).toEqual([])
+    })
+
+    it('no intenta deshacer una corrección que no existe', async () => {
+      const { calification } = makeSubject()
+
+      const result = await calification.undoDniCorrection('999999')
+
+      expect(result.ok).toBe(false)
+      expect(apiFetch).not.toHaveBeenCalled()
+    })
   })
 })

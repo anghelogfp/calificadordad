@@ -32,8 +32,29 @@ En la pantalla de resultados los no calificados formaban una lista larga (129 fi
 - `calculateResults.test.js`: conteo de hojas sin alumno.
 - Suite completa: 228 pruebas y `vite build` correctos. Revisión visual con datos de ejemplo (129 sin hoja, 27 hojas sin alumno).
 
+## Confirmar un DNI sugerido (Sí/No)
+
+En la pestaña "Hojas sin alumno", cada sugerencia viable tiene un botón **Confirmar**. Pide una confirmación en pantalla ("¿Es este alumno?") antes de guardar; no usa diálogos del navegador.
+
+- La corrección confirmada se muestra aparte: "Confirmado · fuera del ranking oficial", con su puntaje y la posición que tendría. **No entra al ranking oficial.** (Decisión: separada y marcada hasta que el colegio la verifique.)
+- **Deshacer** la revoca; queda registrada, no se borra.
+- Un alumno confirmado con una hoja queda bloqueado para otras hojas.
+- Solo se confirman sugerencias viables: no las bloqueadas ni las que chocan con otra hoja. "No" equivale a no confirmar.
+- Las correcciones confirmadas salen en la hoja "Hojas sin alumno" del Excel de revisión.
+- Sin restricción de rol: el sistema lo usa el administrador; los datos siguen aislados por usuario.
+
+Backend: modelo `DniCorrection`, migración `0012_dnicorrection`, endpoint `/api/correcciones-dni/` (listar, crear, deshacer). Ver `docs/backend.md`.
+
+Pruebas: 12 de backend (validaciones, auditoría al deshacer, aislamiento por usuario, autenticación), 3 de dominio, 5 de composable y 6 del panel. Verificado también contra el servidor real. Suite: 242 de frontend y 66 de backend.
+
+## Aviso: base de datos de la raíz
+
+La base que había en la raíz venía de la rama `feat/calificacion-pj`, con columnas obligatorias que `main` no tiene (`aula_padron`, `file_size`...), y rechazaba guardar datos con error 500. Se respaldó en `~/Documents/admision_work/respaldos-db/` y `main` usa ahora una base limpia.
+
+`feat/calificacion-pj` tiene su propia migración `0012_answerkeysource_file_size...`: al fusionarla con `main` habrá dos migraciones 0012 y hará falta una migración de fusión.
+
 ## Pendiente
 
-- Botón Sí/No para confirmar un DNI sugerido, con registro de auditoría (requiere guardarlo en la base).
-- Decidir si los confirmados entran al ranking oficial o aparecen separados.
 - Agrupar las acciones de la cabecera y revisar tablas en pantallas pequeñas.
+- Decidir si los confirmados deben poder incluirse en el ranking oficial.
+- Incluir las correcciones en el backup/restauración.

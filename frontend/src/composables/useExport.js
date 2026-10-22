@@ -213,6 +213,8 @@ export function useExport() {
     const reasonLabels = { 'not-in-padron': 'DNI no está en el padrón', incomplete: 'DNI incompleto' }
     const statusLabels = {
       ok: 'Posible: verificar con el colegio',
+      confirmed: 'Confirmado (fuera del ranking oficial)',
+      'blocked-confirmed': 'Ese alumno ya fue confirmado con otra hoja',
       'blocked-has-sheet': 'Ese alumno ya tiene su propia hoja',
       conflict: 'Otra hoja sugiere al mismo alumno',
       'not-scored': 'No se pudo calcular',
@@ -228,7 +230,7 @@ export function useExport() {
           ...base,
           suggestion.dni,
           [suggestion.paterno, suggestion.materno, suggestion.nombres].filter(Boolean).join(' '),
-          suggestion.status === 'ok' ? suggestion.provisionalScore : '',
+          ['ok', 'confirmed'].includes(suggestion.status) ? suggestion.provisionalScore : '',
           statusLabels[suggestion.status] || suggestion.status,
         ])
       })

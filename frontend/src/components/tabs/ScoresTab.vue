@@ -492,6 +492,9 @@ function handleExportIngresantesPdf() {
         :no-calificados="noCalificados"
         :orphan-sheet-count="calification.calificationSummary?.sheetsWithoutCandidate ?? 0"
         :build-preview="calification.previewProvisionalMatches"
+        :load-corrections="calification.loadDniCorrections"
+        :confirm-correction="calification.confirmDniCorrection"
+        :undo-correction="calification.undoDniCorrection"
         @export="handleExportReview"
       />
 

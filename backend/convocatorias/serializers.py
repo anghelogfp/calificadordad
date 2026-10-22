@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import (
+    DniCorrection,
     Area,
     CalificationConfig,
     Candidato,
@@ -247,3 +248,44 @@ class CalificationConfigSerializer(serializers.ModelSerializer):
             'updated_at',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class DniCorrectionSerializer(serializers.ModelSerializer):
+    """Valida contra los datos del propio usuario; el DNI original lo deriva el servidor."""
+    correctedDni = serializers.RegexField(r'^\d{8}$', source='corrected_dni')
+    originalDni = serializers.CharField(source='original_dni', read_only=True)
+    confirmedAt = serializers.DateTimeField(source='confirmed_at', read_only=True)
+
+    class Meta:
+        model = DniCorrection
+        fields = ['id', 'litho', 'originalDni', 'correctedDni', 'confirmedAt']
+        read_only_fields = ['id']
+
+    def validate(self, attrs):
+        user = self.context['request'].user
+        litho = attrs['litho'].strip()
+        corrected_dni = attrs['corrected_dni']
+
+        sheet = ResponseRow.objects.filter(created_by=user, litho=litho).first()
+        if sheet is None:
+            raise serializers.ValidationError({'litho': 'La hoja no existe en las respuestas cargadas.'})
+
+        padron_dnis = set(
+            Candidato.objects.filter(created_by=user).values_list('dni', flat=True)
+        )
+        if corrected_dni not in padron_dnis:
+            raise serializers.ValidationError({'correctedDni': 'El DNI no está en el padrón.'})
+        if sheet.dni in padron_dnis:
+            raise serializers.ValidationError({'litho': 'La hoja ya tiene un alumno en el padrón.'})
+        if ResponseRow.objects.filter(created_by=user, dni=corrected_dni).exists():
+            raise serializers.ValidationError({'correctedDni': 'Ese alumno ya tiene su propia hoja.'})
+
+        active = DniCorrection.objects.filter(created_by=user, revoked_at__isnull=True)
+        if active.filter(litho=litho).exists():
+            raise serializers.ValidationError({'litho': 'La hoja ya tiene una corrección confirmada.'})
+        if active.filter(corrected_dni=corrected_dni).exists():
+            raise serializers.ValidationError({'correctedDni': 'Ese alumno ya fue asignado a otra hoja.'})
+
+        attrs['litho'] = litho
+        attrs['original_dni'] = sheet.dni
+        return attrs

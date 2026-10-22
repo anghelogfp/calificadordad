@@ -20,9 +20,18 @@
 La implementacion actual usa varias entidades globales y varias entidades aisladas por usuario:
 
 - Globales: `Area`, `DatFormatConfig`, `PlantillaPonderacion`.
-- Por usuario: `Candidato`, `IdentifierSource`, `IdentifierRow`, `ResponseSource`, `ResponseRow`, `AnswerKeySource`, `AnswerKeyRow`, `ProgramaVacante`, `CalificationConfig`, `ProcesoCalificacion`, `VerificadorSesion`.
+- Por usuario: `Candidato`, `IdentifierSource`, `IdentifierRow`, `ResponseSource`, `ResponseRow`, `AnswerKeySource`, `AnswerKeyRow`, `ProgramaVacante`, `CalificationConfig`, `DniCorrection`, `ProcesoCalificacion`, `VerificadorSesion`.
 
 Decision vigente: el proceso de calificacion es la unidad operativa principal. No existe entidad fuerte de convocatoria. Si el negocio necesita convocatorias completamente independientes, debe reintroducirse como rediseño explicito.
+
+## Correcciones De DNI
+
+`DniCorrection` (`/api/correcciones-dni/`, por usuario) registra que una hoja sin alumno en el padron fue atribuida a un DNI sugerido. No modifica la hoja ni el padron y no entra al ranking oficial.
+
+- El DNI original lo deriva el servidor de la hoja; el cliente solo envia `litho` y `correctedDni`.
+- Valida contra los datos del propio usuario: la hoja existe y no tiene alumno en el padron, el DNI corregido esta en el padron y no tiene hoja propia, y no esta asignado a otra hoja.
+- Deshacer revoca (`revoked_at`) en lugar de borrar, para conservar la auditoria. Hay restricciones unicas solo entre correcciones activas.
+- Limitacion conocida: el backup/restauracion no incluye estas correcciones.
 
 ## Seguridad Y Permisos
 

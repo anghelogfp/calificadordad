@@ -6,7 +6,15 @@ const props = defineProps({
   // { rows, summary } de buildProvisionalPreview
   preview: { type: Object, required: true },
   search: { type: String, default: '' },
+  busy: { type: Boolean, default: false },
+  actionError: { type: String, default: '' },
 })
+
+const emit = defineEmits(['confirm', 'undo'])
+
+// Paso de confirmación en pantalla (sin diálogos del navegador)
+const pendingKey = ref('')
+const keyOf = (litho, dni) => `${litho}|${dni}`
 
 const page = ref(1)
 const pageSize = ref(10)
@@ -18,6 +26,7 @@ const REASON_LABELS = {
 
 const STATUS_LABELS = {
   'blocked-has-sheet': 'Ese alumno ya tiene su propia hoja',
+  'blocked-confirmed': 'Ese alumno ya fue confirmado con otra hoja',
   conflict: 'Otra hoja sugiere al mismo alumno',
   'not-scored': 'No se pudo calcular',
 }
@@ -47,6 +56,15 @@ const pagedRows = computed(() => {
 
 watch(() => [props.search, props.preview], () => { page.value = 1 })
 
+function askConfirm(litho, dni) {
+  pendingKey.value = keyOf(litho, dni)
+}
+
+function doConfirm(litho, dni) {
+  pendingKey.value = ''
+  emit('confirm', { litho, correctedDni: dni })
+}
+
 function formatScore(value) {
   return Number.isFinite(value) ? value.toFixed(3) : '—'
 }
@@ -59,6 +77,11 @@ function formatScore(value) {
       Si el DNI sugerido fuera el correcto, el puntaje sería el que se muestra
       <strong>(provisional: no cambia el ranking)</strong>.
     </p>
+
+    <p v-if="preview.summary?.confirmed" class="orphan__confirmed-note">
+      {{ preview.summary.confirmed }} confirmada(s). Siguen fuera del ranking oficial.
+    </p>
+    <p v-if="actionError" class="orphan__error" role="alert">{{ actionError }}</p>
 
     <p v-if="!filteredRows.length" class="orphan__empty">
       {{ preview.rows.length ? 'Ninguna hoja coincide con la búsqueda.' : 'Todas las hojas cargadas tienen un DNI que está en el padrón.' }}
@@ -73,6 +96,7 @@ function formatScore(value) {
             <th>Alumno sugerido</th>
             <th class="num">Puntaje si es él</th>
             <th class="num">Posición</th>
+            <th class="num">Acción</th>
           </tr>
         </thead>
         <tbody>
@@ -80,7 +104,7 @@ function formatScore(value) {
             <tr v-if="!row.suggestions.length">
               <td class="mono">{{ row.litho || '—' }}<span class="sub">Aula {{ row.aula || '—' }}</span></td>
               <td class="mono">{{ row.dniRead || '—' }}<span class="sub">{{ REASON_LABELS[row.reason] }}</span></td>
-              <td colspan="3" class="muted">Sin coincidencia parecida en el padrón</td>
+              <td colspan="4" class="muted">Sin coincidencia parecida en el padrón</td>
             </tr>
             <tr v-for="suggestion in row.suggestions" :key="`${row.litho}-${suggestion.dni}`">
               <td class="mono">{{ row.litho || '—' }}<span class="sub">Aula {{ row.aula || '—' }}</span></td>
@@ -88,20 +112,39 @@ function formatScore(value) {
               <td>
                 {{ fullName(suggestion) || '—' }}
                 <span class="sub mono">{{ suggestion.dni }}</span>
+                <span v-if="suggestion.status === 'confirmed'" class="ok-flag">Confirmado · fuera del ranking oficial</span>
                 <span v-if="STATUS_LABELS[suggestion.status]" class="flag">
                   {{ STATUS_LABELS[suggestion.status] }}
                   <template v-if="suggestion.conflictWith"> ({{ suggestion.conflictWith.join(', ') }})</template>
                 </span>
               </td>
               <td class="num">
-                <span v-if="suggestion.status === 'ok'" class="score">
+                <span v-if="suggestion.status === 'ok' || suggestion.status === 'confirmed'" class="score">
                   {{ formatScore(suggestion.provisionalScore) }}
-                  <em>PROVISIONAL</em>
+                  <em>{{ suggestion.status === 'confirmed' ? 'CONFIRMADO' : 'PROVISIONAL' }}</em>
                 </span>
                 <span v-else class="muted">—</span>
               </td>
               <td class="num">
-                <span v-if="suggestion.status === 'ok'">{{ suggestion.wouldRank }}</span>
+                <span v-if="suggestion.status === 'ok' || suggestion.status === 'confirmed'">{{ suggestion.wouldRank }}</span>
+                <span v-else class="muted">—</span>
+              </td>
+              <td class="num">
+                <template v-if="suggestion.status === 'ok'">
+                  <span v-if="pendingKey === keyOf(row.litho, suggestion.dni)" class="ask">
+                    ¿Es este alumno?
+                    <button type="button" class="act act--primary" :disabled="busy" @click="doConfirm(row.litho, suggestion.dni)">Sí, confirmar</button>
+                    <button type="button" class="act" @click="pendingKey = ''">Cancelar</button>
+                  </span>
+                  <button v-else type="button" class="act" :disabled="busy" @click="askConfirm(row.litho, suggestion.dni)">Confirmar</button>
+                </template>
+                <button
+                  v-else-if="suggestion.status === 'confirmed'"
+                  type="button"
+                  class="act"
+                  :disabled="busy"
+                  @click="emit('undo', { litho: row.litho })"
+                >Deshacer</button>
                 <span v-else class="muted">—</span>
               </td>
             </tr>
@@ -126,7 +169,7 @@ function formatScore(value) {
 .orphan { display: flex; flex-direction: column; gap: var(--space-3); }
 .orphan__lead, .orphan__hint, .orphan__empty { margin: 0; color: var(--slate-600); font-size: 0.8rem; max-width: 72ch; }
 .orphan__table-wrap { overflow-x: auto; border: 1px solid var(--slate-200); border-radius: var(--radius-md); background: white; }
-.orphan__table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 0.8rem; }
+.orphan__table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 0.8rem; }
 .orphan__table th {
   padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--slate-200);
   background: var(--slate-50); color: var(--slate-600); font-size: 0.72rem; font-weight: 700; text-align: left;
@@ -139,5 +182,18 @@ function formatScore(value) {
 .sub { display: block; color: var(--slate-500); font-size: 0.72rem; font-weight: 400; }
 .flag { display: block; color: #b45309; font-size: 0.72rem; font-weight: 600; }
 .score { display: inline-flex; flex-direction: column; align-items: flex-end; font-weight: 700; }
+.orphan__confirmed-note { margin: 0; color: #166534; font-size: 0.8rem; font-weight: 600; }
+.orphan__error { margin: 0; color: #991b1b; font-size: 0.8rem; font-weight: 600; }
+.ok-flag { display: block; color: #166534; font-size: 0.72rem; font-weight: 700; }
+.ask { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px; font-size: 0.72rem; color: var(--slate-700); }
+.act {
+  padding: 3px var(--space-2); border: 1px solid var(--slate-300, #cbd5e1); border-radius: var(--radius-md);
+  background: white; color: var(--slate-700); font-size: 0.75rem; font-weight: 600; cursor: pointer;
+}
+.act:hover:not(:disabled) { background: var(--slate-50); }
+.act:disabled { opacity: 0.5; cursor: default; }
+.act--primary { background: #166534; border-color: #166534; color: white; }
+.act--primary:hover:not(:disabled) { background: #14532d; }
+.act:focus-visible { outline: 2px solid var(--blue-600, #2563eb); outline-offset: 2px; }
 .score em { color: #b45309; font-size: 0.62rem; font-style: normal; letter-spacing: 0.06em; }
 </style>

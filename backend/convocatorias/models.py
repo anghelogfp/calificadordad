@@ -352,3 +352,40 @@ class CalificationConfig(models.Model):
 
     def __str__(self):
         return f'{self.area}: +{self.correct_value}/{self.incorrect_value}/{self.blank_value}'
+
+
+class DniCorrection(models.Model):
+    """Corrección confirmada del DNI de una hoja que no coincidía con el padrón.
+
+    Es un registro de auditoría: no cambia la hoja ni el padrón. Deshacerla la marca
+    como revocada (revoked_at) en lugar de borrarla.
+    """
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='dni_corrections',
+    )
+    litho = models.CharField(max_length=40)
+    original_dni = models.CharField(max_length=20, blank=True)
+    corrected_dni = models.CharField(max_length=8)
+    confirmed_at = models.DateTimeField(auto_now_add=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'dni_correcciones'
+        ordering = ['-confirmed_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['created_by', 'litho'],
+                condition=models.Q(revoked_at__isnull=True),
+                name='uniq_active_dni_correction_per_sheet',
+            ),
+            models.UniqueConstraint(
+                fields=['created_by', 'corrected_dni'],
+                condition=models.Q(revoked_at__isnull=True),
+                name='uniq_active_dni_correction_per_student',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.litho}: {self.original_dni or "?"} -> {self.corrected_dni}'

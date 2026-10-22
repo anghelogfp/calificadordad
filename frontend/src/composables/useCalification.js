@@ -520,6 +520,57 @@ export function useCalification(
    * sugerido fuera el correcto. No guarda ni cambia ningún resultado.
    * Usa la misma plantilla y valores con los que se calificó el área mostrada.
    */
+  // ── Correcciones de DNI confirmadas ──────────────────────────────────────────
+  const dniCorrections = ref([])
+
+  async function loadDniCorrections() {
+    try {
+      const res = await apiFetch('/correcciones-dni/')
+      if (res.ok) dniCorrections.value = await res.json()
+    } catch (error) {
+      console.warn('[calification] No se pudieron cargar las correcciones de DNI:', error)
+    }
+  }
+
+  async function readApiError(res) {
+    try {
+      const body = await res.json()
+      const first = Object.values(body || {})[0]
+      return (Array.isArray(first) ? first[0] : first) || 'No se pudo completar la acción.'
+    } catch {
+      return 'No se pudo completar la acción.'
+    }
+  }
+
+  /** Confirma que el DNI sugerido es el correcto para la hoja. No cambia el ranking oficial. */
+  async function confirmDniCorrection(litho, correctedDni) {
+    try {
+      const res = await apiFetch('/correcciones-dni/', {
+        method: 'POST',
+        body: JSON.stringify({ litho, correctedDni }),
+      })
+      if (!res.ok) return { ok: false, error: await readApiError(res) }
+      await loadDniCorrections()
+      return { ok: true }
+    } catch {
+      return { ok: false, error: 'No se pudo conectar con el servidor.' }
+    }
+  }
+
+  /** Deshace una confirmación (queda registrada como revocada, no se borra). */
+  async function undoDniCorrection(litho) {
+    const correction = dniCorrections.value.find((item) => item.litho === litho)
+    if (!correction) return { ok: false, error: 'La corrección ya no existe.' }
+    try {
+      const res = await apiFetch(`/correcciones-dni/${correction.id}/`, { method: 'DELETE' })
+      if (!res.ok) return { ok: false, error: await readApiError(res) }
+      await loadDniCorrections()
+      return { ok: true }
+    } catch {
+      return { ok: false, error: 'No se pudo conectar con el servidor.' }
+    }
+  }
+
   function previewProvisionalMatches() {
     const summary = calificationSummary.value
     if (!summary) return null
@@ -530,6 +581,10 @@ export function useCalification(
       archiveRows: archiveRows.value,
       responsesRows: responsesRows.value,
       officialScores: calificationResults.value.map((row) => row.score),
+      confirmedCorrections: dniCorrections.value.map((item) => ({
+        litho: item.litho,
+        correctedDni: item.correctedDni,
+      })),
       scoreParams: {
         area: summary.area,
         plantilla,
@@ -793,6 +848,10 @@ export function useCalification(
     runCalification,
     runAllAreas,
     previewProvisionalMatches,
+    dniCorrections,
+    loadDniCorrections,
+    confirmDniCorrection,
+    undoDniCorrection,
     resetCalificationResults,
     startNewProcess,
     switchDisplayArea,

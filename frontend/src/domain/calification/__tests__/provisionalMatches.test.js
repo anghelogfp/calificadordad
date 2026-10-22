@@ -86,7 +86,7 @@ describe('buildProvisionalPreview', () => {
       officialScores: [600, 300],
     })
 
-    expect(summary).toEqual({ orphanSheets: 1, withViableSuggestion: 1, onlyBlockedSuggestions: 0, withoutSuggestion: 0 })
+    expect(summary).toEqual({ orphanSheets: 1, confirmed: 0, withViableSuggestion: 1, onlyBlockedSuggestions: 0, withoutSuggestion: 0 })
     const [row] = rows
     expect(row).toMatchObject({ litho: '000910', dniRead: '63735500', reason: 'not-in-padron' })
     const [suggestion] = row.suggestions
@@ -157,5 +157,49 @@ describe('buildProvisionalPreview', () => {
       calculate: () => { throw new Error('clave inválida') },
     })
     expect(rows[0].suggestions[0]).toMatchObject({ status: 'not-scored', error: 'clave inválida' })
+  })
+
+  describe('correcciones confirmadas', () => {
+    const base = () => ({
+      archiveRows: [...padron, candidate('63737400', 'OTRO')],
+      scoreParams: makeScoreParams(),
+      officialScores: [600, 300],
+    })
+
+    it('muestra la hoja confirmada aparte, con su puntaje y solo el alumno confirmado', () => {
+      const { rows, summary } = buildProvisionalPreview({
+        ...base(),
+        responsesRows: [sheet('63735500', '000910', 'A'.repeat(30) + 'B'.repeat(30))],
+        confirmedCorrections: [{ litho: '000910', correctedDni: '63737500' }],
+      })
+
+      expect(rows[0].suggestions).toHaveLength(1)
+      expect(rows[0].suggestions[0]).toMatchObject({ dni: '63737500', status: 'confirmed', provisionalScore: 300 })
+      expect(summary.confirmed).toBe(1)
+    })
+
+    it('bloquea el mismo alumno para otra hoja una vez confirmado', () => {
+      const { rows } = buildProvisionalPreview({
+        ...base(),
+        responsesRows: [sheet('63735500', '000910'), sheet('63737510', '000911')],
+        confirmedCorrections: [{ litho: '000910', correctedDni: '63737500' }],
+      })
+
+      const other = rows.find((row) => row.litho === '000911')
+      expect(other.suggestions[0]).toMatchObject({ dni: '63737500', status: 'blocked-confirmed', provisionalScore: null })
+    })
+
+    it('el alumno confirmado queda bloqueado para otras hojas y los demás siguen disponibles', () => {
+      const { rows } = buildProvisionalPreview({
+        ...base(),
+        responsesRows: [sheet('63735500', '000910'), sheet('63737300', '000912')],
+        confirmedCorrections: [{ litho: '000910', correctedDni: '63737500' }],
+      })
+
+      const statuses = Object.fromEntries(
+        rows.find((row) => row.litho === '000912').suggestions.map((s) => [s.dni, s.status]),
+      )
+      expect(statuses).toEqual({ '63737500': 'blocked-confirmed', '63737400': 'ok' })
+    })
   })
 })

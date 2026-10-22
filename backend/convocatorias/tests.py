@@ -9,6 +9,7 @@ from .models import (
     CalificationConfig,
     Candidato,
     DatFormatConfig,
+    DniCorrection,
     IdentifierRow,
     IdentifierSource,
     ProgramaVacante,
@@ -492,3 +493,113 @@ class AnswerWhitespacePreservationTests(TestCase):
                 field = serializer_class().fields['answers']
                 self.assertFalse(field.trim_whitespace)
                 self.assertEqual(field.run_validation(self.SHEET), self.SHEET)
+
+
+class DniCorrectionTests(TestCase):
+    """Confirmación de DNI sugeridos: valida contra los datos del usuario y conserva auditoría."""
+
+    URL = '/api/correcciones-dni/'
+
+    def setUp(self):
+        self.user = User.objects.create_user('admin-corr', password='test-pass-123')
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        # Padrón: el alumno real y otro que ya tiene su propia hoja.
+        Candidato.objects.create(created_by=self.user, client_id='c1', dni='63737500', paterno='SUCAPUCA')
+        Candidato.objects.create(created_by=self.user, client_id='c2', dni='11111111', paterno='OFICIAL')
+        # Hoja con DNI mal marcado, y la hoja propia de 11111111.
+        ResponseRow.objects.create(created_by=self.user, client_id='r1', litho='000910', dni='63735500')
+        ResponseRow.objects.create(created_by=self.user, client_id='r2', litho='000001', dni='11111111')
+
+    def post(self, litho='000910', corrected='63737500', **extra):
+        return self.client.post(self.URL, {'litho': litho, 'correctedDni': corrected, **extra}, format='json')
+
+    def test_confirms_a_correction_and_derives_original_dni_on_the_server(self):
+        response = self.post(originalDni='99999999')
+
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertEqual(body['litho'], '000910')
+        self.assertEqual(body['correctedDni'], '63737500')
+        self.assertEqual(body['originalDni'], '63735500')
+        self.assertTrue(body['confirmedAt'])
+
+    def test_confirming_does_not_change_the_sheet_or_the_padron(self):
+        self.post()
+
+        self.assertEqual(ResponseRow.objects.get(litho='000910').dni, '63735500')
+        self.assertEqual(Candidato.objects.filter(dni='63737500').count(), 1)
+
+    def test_rejects_a_dni_that_is_not_in_the_padron(self):
+        response = self.post(corrected='99999999')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('correctedDni', response.json())
+
+    def test_rejects_a_malformed_dni(self):
+        for bad in ('6373750', '637375001', 'abcdefgh', ''):
+            self.assertEqual(self.post(corrected=bad).status_code, 400, bad)
+
+    def test_rejects_an_unknown_sheet(self):
+        response = self.post(litho='999999')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('litho', response.json())
+
+    def test_rejects_a_sheet_that_already_has_a_student_in_the_padron(self):
+        response = self.post(litho='000001', corrected='63737500')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('litho', response.json())
+
+    def test_rejects_a_student_who_already_has_their_own_sheet(self):
+        response = self.post(corrected='11111111')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('correctedDni', response.json())
+
+    def test_rejects_a_second_confirmation_for_the_same_sheet_or_student(self):
+        self.assertEqual(self.post().status_code, 201)
+        self.assertEqual(self.post().status_code, 400)
+
+        ResponseRow.objects.create(created_by=self.user, client_id='r3', litho='000911', dni='63737400')
+        other_sheet = self.post(litho='000911', corrected='63737500')
+        self.assertEqual(other_sheet.status_code, 400)
+        self.assertIn('correctedDni', other_sheet.json())
+
+    def test_undo_revokes_but_keeps_the_audit_record(self):
+        created = self.post().json()
+
+        response = self.client.delete(f'{self.URL}{created["id"]}/')
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(self.client.get(self.URL).json(), [])
+        record = DniCorrection.objects.get(pk=created['id'])
+        self.assertIsNotNone(record.revoked_at)
+        self.assertEqual(record.corrected_dni, '63737500')
+
+    def test_a_revoked_correction_can_be_confirmed_again(self):
+        created = self.post().json()
+        self.client.delete(f'{self.URL}{created["id"]}/')
+
+        self.assertEqual(self.post().status_code, 201)
+        self.assertEqual(DniCorrection.objects.count(), 2)
+        self.assertEqual(len(self.client.get(self.URL).json()), 1)
+
+    def test_corrections_are_isolated_per_user(self):
+        created = self.post().json()
+        other = User.objects.create_user('otro', password='test-pass-123')
+        other_client = APIClient()
+        other_client.force_authenticate(other)
+
+        self.assertEqual(other_client.get(self.URL).json(), [])
+        self.assertEqual(other_client.delete(f'{self.URL}{created["id"]}/').status_code, 404)
+        self.assertIsNone(DniCorrection.objects.get(pk=created['id']).revoked_at)
+
+        # Los datos de otro usuario no sirven para validar.
+        denied = other_client.post(self.URL, {'litho': '000910', 'correctedDni': '63737500'}, format='json')
+        self.assertEqual(denied.status_code, 400)
+
+    def test_requires_authentication(self):
+        anonymous = APIClient()
+        self.assertEqual(anonymous.get(self.URL).status_code, 401)
+        self.assertEqual(
+            anonymous.post(self.URL, {'litho': '000910', 'correctedDni': '63737500'}, format='json').status_code,
+            401,
+        )
