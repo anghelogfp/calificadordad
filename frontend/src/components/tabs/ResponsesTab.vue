@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, watch } from 'vue'
 import { RESPONSES_SUBTABS } from '@/constants'
 import WorkflowIntroCard from '@/components/shared/WorkflowIntroCard.vue'
 import FileUploader from '@/components/shared/FileUploader.vue'
@@ -9,6 +9,8 @@ import DataTable from '@/components/shared/DataTable.vue'
 import SourcesPanel from '@/components/shared/SourcesPanel.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import StepVerificationPanel from '@/components/shared/StepVerificationPanel.vue'
+import OutsidePadronPanel from '@/components/shared/OutsidePadronPanel.vue'
+import { buildOutsidePadronReview } from '@/domain/reconciliation/outsidePadronReview'
 import AnswerSheetPreviewModal from '@/components/shared/AnswerSheetPreviewModal.vue'
 
 const props = defineProps({
@@ -18,6 +20,9 @@ const props = defineProps({
   linkedCount:       { type: Number,  default: 0 },
   reconciliation:    { type: Object,  default: null },
   processType:       { type: String,  default: 'simulacro' },
+  // Padrón y correcciones de DNI ya confirmadas, para ubicar y orientar las hojas sin alumno
+  archiveRows:       { type: Array,   default: () => [] },
+  dniCorrections:    { type: Array,   default: () => [] },
   simulacroScope:    { type: String,  default: '' },
 })
 
@@ -48,9 +53,34 @@ const sheetModalSubtitle = ref('')
 const sheetModalAnswers = ref('')
 const sheetModalMode = ref('inspect-answers')
 
-const displayedRows = computed(() => (
-  showOnlyObserved.value ? responses.actionableObservations : responses.pagedRows
-))
+const showOutsidePadron = ref(false)
+
+const outsideReview = computed(() => buildOutsidePadronReview({
+  rows: responses.rows,
+  candidates: props.archiveRows,
+  corrections: props.dniCorrections,
+}))
+const outsideRowIds = computed(() => new Set(outsideReview.value.items.map((item) => item.rowId)))
+
+// Un solo filtro activo a la vez; si ya no queda ninguna hoja por revisar, se apaga.
+watch(() => outsideReview.value.items.length, (count) => {
+  if (count === 0) showOutsidePadron.value = false
+})
+
+function toggleOutsidePadron() {
+  showOutsidePadron.value = !showOutsidePadron.value
+  if (showOutsidePadron.value) showOnlyObserved.value = false
+}
+
+function toggleObserved() {
+  showOnlyObserved.value = !showOnlyObserved.value
+  if (showOnlyObserved.value) showOutsidePadron.value = false
+}
+
+const displayedRows = computed(() => {
+  if (showOutsidePadron.value) return responses.rows.filter((row) => outsideRowIds.value.has(row.id))
+  return showOnlyObserved.value ? responses.actionableObservations : responses.pagedRows
+})
 
 const displayedRowsWithCounts = computed(() =>
   displayedRows.value.map((row) => {
@@ -190,7 +220,8 @@ const tableColumns = [
 
 function getRowClass(row) {
   return {
-    'row--issue': Boolean(responses.observationByRowId?.get(row.id))
+    'row--issue': Boolean(responses.observationByRowId?.get(row.id)),
+    'row--outside-padron': outsideRowIds.value.has(row.id),
   }
 }
 
@@ -279,7 +310,18 @@ function closeSheetPreview() {
             </svg>
             {{ detecting ? 'Analizando...' : 'Detectar formato' }}
           </button>
-          <button type="button" class="btn btn--ghost" :disabled="!responses.actionableObservationCount" @click="showOnlyObserved = !showOnlyObserved">
+          <button
+            v-if="outsideReview.items.length"
+            type="button"
+            class="btn"
+            :class="showOutsidePadron ? 'btn--primary' : 'btn--ghost'"
+            :aria-pressed="showOutsidePadron"
+            title="Muestra solo las hojas cuyo DNI no coincide con ningún alumno del padrón, con una pista de quién podría ser"
+            @click="toggleOutsidePadron"
+          >
+            {{ showOutsidePadron ? 'Ver todos' : `Ver DNI sin alumno (${outsideReview.items.length})` }}
+          </button>
+          <button type="button" class="btn btn--ghost" :disabled="!responses.actionableObservationCount" @click="toggleObserved">
             {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
           </button>
           <button
@@ -353,6 +395,13 @@ function closeSheetPreview() {
         Este cruce confirma si las hojas de respuestas ya están vinculadas al Paso 2 y corresponden al padrón del Paso 1.
       </template>
     </StepVerificationPanel>
+
+    <OutsidePadronPanel
+      v-if="showOutsidePadron && outsideReview.items.length"
+      :items="outsideReview.items"
+      :summary="outsideReview.summary"
+      noun-plural="hojas de respuestas"
+    />
 
     <!-- Confirmación inline -->
     <div v-if="pendingAction" class="confirm-banner">
@@ -441,7 +490,7 @@ function closeSheetPreview() {
         :is-indeterminate="responses.isSomeVisibleSelected"
         :selected-count="responses.totalSelected"
         :row-class="getRowClass"
-        :pagination="showOnlyObserved ? null : responses.pagination"
+        :pagination="showOnlyObserved || showOutsidePadron ? null : responses.pagination"
         @toggle-selection="responses.toggleSelection"
         @toggle-select-all="responses.toggleSelectAll"
         @toggle-edit="responses.toggleEdit"

@@ -34,6 +34,7 @@ El repo contiene pruebas para:
 - Preflight, calculo puro y auditoria posterior, incluido el recalculo independiente del puntaje.
 - `scoreAnswerSheet`: 3,000 hojas aleatorias contra la formula anterior (sin excepciones el resultado es identico) y casos de cada excepcion.
 - Excepciones de pregunta: clasificacion, huella de clave, motor (simulacro general, por areas y real con varios tipos), auditoria, preflight, composable, panel, detalle del alumno, exportaciones y verificador.
+- Fichas con DNI desconocido en los pasos 2 y 3 (filtro, panel de pista, integracion en ambas pestanas).
 - Correcciones de DNI: sugerencias, vista previa, bloqueos, conflictos, aplicacion en el ranking, proteccion contra numeros de hoja repetidos.
 - Hojas con respuestas incompletas o excedentes.
 - Huellas SHA-256: el algoritmo contra `crypto` de Node (vectores oficiales, limites de bloque, 200 contenidos aleatorios), hash de los bytes y no del texto, huellas de configuracion y datos.
@@ -48,7 +49,7 @@ El repo contiene pruebas para:
 
 Fecha: 2026-10-22.
 
-- Frontend: `418` pruebas pasando en `35` archivos.
+- Frontend: `453` pruebas pasando en `38` archivos.
 - Frontend: build de produccion exitoso.
 - Backend: `107` pruebas pasando.
 - Backend: `python manage.py check` sin incidencias.

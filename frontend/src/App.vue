@@ -621,6 +621,8 @@ watch(
             :reconciliation="identifierReconciliation"
             :process-type="calification.processType.value"
             :simulacro-scope="calification.simulacroScope.value"
+            :archive-rows="archives.rows.value"
+            :dni-corrections="calification.dniCorrections.value"
             @update:sub-tab="identifierSubTab = $event"
           />
 
@@ -633,6 +635,8 @@ watch(
             :reconciliation="responseReconciliation"
             :process-type="calification.processType.value"
             :simulacro-scope="calification.simulacroScope.value"
+            :archive-rows="archives.rows.value"
+            :dni-corrections="calification.dniCorrections.value"
             @update:sub-tab="responsesSubTab = $event"
           />
 

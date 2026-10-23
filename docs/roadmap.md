@@ -111,6 +111,7 @@ Completado (2026-10-22):
 - Excepciones de pregunta y una unica funcion de puntaje (`docs/changelog/2026-10-22-excepciones-de-preguntas.md`).
 - Documentacion de reglas (`docs/reglas-de-calificacion.md`) y analisis de ramas (`docs/integracion-ramas.md`).
 - Decision sobre `feat/calificacion-pj` (se conserva como linea del producto del Poder Judicial; se portan piezas) y salidas de PyInstaller ignoradas en git.
+- Filtro "DNI sin alumno" con sugerencia de alumno en Identificadores y Respuestas (`docs/changelog/2026-10-22-filtro-dni-sin-alumno.md`).
 - BMAD configurado: idioma en espanol para el equipo, contexto del dominio en 18 skills y enlace para usarlo desde Claude Code (`docs/bmad.md`).
 
 Pendiente, por orden recomendado:
@@ -125,7 +126,6 @@ Pendiente, por orden recomendado:
 8. Importador de padron: validar otros formatos que pueda exportar SIAGIE.
 9. Cerrar la limpieza de ramas: borrar el worktree y la rama `anghelogfp/saludo-terminal-check` al cerrar su sesion, y acordar con su autor que se hace con `ELMER_V1` (ver `docs/integracion-ramas.md`).
 10. Regenerar `AGENTS.md` con la skill `bmad-project-context` para que mencione las reglas de calificacion actuales (ver `docs/bmad.md`).
-11. Filtro de fichas fuera del padron en Identificadores y Respuestas (evaluado en `docs/integracion-ramas.md`).
 
 ## Punto De Pausa Actual
 

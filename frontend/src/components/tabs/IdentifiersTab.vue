@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { IDENTIFIER_SUBTABS } from '@/constants'
 import WorkflowIntroCard from '@/components/shared/WorkflowIntroCard.vue'
 import FileUploader from '@/components/shared/FileUploader.vue'
@@ -9,6 +9,8 @@ import DataTable from '@/components/shared/DataTable.vue'
 import SourcesPanel from '@/components/shared/SourcesPanel.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
 import StepVerificationPanel from '@/components/shared/StepVerificationPanel.vue'
+import OutsidePadronPanel from '@/components/shared/OutsidePadronPanel.vue'
+import { buildOutsidePadronReview } from '@/domain/reconciliation/outsidePadronReview'
 
 const props = defineProps({
   identifiers: { type: Object, required: true },
@@ -16,6 +18,9 @@ const props = defineProps({
   reconciliation: { type: Object, default: null },
   processType: { type: String, default: 'simulacro' },
   simulacroScope: { type: String, default: '' },
+  // Padrón y correcciones de DNI ya confirmadas, para ubicar y orientar las fichas sin alumno
+  archiveRows: { type: Array, default: () => [] },
+  dniCorrections: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['update:subTab'])
@@ -23,9 +28,34 @@ const emit = defineEmits(['update:subTab'])
 const identifiers = reactive(props.identifiers)
 const showOnlyObserved = ref(false)
 
-const displayedRows = computed(() => (
-  showOnlyObserved.value ? identifiers.observations : identifiers.pagedRows
-))
+const showOutsidePadron = ref(false)
+
+const outsideReview = computed(() => buildOutsidePadronReview({
+  rows: identifiers.rows,
+  candidates: props.archiveRows,
+  corrections: props.dniCorrections,
+}))
+const outsideRowIds = computed(() => new Set(outsideReview.value.items.map((item) => item.rowId)))
+
+// Un solo filtro activo a la vez; si ya no queda ninguna ficha por revisar, se apaga.
+watch(() => outsideReview.value.items.length, (count) => {
+  if (count === 0) showOutsidePadron.value = false
+})
+
+function toggleOutsidePadron() {
+  showOutsidePadron.value = !showOutsidePadron.value
+  if (showOutsidePadron.value) showOnlyObserved.value = false
+}
+
+function toggleObserved() {
+  showOnlyObserved.value = !showOnlyObserved.value
+  if (showOnlyObserved.value) showOutsidePadron.value = false
+}
+
+const displayedRows = computed(() => {
+  if (showOutsidePadron.value) return identifiers.rows.filter((row) => outsideRowIds.value.has(row.id))
+  return showOnlyObserved.value ? identifiers.observations : identifiers.pagedRows
+})
 
 const stepState = computed(() => {
   if (!props.reconciliation || (!props.reconciliation.padronTotal && !props.reconciliation.identifiersTotal)) {
@@ -122,7 +152,8 @@ const tableColumns = [
 
 function getRowClass(row) {
   return {
-    'row--issue': Boolean(identifiers.observationByRowId?.get(row.id))
+    'row--issue': Boolean(identifiers.observationByRowId?.get(row.id)),
+    'row--outside-padron': outsideRowIds.value.has(row.id),
   }
 }
 </script>
@@ -179,11 +210,22 @@ function getRowClass(row) {
       eyebrow="Verificación de identificadores"
       :title="stepState.title"
     >
-      <template v-if="identifiers.observationCount" #actions>
-          <button type="button" class="btn btn--ghost" @click="showOnlyObserved = !showOnlyObserved">
+      <template v-if="identifiers.observationCount || outsideReview.items.length" #actions>
+          <button
+            v-if="outsideReview.items.length"
+            type="button"
+            class="btn"
+            :class="showOutsidePadron ? 'btn--primary' : 'btn--ghost'"
+            :aria-pressed="showOutsidePadron"
+            title="Muestra solo las fichas cuyo DNI no coincide con ningún alumno del padrón, con una pista de quién podría ser"
+            @click="toggleOutsidePadron"
+          >
+            {{ showOutsidePadron ? 'Ver todos' : `Ver DNI sin alumno (${outsideReview.items.length})` }}
+          </button>
+          <button v-if="identifiers.observationCount" type="button" class="btn btn--ghost" @click="toggleObserved">
             {{ showOnlyObserved ? 'Ver todos' : 'Ver observados' }}
           </button>
-          <button type="button" class="btn btn--primary" @click="identifiers.exportIdentifierObservationsToExcel">
+          <button v-if="identifiers.observationCount" type="button" class="btn btn--primary" @click="identifiers.exportIdentifierObservationsToExcel">
             Exportar observados
           </button>
       </template>
@@ -227,6 +269,13 @@ function getRowClass(row) {
         <span v-if="identifiers.observationCount">Corrige los campos en la tabla si cambia DNI, lectura, aula o tipo.</span>
       </template>
     </StepVerificationPanel>
+
+    <OutsidePadronPanel
+      v-if="showOutsidePadron && outsideReview.items.length"
+      :items="outsideReview.items"
+      :summary="outsideReview.summary"
+      noun-plural="fichas"
+    />
 
     <!-- Confirmación inline -->
     <div v-if="pendingAction" class="confirm-banner">
@@ -315,7 +364,7 @@ function getRowClass(row) {
         :is-indeterminate="identifiers.isSomeVisibleSelected"
         :selected-count="identifiers.totalSelected"
         :row-class="getRowClass"
-        :pagination="showOnlyObserved ? null : identifiers.pagination"
+        :pagination="showOnlyObserved || showOutsidePadron ? null : identifiers.pagination"
         @toggle-selection="identifiers.toggleSelection"
         @toggle-select-all="identifiers.toggleSelectAll"
         @toggle-edit="identifiers.toggleEdit"

@@ -75,4 +75,4 @@ python manage.py test
 python manage.py check
 ```
 
-Ultima verificacion local (2026-10-22): frontend 418 pruebas en 35 archivos y build correcto; backend 107 pruebas, `check` y `makemigrations --check` sin cambios pendientes. Detalle en [Testing](docs/testing.md).
+Ultima verificacion local (2026-10-22): frontend 453 pruebas en 38 archivos y build correcto; backend 107 pruebas, `check` y `makemigrations --check` sin cambios pendientes. Detalle en [Testing](docs/testing.md).

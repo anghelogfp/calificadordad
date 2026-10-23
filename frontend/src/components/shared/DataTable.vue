@@ -419,6 +419,7 @@ function visiblePages(current, total) {
   box-shadow: inset 4px 0 0 var(--unap-blue-500);
 }
 .data-table tbody tr.row--issue { box-shadow: inset 4px 0 0 var(--warning-500); }
+.data-table tbody tr.row--outside-padron { box-shadow: inset 4px 0 0 var(--warning-500); background: var(--warning-50, #fffbeb); }
 
 .data-table td { padding: var(--space-3) var(--space-4); vertical-align: middle; }
 

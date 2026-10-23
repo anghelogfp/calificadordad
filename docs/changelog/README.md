@@ -13,5 +13,6 @@ Registro de cambios por fecha. Cada entrada explica el problema, la causa, los c
 | 2026-10-22 | [Auditoria del core de calificacion](2026-10-22-auditoria-core-calificacion.md) | Hojas incompletas y recalculo independiente. |
 | 2026-10-22 | [Trazabilidad SHA-256](2026-10-22-trazabilidad-sha256.md) | Hash de archivos y huellas del calculo. |
 | 2026-10-22 | [Excepciones de preguntas](2026-10-22-excepciones-de-preguntas.md) | Anulacion y varias respuestas validas; funcion unica de puntaje. |
+| 2026-10-22 | [Filtro DNI sin alumno](2026-10-22-filtro-dni-sin-alumno.md) | Ubicar en los pasos 2 y 3 las fichas sin alumno, con pista de quien podria ser. |
 
 Otros documentos nacidos de este trabajo: [Reglas de calificacion](../reglas-de-calificacion.md) y [Integracion de ramas](../integracion-ramas.md).

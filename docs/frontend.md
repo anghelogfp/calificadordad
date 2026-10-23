@@ -92,6 +92,10 @@ La pantalla de resultados (`ScoresTab.vue`) muestra, en orden: cabecera con acci
 - "Detalles tecnicos del calculo" muestra las huellas SHA-256. `SourcesPanel.vue` muestra el inicio del SHA-256 de cada archivo cargado.
 - Se usa confirmacion en pantalla; no se usan los dialogos del navegador.
 
+## Fichas Con DNI Desconocido (pasos 2 y 3)
+
+`IdentifiersTab.vue` y `ResponsesTab.vue` calculan `buildOutsidePadronReview` (`domain/reconciliation/outsidePadronReview.js`) con sus filas, el padron (`archiveRows`) y las correcciones confirmadas (`dniCorrections`). Si hay fichas sin alumno ofrecen el filtro "Ver DNI sin alumno (N)": la tabla muestra solo esas filas (resaltadas con `row--outside-padron`) y `OutsidePadronPanel.vue` muestra la pista de solo lectura. No modifica datos. Sin padron cargado no se ofrece, porque todo parecería "fuera del padron".
+
 ## Verificacion Por Pasos
 
 El estado del stepper se calcula desde datos reales del proceso:

@@ -136,6 +136,15 @@ Columnas extra como `nro` o `sede` no bloquean la importacion; se ignoran mientr
 - La alineacion de las respuestas depende de la columna tipo: una letra P-T indica que la columna existe, una letra A-E indica que no existe, y un espacio (tipo sin marcar) se resuelve con la disposicion del resto del archivo. Un blanco al inicio o al final de la hoja nunca cambia la posicion de las preguntas.
 - Las respuestas se guardan en la API sin recortar espacios (`trim_whitespace=False`): cada espacio es una pregunta en blanco.
 
+## Ubicar Fichas Con DNI Desconocido (pasos 2 y 3)
+
+En Identificadores y en Respuestas, cuando hay padron cargado y alguna ficha trae un DNI que no coincide con ningun alumno, aparece el boton **Ver DNI sin alumno (N)** junto a "Ver observados":
+
+1. Al pulsarlo, la tabla muestra solo esas fichas, resaltadas, y un panel con la hoja, el aula, el DNI leido y el **posible alumno** (un digito de diferencia). Indica si ese alumno ya tiene su propia ficha y si la hoja ya tiene una correccion confirmada.
+2. La sugerencia es una pista: **verificar con la hoja fisica o con el colegio**.
+3. Para corregir: editar el DNI en la tabla (error evidente de lectura optica) o, despues de calificar, confirmar la correccion en Resultados > Revision (queda auditada y se puede deshacer).
+4. "Ver todos" regresa a la tabla completa. Si ya no queda ninguna ficha por revisar, el filtro se apaga solo.
+
 ## Revision Despues De Calificar
 
 En Resultados, bajo la franja de estado (calificados, ingresantes, promedio), el panel **Revision** resume lo que requiere atencion. Empieza colapsado y tiene pestanas con busqueda y paginacion:

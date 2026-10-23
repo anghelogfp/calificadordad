@@ -27,6 +27,7 @@ Analisis hecho el 2026-10-22 de las ramas que tienen trabajo que `main` no tiene
 | Pruebas sinteticas previas al calculo (5 pruebas obligatorias) | Medio | Pendiente. En esa rama dependen del codigo del Poder Judicial; habria que desacoplarlas. |
 | Ejecutable Windows (PyInstaller + flujo de GitHub) | Medio, si la oficina usa Windows | Pendiente. El lanzador de esa rama crea el usuario `admin` con contrasena `admin123`; habria que cambiarlo. |
 | Bitacora de eventos (`EventoBitacora`) | Medio | Pendiente. Cubriria quien hizo cada accion; hoy hay auditoria por correccion y por excepcion. |
+| Filtro de fichas con DNI desconocido (idea) | Alto | **Hecho** (`docs/changelog/2026-10-22-filtro-dni-sin-alumno.md`), mejorado con sugerencia de alumno y sin edicion silenciosa. |
 | Backup ampliado y Verificador (+196 y +1,800 lineas) | Por revisar | Sin analizar a fondo. |
 | Actas del Poder Judicial y `ActasPjView` (4,000 lineas) | Bajo para admision | No se trae: es otro producto. |
 | Motor de 27 examenes y 59 puestos (`calculatePjResults`) | No aplica | No se trae. |
@@ -73,7 +74,7 @@ En el paso de Identificadores:
 3. **No traer** la correccion por edicion directa como via principal. Altera el dato sin dejar registro. La via oficial sigue siendo la confirmacion auditada de Resultados > Revision. La edicion en la tabla ya existe en `main` para errores evidentes de lectura optica; si se quiere mas control, se puede registrar esa edicion en una bitacora (pieza pendiente de la otra rama).
 4. **Dejar para despues** el informe de efectividad por archivo: sirve para actas del Poder Judicial; en admision la conciliacion de `main` ya cierra los totales y el porcentaje seria un agregado menor.
 
-Estado: **pendiente de aprobacion**; registrado en `docs/roadmap.md`.
+Estado: **hecho** (2026-10-22), puntos 1 a 3. Ver `docs/changelog/2026-10-22-filtro-dni-sin-alumno.md`. El informe de efectividad por archivo (punto 4) queda pendiente.
 
 ## Como retomarlo
 
