@@ -1,4 +1,5 @@
 import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
+import { formatHashBlocks } from '@/utils/cryptoHash'
 import { canonicalAreaName } from '@/utils/helpers'
 
 /**
@@ -119,11 +120,13 @@ export function useExport() {
       ['Puntaje máximo', areaStats?.max ?? ''],
       ['Puntaje mínimo', areaStats?.min ?? ''],
       ['Promedio', areaStats?.avg ?? ''],
+      ['Huella de configuración (SHA-256)', formatHashBlocks(areaSummary?.configSha256) || 'No disponible (resultado anterior a las huellas)'],
+      ['Huella de datos (SHA-256)', formatHashBlocks(areaSummary?.dataSha256) || 'No disponible (resultado anterior a las huellas)'],
     ]
 
     summaryRows.forEach((item) => sheet.addRow(item))
-    sheet.getColumn(1).width = 28
-    sheet.getColumn(2).width = 70
+    sheet.getColumn(1).width = 34
+    sheet.getColumn(2).width = 76
     sheet.getColumn(1).font = { bold: true, color: { argb: 'FF1E3A5F' } }
     sheet.eachRow((row, index) => {
       if (index <= 1) return

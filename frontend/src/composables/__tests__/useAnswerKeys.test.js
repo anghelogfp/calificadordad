@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { ref } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -246,6 +247,26 @@ describe('useAnswerKeys imports', () => {
       responseErrors: 0,
       identificationErrors: 0,
     })
+  })
+
+  it('guarda la huella de los dos archivos que forman la clave, cada uno con la suya', async () => {
+    const sha = (text) => createHash('sha256').update(text).digest('hex')
+    const withBytes = (name, text) => {
+      const bytes = new TextEncoder().encode(text)
+      return { name, size: bytes.length, text: async () => text, arrayBuffer: async () => bytes.buffer }
+    }
+    const idsText = makeIdentifierLine({ litho: '222222', tipo: 'Q', folio: '88', indicator: 'B' })
+    const respText = makeResponseLine({ litho: '222222', tipo: 'P', folio: '88', indicator: 'B', answers: makeAnswers('C') })
+    const answerKeys = makeSubject()
+
+    await answerKeys.readAnswerKeyFiles('INGENIERÍAS', withBytes('ids.dat', idsText), withBytes('claves.dat', respText))
+
+    expect(answerKeys.sources.value[0]).toMatchObject({
+      sha256: sha(respText),
+      identificationSha256: sha(idsText),
+      fileSize: new TextEncoder().encode(respText).length,
+    })
+    expect(answerKeys.sources.value[0].sha256).not.toBe(answerKeys.sources.value[0].identificationSha256)
   })
 
   it('importa claves por área cuando el archivo de respuestas no trae tipo', async () => {

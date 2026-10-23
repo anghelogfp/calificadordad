@@ -1,3 +1,5 @@
+import re
+
 from django.db import transaction
 from django.utils.dateparse import parse_datetime
 from rest_framework import status, viewsets
@@ -6,6 +8,14 @@ from rest_framework.response import Response
 
 from .models import AreaCalificacion, ProcesoCalificacion, ResultadoCandidato, VerificadorSesion
 from .serializers import ProcesoDetailSerializer, ProcesoListSerializer, VerificadorSesionSerializer
+
+_SHA256 = re.compile(r'^[0-9a-f]{64}$')
+
+
+def clean_sha256(value):
+    """Huella SHA-256 válida en minúscula, o vacío si no lo es (nunca se guarda basura como huella)."""
+    value = str(value or '').strip().lower()
+    return value if _SHA256.match(value) else ''
 
 
 class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
@@ -86,6 +96,8 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                         'sheets_without_candidate': summary.get('sheetsWithoutCandidate', 0),
                         'dni_corrections_applied': summary.get('dniCorrectionsApplied', 0),
                         'no_calificados': summary.get('noCalificados', []),
+                        'config_sha256': clean_sha256(summary.get('configSha256')),
+                        'data_sha256': clean_sha256(summary.get('dataSha256')),
                         'total_weight': summary.get('totalWeight', 0),
                         'answers_length': summary.get('answersLength', 60),
                     },
@@ -141,6 +153,8 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                     'sheetsWithoutCandidate': area_obj.sheets_without_candidate,
                     'dniCorrectionsApplied': area_obj.dni_corrections_applied,
                     'noCalificados': area_obj.no_calificados,
+                    'configSha256': area_obj.config_sha256,
+                    'dataSha256': area_obj.data_sha256,
                     'totalWeight': float(area_obj.total_weight),
                     'answersLength': area_obj.answers_length,
                     'correctValue': float(area_obj.correct_value),

@@ -19,6 +19,9 @@ from .models import (
 # defecto los espacios de los CharField, lo que desplazaría las respuestas al guardarlas.
 PRESERVE_WHITESPACE = {'trim_whitespace': False}
 
+# SHA-256 en hexadecimal minúscula, o vacío cuando el archivo no se pudo leer.
+SHA256_PATTERN = r'^([0-9a-f]{64})?$'
+
 
 class AreaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -81,6 +84,8 @@ class IdentifierSourceSerializer(serializers.ModelSerializer):
     totalLines = serializers.IntegerField(source='total_lines')
     validRows = serializers.IntegerField(source='valid_rows')
     errorCount = serializers.IntegerField(source='error_count')
+    sha256 = serializers.RegexField(SHA256_PATTERN, allow_blank=True, required=False)
+    fileSize = serializers.IntegerField(source='file_size', min_value=0, required=False)
 
     class Meta:
         model = IdentifierSource
@@ -91,6 +96,8 @@ class IdentifierSourceSerializer(serializers.ModelSerializer):
             'totalLines',
             'validRows',
             'errorCount',
+            'sha256',
+            'fileSize',
             'created_at',
             'updated_at',
         ]
@@ -132,6 +139,8 @@ class ResponseSourceSerializer(serializers.ModelSerializer):
     totalLines = serializers.IntegerField(source='total_lines')
     validRows = serializers.IntegerField(source='valid_rows')
     errorCount = serializers.IntegerField(source='error_count')
+    sha256 = serializers.RegexField(SHA256_PATTERN, allow_blank=True, required=False)
+    fileSize = serializers.IntegerField(source='file_size', min_value=0, required=False)
 
     class Meta:
         model = ResponseSource
@@ -142,6 +151,8 @@ class ResponseSourceSerializer(serializers.ModelSerializer):
             'totalLines',
             'validRows',
             'errorCount',
+            'sha256',
+            'fileSize',
             'created_at',
             'updated_at',
         ]
@@ -181,6 +192,11 @@ class AnswerKeySourceSerializer(serializers.ModelSerializer):
     validRows = serializers.IntegerField(source='valid_rows')
     responseErrors = serializers.IntegerField(source='response_errors')
     identificationErrors = serializers.IntegerField(source='identification_errors')
+    sha256 = serializers.RegexField(SHA256_PATTERN, allow_blank=True, required=False)
+    fileSize = serializers.IntegerField(source='file_size', min_value=0, required=False)
+    identificationSha256 = serializers.RegexField(
+        SHA256_PATTERN, source='identification_sha256', allow_blank=True, required=False,
+    )
 
     class Meta:
         model = AnswerKeySource
@@ -194,6 +210,9 @@ class AnswerKeySourceSerializer(serializers.ModelSerializer):
             'validRows',
             'responseErrors',
             'identificationErrors',
+            'sha256',
+            'fileSize',
+            'identificationSha256',
             'created_at',
             'updated_at',
         ]

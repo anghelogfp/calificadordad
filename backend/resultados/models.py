@@ -120,6 +120,9 @@ class AreaCalificacion(models.Model):
     sheets_without_candidate = models.IntegerField(default=0)
     dni_corrections_applied = models.IntegerField(default=0)
     no_calificados = models.JSONField(default=list)
+    # Huellas SHA-256: con qué configuración (claves, plantilla, valores, correcciones) y qué datos se calculó
+    config_sha256 = models.CharField(max_length=64, blank=True, default='')
+    data_sha256 = models.CharField(max_length=64, blank=True, default='')
     total_weight = models.DecimalField(max_digits=10, decimal_places=3, default=0)
     answers_length = models.IntegerField(default=60)
 

@@ -143,6 +143,7 @@ const sourcesColumns = [
   { key: 'validRows', label: 'Registros válidos', width: '130px' },
   { key: 'responseErrors', label: 'Errores resp.', badge: true, width: '110px' },
   { key: 'identificationErrors', label: 'Errores id.', badge: true, width: '100px' },
+  { key: 'sha256', label: 'SHA-256 (respuestas)', format: 'hash', width: '150px' },
 ]
 
 function getRowClass(row) {

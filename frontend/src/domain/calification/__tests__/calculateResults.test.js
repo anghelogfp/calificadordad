@@ -191,6 +191,81 @@ describe('calculateAreaResults', () => {
     })
   })
 
+  describe('huella del cálculo', () => {
+    const HEX64 = /^[0-9a-f]{64}$/
+
+    it('el resumen trae la huella de configuración y la de datos', () => {
+      const { summary } = calculateAreaResults(makeInput())
+      expect(summary.configSha256).toMatch(HEX64)
+      expect(summary.dataSha256).toMatch(HEX64)
+    })
+
+    it('el mismo cálculo repetido da las mismas huellas', () => {
+      const a = calculateAreaResults(makeInput()).summary
+      const b = calculateAreaResults(makeInput()).summary
+      expect([a.configSha256, a.dataSha256]).toEqual([b.configSha256, b.dataSha256])
+    })
+
+    it('cambiar una letra de la clave cambia la huella de configuración y no la de datos', () => {
+      const base = calculateAreaResults(makeInput()).summary
+      const key = 'B' + makeAnswers('A').slice(1)
+      const changed = calculateAreaResults(makeInput({
+        answerKeyRows: [{ area: 'Ingeniería', tipo: 'P', answers: key }],
+        answerKeyLookupByAreaTipo: new Map([['Ingeniería|P', { area: 'Ingeniería', tipo: 'P', answers: key }]]),
+      })).summary
+
+      expect(changed.configSha256).not.toBe(base.configSha256)
+      expect(changed.dataSha256).toBe(base.dataSha256)
+    })
+
+    it('una respuesta distinta cambia la huella de datos y no la de configuración', () => {
+      const base = calculateAreaResults(makeInput()).summary
+      const sheet = { dni: '12345678', tipo: 'P', answers: 'B' + makeAnswers('A').slice(1), litho: '100001' }
+      const changed = calculateAreaResults(makeInput({
+        responsesRows: [sheet],
+        responsesByDni: new Map([['12345678', [sheet]]]),
+      })).summary
+
+      expect(changed.dataSha256).not.toBe(base.dataSha256)
+      expect(changed.configSha256).toBe(base.configSha256)
+    })
+
+    it('la clave de otra área no altera la huella de esta área', () => {
+      const base = calculateAreaResults(makeInput()).summary
+      const withOther = calculateAreaResults(makeInput({
+        answerKeyRows: [
+          { area: 'Ingeniería', tipo: 'P', answers: makeAnswers('A') },
+          { area: 'Biomédicas', tipo: 'P', answers: makeAnswers('E') },
+        ],
+      })).summary
+
+      expect(withOther.configSha256).toBe(base.configSha256)
+    })
+
+    it('confirmar una corrección de DNI cambia la huella de configuración y no la de datos', () => {
+      const input = {
+        ...makeInput({
+          simulacroScope: 'areas',
+          archiveRows: [
+            { dni: '12345678', area: 'Ingeniería', programa: 'Civil', paterno: 'A' },
+            { dni: '22222222', area: 'Ingeniería', programa: 'Civil', paterno: 'B' },
+          ],
+        }),
+      }
+      const wrong = { dni: '99999999', tipo: 'P', answers: makeAnswers('A'), litho: '100009' }
+      const withWrong = { ...input, responsesRows: [wrong], responsesByDni: new Map([['99999999', [wrong]]]) }
+
+      const before = calculateAreaResults(withWrong).summary
+      const after = calculateAreaResults({
+        ...withWrong,
+        dniCorrections: [{ litho: '100009', originalDni: '99999999', correctedDni: '22222222' }],
+      }).summary
+
+      expect(after.configSha256).not.toBe(before.configSha256)
+      expect(after.dataSha256).toBe(before.dataSha256)
+    })
+  })
+
   it('no asigna áreas desconocidas a la primera área disponible', () => {
     expect(() => calculateAreaResults(makeInput({
       area: 'Biomédicas',

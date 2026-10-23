@@ -9,6 +9,7 @@ import {
   buildIdentifierObservation,
   parseIdentifierLine,
 } from '@/utils/parsers'
+import { computeFileSha256 } from '@/utils/cryptoHash'
 import { apiFetch } from '@/utils/apiFetch'
 
 export { createIdentifierRow, buildIdentifierObservation }
@@ -199,6 +200,7 @@ export function useIdentifiers(formatConfig) {
       const sourceId = generateId()
       try {
         const text = await file.text()
+        const fileSha256 = await computeFileSha256(file)
         const sanitizedText = text.split('\u001a').join('')
         const lines = sanitizedText.split(/\r?\n/)
         const parsedRows = []
@@ -237,6 +239,8 @@ export function useIdentifiers(formatConfig) {
             totalLines: contentLines,
             validRows: parsedRows.length,
             errorCount: fileErrors.length,
+            sha256: fileSha256,
+            fileSize: Number(file.size) || 0,
           },
         ]
       } catch (error) {

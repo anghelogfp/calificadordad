@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { createHash } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useResponses } from '../useResponses'
 
@@ -293,6 +294,61 @@ describe('useResponses.readResponseFiles', () => {
       tipoSource: 'identifier',
       observaciones: 'Sin observaciones',
     })
+  })
+})
+
+describe('huella de los archivos de respuestas', () => {
+  const sha = (bytes) => createHash('sha256').update(bytes).digest('hex')
+
+  it('guarda el SHA-256 y el tamaño de los bytes originales del archivo', async () => {
+    const answers = 'ABCDE'.repeat(12)
+    const text = buildDatLine({ payload: `076279${answers}` })
+    const bytes = new TextEncoder().encode(text)
+    const responses = makeSubject()
+
+    await responses.readResponseFiles([{
+      name: 'resp.dat', size: bytes.length, text: async () => text, arrayBuffer: async () => bytes.buffer,
+    }])
+
+    expect(responses.sources.value).toHaveLength(1)
+    expect(responses.sources.value[0]).toMatchObject({ name: 'resp.dat', sha256: sha(bytes), fileSize: bytes.length })
+  })
+
+  it('el hash es de los bytes y no del texto decodificado: un byte no UTF-8 no se pierde', async () => {
+    // 0xD1 (Ñ en latin1) no es UTF-8 válido; decodificar a texto lo reemplazaría por U+FFFD.
+    const bytes = Uint8Array.from([...new TextEncoder().encode(buildDatLine({ payload: '076279' + 'A'.repeat(60) })), 0xd1])
+    const responses = makeSubject()
+
+    await responses.readResponseFiles([{
+      name: 'latin1.dat', size: bytes.length, text: async () => new TextDecoder().decode(bytes), arrayBuffer: async () => bytes.buffer,
+    }])
+
+    expect(responses.sources.value[0].sha256).toBe(sha(bytes))
+    expect(responses.sources.value[0].sha256).not.toBe(sha(new TextEncoder().encode(new TextDecoder().decode(bytes))))
+  })
+
+  it('si no se pueden leer los bytes, guarda la fuente sin hash (nunca uno falso)', async () => {
+    const responses = makeSubject()
+
+    await responses.readResponseFiles([makeFile('resp.dat', buildDatLine({ payload: '076279' + 'A'.repeat(60) }))])
+
+    expect(responses.sources.value[0].sha256).toBe('')
+    expect(responses.sources.value[0].fileSize).toBe(0)
+  })
+
+  it('dos archivos distintos tienen huellas distintas', async () => {
+    const make = (answers) => {
+      const text = buildDatLine({ payload: `076279${answers}` })
+      const bytes = new TextEncoder().encode(text)
+      return { name: 'r.dat', size: bytes.length, text: async () => text, arrayBuffer: async () => bytes.buffer }
+    }
+    const responses = makeSubject()
+
+    await responses.readResponseFiles([make('A'.repeat(60)), make('B'.repeat(60))])
+
+    const [first, second] = responses.sources.value
+    expect(first.sha256).toMatch(/^[0-9a-f]{64}$/)
+    expect(first.sha256).not.toBe(second.sha256)
   })
 })
 

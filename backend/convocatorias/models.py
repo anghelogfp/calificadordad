@@ -101,6 +101,8 @@ class IdentifierSource(models.Model):
     total_lines = models.IntegerField(default=0)
     valid_rows = models.IntegerField(default=0)
     error_count = models.IntegerField(default=0)
+    sha256 = models.CharField(max_length=64, blank=True, default='')
+    file_size = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -174,6 +176,8 @@ class ResponseSource(models.Model):
     total_lines = models.IntegerField(default=0)
     valid_rows = models.IntegerField(default=0)
     error_count = models.IntegerField(default=0)
+    sha256 = models.CharField(max_length=64, blank=True, default='')
+    file_size = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -248,6 +252,9 @@ class AnswerKeySource(models.Model):
     valid_rows = models.IntegerField(default=0)
     response_errors = models.IntegerField(default=0)
     identification_errors = models.IntegerField(default=0)
+    sha256 = models.CharField(max_length=64, blank=True, default='')
+    file_size = models.IntegerField(default=0)
+    identification_sha256 = models.CharField(max_length=64, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

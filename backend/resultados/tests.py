@@ -272,6 +272,71 @@ class DniCorrectedMarkPersistenceTests(TestCase):
         self.assert_marks_round_trip(full['areas']['General'])
 
 
+class CalculationFingerprintPersistenceTests(TestCase):
+    """Las huellas SHA-256 del cálculo se guardan con el resultado y vuelven intactas."""
+
+    CONFIG = 'a' * 64
+    DATA = 'b' * 64
+
+    def setUp(self):
+        self.user = User.objects.create_user('huella-user', password='test-pass-123', is_staff=True)
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def area(self, **summary):
+        area = area_payload()
+        area['summary'].update(summary)
+        return area
+
+    def full(self, local_id='huella', **summary):
+        create = self.client.post(
+            '/api/procesos/', process_payload(local_id=local_id, areas={'General': self.area(**summary)}), format='json',
+        )
+        self.assertEqual(create.status_code, 201)
+        return self.client.get(f'/api/procesos/{create.data["id"]}/full/').data['areas']['General']['summary']
+
+    def test_history_keeps_both_fingerprints(self):
+        summary = self.full(configSha256=self.CONFIG, dataSha256=self.DATA)
+
+        self.assertEqual(summary['configSha256'], self.CONFIG)
+        self.assertEqual(summary['dataSha256'], self.DATA)
+
+    def test_older_results_without_fingerprints_come_back_empty(self):
+        summary = self.full()
+
+        self.assertEqual(summary['configSha256'], '')
+        self.assertEqual(summary['dataSha256'], '')
+
+    def test_a_value_that_is_not_a_sha256_is_never_stored_as_one(self):
+        for bad in ('no-es-hash', 'g' * 64, 'a' * 63, 'a' * 65, 12345, None):
+            summary = self.full(local_id=f'malo-{bad}', configSha256=bad, dataSha256=bad)
+            self.assertEqual((summary['configSha256'], summary['dataSha256']), ('', ''), bad)
+
+    def test_an_uppercase_sha256_is_normalized_to_lowercase(self):
+        summary = self.full(configSha256='A' * 64, dataSha256='B' * 64)
+
+        self.assertEqual((summary['configSha256'], summary['dataSha256']), ('a' * 64, 'b' * 64))
+
+    def test_resaving_updates_the_fingerprints(self):
+        self.full(local_id='mismo', configSha256=self.CONFIG, dataSha256=self.DATA)
+        summary = self.full(local_id='mismo', configSha256='c' * 64, dataSha256=self.DATA)
+
+        self.assertEqual(summary['configSha256'], 'c' * 64)
+        self.assertEqual(summary['dataSha256'], self.DATA)
+
+    def test_backup_restore_keeps_the_fingerprints(self):
+        payload = {'procesos': [{
+            'id': 'restaurado', 'name': 'Restaurado',
+            'areas': {'General': self.area(configSha256=self.CONFIG, dataSha256=self.DATA)},
+        }]}
+
+        self.assertEqual(self.client.post('/api/backup/restore/', payload, format='json').status_code, 200)
+
+        proceso = ProcesoCalificacion.objects.get(created_by=self.user, local_id='restaurado')
+        summary = self.client.get(f'/api/procesos/{proceso.id}/full/').data['areas']['General']['summary']
+        self.assertEqual((summary['configSha256'], summary['dataSha256']), (self.CONFIG, self.DATA))
+
+
 class VerificadorSesionTests(TestCase):
     def setUp(self):
         self.user_a = User.objects.create_user('verificador-a', password='test-pass-123')

@@ -240,3 +240,39 @@ describe('useExport.exportScoresToExcel', () => {
     expect(saveAsMock.mock.calls[0][1]).toContain('simulacro-resultados-todo')
   })
 })
+
+describe('useExport: huellas SHA-256 en el resumen', () => {
+  const baseRow = {
+    position: 1, dni: '12345678', paterno: 'P', materno: 'M', nombres: 'N', area: 'General', programa: '',
+    tipo: 'P', aula: '101', litho: '000001', score: 12, answersRaw: 'A', correctAnswersRaw: 'A',
+  }
+  const options = (summary) => ({
+    processType: 'simulacro', area: 'General',
+    areaSummary: { timestamp: '2026-10-22T12:00:00.000Z', plantillaName: 'G', correctValue: 10, incorrectValue: 0, blankValue: 2, answersLength: 1, totalWeight: 1, totalCandidates: 1, ...summary },
+    areaStats: { max: 12, min: 12, avg: 12 },
+  })
+
+  it('el Excel de resumen incluye las dos huellas, en bloques de 8', async () => {
+    await useExport().exportScoresToExcel([baseRow], 'Simulacro', options({
+      configSha256: 'abcdef0123456789'.repeat(4),
+      dataSha256: '0123456789abcdef'.repeat(4),
+    }))
+
+    const summary = workbookInstances[0].sheets.find((sheet) => sheet.name === 'Resumen')
+    const rows = Object.fromEntries(summary.rows.map((row) => [row.values[0], row.values[1]]))
+    expect(rows['Huella de configuración (SHA-256)']).toBe(
+      'ABCDEF01 23456789 ABCDEF01 23456789 ABCDEF01 23456789 ABCDEF01 23456789',
+    )
+    expect(rows['Huella de datos (SHA-256)']).toMatch(/^01234567 89ABCDEF/)
+  })
+
+  it('un resultado anterior a las huellas lo dice en lugar de dejar la celda vacía', async () => {
+    await useExport().exportScoresToExcel([baseRow], 'Simulacro', options({}))
+
+    const summary = workbookInstances[0].sheets.find((sheet) => sheet.name === 'Resumen')
+    const rows = Object.fromEntries(summary.rows.map((row) => [row.values[0], row.values[1]]))
+    expect(rows['Huella de configuración (SHA-256)']).toContain('No disponible')
+    expect(rows['Huella de datos (SHA-256)']).toContain('No disponible')
+  })
+})
+

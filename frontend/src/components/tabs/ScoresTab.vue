@@ -1,6 +1,7 @@
 <script setup>
 import { reactive, ref, computed, watch } from 'vue'
 import { canonicalAreaName, formatTimestamp } from '@/utils/helpers'
+import { formatHashBlocks } from '@/utils/cryptoHash'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
 import EmptyState from '@/components/shared/EmptyState.vue'
@@ -27,6 +28,11 @@ const ponderations = reactive(props.ponderations)
 const emit = defineEmits(['openModal', 'openDashboard'])
 
 function openModal() { emit('openModal') }
+
+// Huella en bloques de 8, para leerla y compararla; '—' si el resultado es anterior a las huellas.
+function formatHash(hash) {
+  return formatHashBlocks(hash) || '—'
+}
 
 function displayAreaName(area) {
   return canonicalAreaName(area) || area || ''
@@ -529,6 +535,14 @@ function handleExportIngresantesPdf() {
           <span><strong>Puntaje mínimo:</strong> {{ currentAreaStats?.min?.toFixed(3) ?? '—' }}</span>
           <span><strong>Peso total:</strong> {{ calification.calificationSummary?.totalWeight?.toFixed(3) }}</span>
           <span><strong>Preguntas:</strong> {{ calification.calificationSummary?.answersLength }}</span>
+          <span class="calc-fingerprint" title="Huella de lo que se usó para calificar: claves, plantilla, valores y correcciones de DNI. Si cambia algo de eso, cambia la huella.">
+            <strong>Huella de configuración (SHA-256):</strong>
+            <code>{{ formatHash(calification.calificationSummary?.configSha256) }}</code>
+          </span>
+          <span class="calc-fingerprint" title="Huella de los datos calificados: padrón y hojas de respuestas tal como estaban cargados.">
+            <strong>Huella de datos (SHA-256):</strong>
+            <code>{{ formatHash(calification.calificationSummary?.dataSha256) }}</code>
+          </span>
           <span v-if="calification.calificationSummary?.missingResponses" class="meta-warn">Sin respuesta: {{ calification.calificationSummary.missingResponses }}</span>
           <span v-if="calification.calificationSummary?.missingKeys" class="meta-warn">Sin clave: {{ calification.calificationSummary.missingKeys }}</span>
           <span v-if="calification.calificationSummary?.duplicateResponses" class="meta-warn">Duplicados: {{ calification.calificationSummary.duplicateResponses }}</span>
@@ -855,6 +869,8 @@ function handleExportIngresantesPdf() {
 .area-tabs--compact { padding: var(--space-1); border: 0; box-shadow: none; background: var(--slate-50); }
 .area-tabs--compact .area-tab { flex: 1; justify-content: center; }
 
+.calc-fingerprint { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; }
+.calc-fingerprint code { font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.72rem; word-break: break-all; }
 .dni-fixed {
   display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: var(--radius-full);
   background: #dcfce7; color: #166534; font-family: inherit; font-size: 0.65rem; font-weight: 700;

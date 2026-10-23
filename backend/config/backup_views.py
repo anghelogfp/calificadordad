@@ -17,6 +17,7 @@ from convocatorias.serializers import (
 )
 from ponderaciones.models import PlantillaItem, PlantillaPonderacion
 from ponderaciones.serializers import PlantillaPonderacionWriteSerializer
+from resultados.views import clean_sha256
 from resultados.models import AreaCalificacion, ProcesoCalificacion, ResultadoCandidato
 
 
@@ -97,6 +98,8 @@ def _replace_processes(user, procesos):
                 sheets_without_candidate=summary.get('sheetsWithoutCandidate', 0),
                 dni_corrections_applied=summary.get('dniCorrectionsApplied', 0),
                 no_calificados=summary.get('noCalificados', []),
+                config_sha256=clean_sha256(summary.get('configSha256')),
+                data_sha256=clean_sha256(summary.get('dataSha256')),
                 total_weight=summary.get('totalWeight', 0),
                 answers_length=summary.get('answersLength', 60),
             )

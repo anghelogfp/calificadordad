@@ -20,6 +20,7 @@ import {
   inferResponseLayout,
 } from '@/utils/parsers'
 import { apiFetch } from '@/utils/apiFetch'
+import { computeFileSha256 } from '@/utils/cryptoHash'
 
 function summarizeObservations(rows) {
   const summary = new Map()
@@ -282,6 +283,11 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
    * Lee archivos de claves de respuestas
    */
   async function readAnswerKeyFiles(area, identificationFileParam, responsesFileParam) {
+    // Huellas de los bytes originales de los dos archivos que forman la clave.
+    const [responsesSha256, identificationSha256] = await Promise.all([
+      computeFileSha256(responsesFileParam),
+      computeFileSha256(identificationFileParam),
+    ])
     const identifierResults = await readLinesFromFile(
       identificationFileParam,
       (line, lineNumber) => parseIdentifierLine(line, lineNumber, effectiveFormatConfig()),
@@ -389,6 +395,9 @@ export function useAnswerKeys(archiveRows, areaNames, formatConfig) {
         validRows: combinedRows.length,
         responseErrors: responseErrors.length,
         identificationErrors: identifierErrors.length,
+        sha256: responsesSha256,
+        fileSize: Number(responsesFileParam.size) || 0,
+        identificationSha256,
       },
     ]
 

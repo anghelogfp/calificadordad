@@ -33,6 +33,7 @@ class AreaCalificacionSerializer(serializers.ModelSerializer):
             'duplicate_responses', 'invalid_candidates', 'missing_programs',
             'invalid_response_types', 'unlinked_responses',
             'sheets_without_candidate', 'dni_corrections_applied', 'no_calificados',
+            'config_sha256', 'data_sha256',
             'total_weight', 'answers_length',
             'resultados',
         ]

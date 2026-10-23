@@ -49,6 +49,8 @@ function makeCalification(overrides = {}) {
       invalidResponseTypes: 0,
       unlinkedResponses: 0,
       sheetsWithoutCandidate: 3,
+      configSha256: 'abcdef0123456789'.repeat(4),
+      dataSha256: '0123456789abcdef'.repeat(4),
       noCalificados: [
         {
           dni: '87654321',
@@ -148,6 +150,25 @@ describe('ScoresTab', () => {
       { area: 'Ingeniería' },
     )
     expect(exporter.exportScoresToExcel).not.toHaveBeenCalled()
+  })
+
+  it('muestra las huellas SHA-256 del cálculo en los detalles técnicos', () => {
+    const wrapper = mountScoresTab()
+    const details = wrapper.find('.calculation-details').text()
+
+    expect(details).toContain('Huella de configuración (SHA-256)')
+    expect(details).toContain('ABCDEF01 23456789')
+    expect(details).toContain('Huella de datos (SHA-256)')
+    expect(details).toContain('01234567 89ABCDEF')
+  })
+
+  it('un resultado anterior a las huellas muestra un guion', () => {
+    const calification = makeCalification()
+    delete calification.calificationSummary.configSha256
+    delete calification.calificationSummary.dataSha256
+    const details = mountScoresTab(calification).find('.calculation-details').text()
+
+    expect(details).toMatch(/Huella de configuración \(SHA-256\):\s*—/)
   })
 
   it('no muestra el empty state si ya existen resultados calculados', () => {

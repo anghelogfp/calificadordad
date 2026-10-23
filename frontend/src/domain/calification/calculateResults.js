@@ -6,6 +6,7 @@ import {
   buildQuestionPlan,
 } from '@/utils/helpers'
 import { applyDniCorrections } from './dniCorrections'
+import { buildCalculationFingerprint } from './fingerprint'
 import {
   buildDniCounts,
   getCandidateDniIssue,
@@ -51,6 +52,8 @@ export function calculateAreaResults({
   dniCorrections = [],
   timestamp = new Date().toISOString(),
 }) {
+  // Las hojas tal como se cargaron: la huella de datos describe las entradas, no las correcciones.
+  const loadedResponsesRows = responsesRows
   let dniCorrectionsApplied = 0
   if (dniCorrections.length) {
     const corrected = applyDniCorrections(responsesRows, dniCorrections)
@@ -366,6 +369,21 @@ export function calculateAreaResults({
     ponderation: i.ponderation,
   }))
 
+  const keysUsed = generalSimulacro ? answerKeyRows.filter(k => !k.area?.trim()) : areaAnswerKeys
+  const fingerprint = buildCalculationFingerprint({
+    processType,
+    simulacroScope,
+    answersLength,
+    correctValue,
+    incorrectValue,
+    blankValue,
+    plantilla,
+    answerKeyRows: keysUsed,
+    dniCorrections,
+    archiveRows,
+    responsesRows: loadedResponsesRows,
+  })
+
   return {
     results: processedResults,
     summary: {
@@ -383,6 +401,7 @@ export function calculateAreaResults({
       dniCorrectionsApplied,
       sheetsWithAssumedBlanks,
       sheetsTruncated,
+      ...fingerprint,
       noCalificados,
       totalWeight: Number(totalWeight.toFixed(3)),
       answersLength,

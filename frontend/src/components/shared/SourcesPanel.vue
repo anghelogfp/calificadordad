@@ -26,6 +26,7 @@ defineProps({
       { key: 'validRows', label: 'Registros válidos', width: '130px' },
       { key: 'errorCount', label: 'Errores', badge: true, width: '90px' },
       { key: 'totalLines', label: 'Líneas leídas', width: '120px' },
+      { key: 'sha256', label: 'SHA-256', format: 'hash', width: '130px' },
     ]
   },
   uploadInputId: {
@@ -48,6 +49,10 @@ function getCellValue(source, column) {
   const value = source[column.key]
   if (column.format === 'timestamp') {
     return formatTimestamp(value)
+  }
+  if (column.format === 'hash') {
+    // Los primeros 12 caracteres bastan para comparar; el completo está en el tooltip.
+    return value ? `${value.slice(0, 12)}…` : '—'
   }
   return value ?? '-'
 }
@@ -76,7 +81,13 @@ function getCellValue(source, column) {
         </thead>
         <tbody>
           <tr v-for="source in sources" :key="source.id">
-            <td v-for="col in columns" :key="col.key" :style="{ width: col.width, minWidth: col.minWidth }">
+            <td
+              v-for="col in columns"
+              :key="col.key"
+              :style="{ width: col.width, minWidth: col.minWidth }"
+              :class="{ 'sources-hash': col.format === 'hash' }"
+              :title="col.format === 'hash' && source[col.key] ? `SHA-256 completo: ${source[col.key]}` : undefined"
+            >
               <span
                 v-if="col.badge"
                 class="badge"
@@ -280,5 +291,10 @@ function getCellValue(source, column) {
 
 .btn:hover {
   background: var(--slate-200);
+}
+.sources-hash {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+  color: var(--slate-600);
 }
 </style>

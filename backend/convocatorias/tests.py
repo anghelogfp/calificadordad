@@ -603,3 +603,78 @@ class DniCorrectionTests(TestCase):
             anonymous.post(self.URL, {'litho': '000910', 'correctedDni': '63737500'}, format='json').status_code,
             401,
         )
+
+
+class SourceFileHashTests(TestCase):
+    """Cada archivo cargado guarda su SHA-256 y tamaño, para poder demostrar con qué se calificó."""
+
+    HASH = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+    OTHER = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+
+    def setUp(self):
+        self.user = User.objects.create_user('hash-user', password='test-pass-123')
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def sources(self, url):
+        listed = self.client.get(url).json()
+        return listed['results'] if isinstance(listed, dict) else listed
+
+    def test_identifier_and_response_sources_keep_hash_and_size(self):
+        source = {**source_payload(), 'sha256': self.HASH, 'fileSize': 4321}
+        for endpoint, row, listing in (
+            ('/api/identificadores/bulk_replace/', identifier_row_payload(), '/api/identifier-sources/'),
+            ('/api/respuestas/bulk_replace/', response_row_payload(), '/api/response-sources/'),
+        ):
+            response = self.client.post(endpoint, {'sources': [source], 'rows': [row]}, format='json')
+            self.assertEqual(response.status_code, 200, endpoint)
+            saved = self.sources(listing)[0]
+            self.assertEqual(saved['sha256'], self.HASH)
+            self.assertEqual(saved['fileSize'], 4321)
+
+    def test_answer_key_source_keeps_both_file_hashes(self):
+        source = {**answer_key_source_payload(), 'sha256': self.HASH, 'fileSize': 99, 'identificationSha256': self.OTHER}
+
+        response = self.client.post(
+            '/api/answer-keys/bulk_replace/', {'sources': [source], 'rows': [answer_key_row_payload()]}, format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        saved = AnswerKeySource.objects.get()
+        self.assertEqual((saved.sha256, saved.file_size, saved.identification_sha256), (self.HASH, 99, self.OTHER))
+        listed = self.sources('/api/answer-key-sources/')[0]
+        self.assertEqual(listed['identificationSha256'], self.OTHER)
+
+    def test_clients_that_do_not_send_hashes_still_work(self):
+        response = self.client.post(
+            '/api/respuestas/bulk_replace/', {'sources': [source_payload()], 'rows': [response_row_payload()]}, format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        saved = ResponseSource.objects.get()
+        self.assertEqual((saved.sha256, saved.file_size), ('', 0))
+
+    def test_an_unreadable_file_is_stored_without_a_hash(self):
+        source = {**source_payload(), 'sha256': '', 'fileSize': 0}
+        response = self.client.post(
+            '/api/respuestas/bulk_replace/', {'sources': [source], 'rows': [response_row_payload()]}, format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(ResponseSource.objects.get().sha256, '')
+
+    def test_rejects_values_that_are_not_a_sha256(self):
+        for bad in ('xyz', self.HASH[:-1], self.HASH + '0', self.HASH.upper(), 'g' * 64):
+            source = {**source_payload(), 'sha256': bad}
+            response = self.client.post(
+                '/api/respuestas/bulk_replace/', {'sources': [source], 'rows': [response_row_payload()]}, format='json',
+            )
+            self.assertEqual(response.status_code, 400, bad)
+        self.assertEqual(ResponseSource.objects.count(), 0)
+
+    def test_rejects_a_negative_size(self):
+        source = {**source_payload(), 'fileSize': -1}
+        response = self.client.post(
+            '/api/identificadores/bulk_replace/', {'sources': [source], 'rows': [identifier_row_payload()]}, format='json',
+        )
+        self.assertEqual(response.status_code, 400)
+
