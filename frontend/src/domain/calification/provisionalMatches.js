@@ -1,5 +1,6 @@
 import { stripDigits } from '@/utils/helpers'
 import { findOrphanResponses } from '@/utils/calificationHelpers'
+import { isSameSheet } from './dniCorrections'
 import { calculateAreaResults } from './calculateResults'
 
 export { findOrphanResponses }
@@ -76,8 +77,15 @@ export function buildProvisionalPreview({
     responsesRows.map((response) => stripDigits(response.dni)).filter((dni) => dni.length === 8),
   )
 
+  // Solo cuentan las correcciones de hojas que siguen trayendo el DNI con el que se confirmaron.
+  const sheetByLitho = new Map(responsesRows.map((row) => [String(row.litho), row]))
   const confirmedByLitho = new Map(
-    confirmedCorrections.map((item) => [String(item.litho), stripDigits(item.correctedDni)]),
+    confirmedCorrections
+      .filter((item) => {
+        const sheet = sheetByLitho.get(String(item.litho))
+        return sheet && isSameSheet(sheet, item)
+      })
+      .map((item) => [String(item.litho), stripDigits(item.correctedDni)]),
   )
 
   // Alumnos ya asignados a una hoja por una corrección confirmada.

@@ -201,5 +201,16 @@ describe('buildProvisionalPreview', () => {
       )
       expect(statuses).toEqual({ '63737500': 'blocked-confirmed', '63737400': 'ok' })
     })
+
+    it('ignora una corrección guardada para otra hoja con el mismo número', () => {
+      const { rows, summary } = buildProvisionalPreview({
+        ...base(),
+        responsesRows: [sheet('63735500', '000910')],
+        confirmedCorrections: [{ litho: '000910', correctedDni: '63737500', originalDni: '55555555' }],
+      })
+
+      expect(summary.confirmed).toBe(0)
+      expect(rows[0].suggestions[0].status).toBe('ok')
+    })
   })
 })

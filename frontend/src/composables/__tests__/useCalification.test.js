@@ -555,7 +555,7 @@ describe('useCalification', () => {
       const calification = calificadoConHojaMalMarcada()
       apiFetch
         .mockResolvedValueOnce(jsonResponse({ id: 1 }))
-        .mockResolvedValueOnce(jsonResponse([{ id: 1, litho: '100002', correctedDni: '22222222' }]))
+        .mockResolvedValueOnce(jsonResponse([{ id: 1, litho: '100002', originalDni: '22222229', correctedDni: '22222222' }]))
 
       const result = await calification.confirmDniCorrection('100002', '22222222')
 
@@ -577,7 +577,7 @@ describe('useCalification', () => {
       const calification = calificadoConHojaMalMarcada()
       apiFetch
         .mockResolvedValueOnce(jsonResponse({ id: 1 }))
-        .mockResolvedValueOnce(jsonResponse([{ id: 1, litho: '100002', correctedDni: '22222222' }]))
+        .mockResolvedValueOnce(jsonResponse([{ id: 1, litho: '100002', originalDni: '22222229', correctedDni: '22222222' }]))
       await calification.confirmDniCorrection('100002', '22222222')
 
       apiFetch
@@ -602,12 +602,23 @@ describe('useCalification', () => {
 
     it('una calificación nueva ya incluye las correcciones confirmadas', async () => {
       const calification = calificadoConHojaMalMarcada()
-      apiFetch.mockResolvedValueOnce(jsonResponse([{ id: 1, litho: '100002', correctedDni: '22222222' }]))
+      apiFetch.mockResolvedValueOnce(jsonResponse([{ id: 1, litho: '100002', originalDni: '22222229', correctedDni: '22222222' }]))
       await calification.loadDniCorrections()
 
       calification.runCalification()
 
       expect(calification.calificationResults.value.map((r) => r.dni).sort()).toEqual(['11111111', '22222222'])
+    })
+
+    it('una corrección vieja no se aplica a otra hoja con el mismo número en un examen nuevo', async () => {
+      const calification = calificadoConHojaMalMarcada()
+      apiFetch.mockResolvedValueOnce(jsonResponse([{ id: 1, litho: '100002', originalDni: '77777777', correctedDni: '22222222' }]))
+      await calification.loadDniCorrections()
+
+      calification.runCalification()
+
+      expect(calification.calificationResults.value.map((r) => r.dni)).toEqual(['11111111'])
+      expect(calification.calificationSummary.value).toMatchObject({ dniCorrectionsApplied: 0, sheetsWithoutCandidate: 1 })
     })
   })
 })

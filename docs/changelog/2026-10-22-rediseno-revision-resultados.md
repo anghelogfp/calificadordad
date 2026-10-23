@@ -49,6 +49,8 @@ En la pestaña "Hojas sin alumno", cada sugerencia viable tiene un botón **Conf
 
 **Backup.** El export incluye `dniCorrections` y la restauración las reemplaza (ver `docs/backend.md`).
 
+**Protección contra números de hoja repetidos.** Los números de hoja (litho) se repiten entre exámenes. Una corrección solo se aplica si la hoja sigue trayendo el DNI con el que se confirmó (`originalDni`); si no, se ignora, no cuenta como aplicada y no aparece como confirmada. Así una corrección vieja no reasigna una hoja de otro proceso.
+
 **Historial.** La marca "DNI corregido" se guarda por fila (`ResultadoCandidato.dni_corregido` y `dni_original`) y el resumen guarda `sheets_without_candidate` y `dni_corrections_applied`, con la migración `resultados/0008_marca_dni_corregido`. Al abrir un resultado del historial o restaurar un backup, el ranking conserva la marca y la barra de revisión sus conteos. Los resultados guardados antes no traen la marca (quedan en "no corregido").
 
 **Pruebas.** Backend: 73 (12 de la API de correcciones, 3 de backup, 4 de la marca en el historial). Frontend: 257, incluidas las del dominio, el recálculo del ranking al confirmar y deshacer, y el panel. Verificado con el simulacro real: al confirmar las 7 hojas viables, calificados 152 → 159, sin hoja 129 → 122, hojas sin alumno 27 → 20; cada puntaje coincide con el cálculo independiente y ninguno de los 152 anteriores cambió.

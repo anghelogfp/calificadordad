@@ -545,7 +545,11 @@ export function useCalification(
   }
 
   function confirmedCorrectionsForCalc() {
-    return dniCorrections.value.map((item) => ({ litho: item.litho, correctedDni: item.correctedDni }))
+    return dniCorrections.value.map((item) => ({
+      litho: item.litho,
+      correctedDni: item.correctedDni,
+      originalDni: item.originalDni,
+    }))
   }
 
   /**
@@ -647,10 +651,7 @@ export function useCalification(
       archiveRows: archiveRows.value,
       responsesRows: responsesRows.value,
       officialScores: calificationResults.value.map((row) => row.score),
-      confirmedCorrections: dniCorrections.value.map((item) => ({
-        litho: item.litho,
-        correctedDni: item.correctedDni,
-      })),
+      confirmedCorrections: confirmedCorrectionsForCalc(),
       scoreParams: {
         area: summary.area,
         plantilla,

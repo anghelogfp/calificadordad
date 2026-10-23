@@ -35,4 +35,23 @@ describe('applyDniCorrections', () => {
     expect([...responsesByDni.keys()]).toEqual(['11111111'])
     expect(responsesByDni.get('11111111')).toHaveLength(2)
   })
+
+  it('no aplica una corrección a una hoja con el mismo número pero otro DNI (otro examen)', () => {
+    const { responsesRows, applied } = applyDniCorrections(
+      [sheet('000910', '55555555')],
+      [{ litho: '000910', correctedDni: '63737500', originalDni: '63735500' }],
+    )
+
+    expect(applied).toBe(0)
+    expect(responsesRows[0].dni).toBe('55555555')
+    expect(responsesRows[0].dniCorregido).toBeUndefined()
+  })
+
+  it('aplica la corrección si la hoja conserva el DNI original', () => {
+    const { applied } = applyDniCorrections(
+      [sheet('000910', '63735500')],
+      [{ litho: '000910', correctedDni: '63737500', originalDni: '63735500' }],
+    )
+    expect(applied).toBe(1)
+  })
 })
