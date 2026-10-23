@@ -95,6 +95,35 @@ Pendiente futuro:
 
 - Reintroducir convocatoria solo si el negocio necesita aislar areas, formato DAT, plantillas, vacantes y procesos por convocatoria formal.
 
+## Prioridad 7 - Confiabilidad Del Core (octubre 2026)
+
+Origen: la calificacion de un simulacro real (179 hojas) destapo fallos silenciosos en el camino cargar - calificar - validar. Se corrigieron y se agregaron controles para que no vuelvan a ocurrir.
+
+Completado (2026-10-22):
+
+- Alineacion de respuestas: el parser decide la posicion por la columna tipo; el backend ya no recorta espacios (`docs/changelog/2026-10-22-fix-alineacion-respuestas.md`).
+- Padron: fecha de nacimiento `DD/MM/YYYY` y libros Excel con tablas filtradas (`exceljs` 4.4).
+- Auditoria al cargar y verificacion despues de guardar.
+- Auditoria del core: avisos de hojas incompletas y recalculo independiente del puntaje (`docs/changelog/2026-10-22-auditoria-core-calificacion.md`).
+- Pantalla de resultados: panel unico de Revision con pestanas, busqueda y paginacion (`docs/changelog/2026-10-22-rediseno-revision-resultados.md`).
+- Hojas sin alumno: vista previa con DNI sugerido y confirmacion auditada que entra al ranking (`docs/changelog/2026-10-22-vista-previa-dni-sugerido.md`).
+- Trazabilidad SHA-256 de archivos y de cada calculo (`docs/changelog/2026-10-22-trazabilidad-sha256.md`).
+- Excepciones de pregunta y una unica funcion de puntaje (`docs/changelog/2026-10-22-excepciones-de-preguntas.md`).
+- Documentacion de reglas (`docs/reglas-de-calificacion.md`) y analisis de ramas (`docs/integracion-ramas.md`).
+
+Pendiente, por orden recomendado:
+
+1. **Empates y corte de vacantes.** Definir con Admision la regla (puesto compartido, menos errores, alfabetico) y marcar el empate en la ultima vacante. Hoy las posiciones son siempre distintas.
+2. **Modo convocatoria real con datos reales** (claves P/Q/R/S/T, cupos, ingresantes): revisarlo con la misma profundidad que el simulacro.
+3. Mostrar la marca de DNI corregido y las excepciones en el Excel de convocatoria real y en el detalle del alumno de ese modo; listar excepciones en los PDF.
+4. Bitacora de eventos y pruebas sinteticas previas al calculo (piezas de `feat/calificacion-pj`).
+5. Ejecutable portable para Windows, si la oficina lo necesita (cambiando la contrasena por defecto del lanzador).
+6. Pantalla de resultados: agrupar las acciones de la cabecera y revisar las tablas en pantallas pequenas.
+7. Persistir en el historial la pestana de "Respuestas incompletas" y sus conteos.
+8. Fusionar o descartar `feat/calificacion-pj` y limpiar ramas y worktrees ya fusionados (ver `docs/integracion-ramas.md`).
+9. Configurar BMAD para el flujo de trabajo con agentes (idioma, contexto del dominio, visibilidad de las skills).
+10. Importador de padron: validar otros formatos que pueda exportar SIAGIE.
+
 ## Punto De Pausa Actual
 
 Trabajo actual:
@@ -110,7 +139,9 @@ Trabajo actual:
 - Importador adecuado para conservar las 23 columnas oficiales sin ampliar la tabla operativa visible.
 - Conciliación de padrón, identificadores y respuestas fortalecida y lista para alimentar el reporte.
 
-Siguiente paso recomendado:
+Nota (2026-10-22): el punto de pausa de abajo es de julio de 2026. El trabajo vigente esta en la Prioridad 7.
+
+Siguiente paso recomendado (julio de 2026):
 
 1. Implementar el reporte PDF de verificación usando `verificationRows` de la conciliación.
 2. Confirmar con Admisión el significado de `[03]`, `[05]` y `[07]` antes de presentarlos como códigos oficiales.

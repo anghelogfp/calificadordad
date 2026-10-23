@@ -28,41 +28,41 @@ CI:
 El repo contiene pruebas para:
 
 - Helpers de normalizacion.
-- Parsers `.dat`.
+- Parsers `.dat`: posicion de respuestas por columna tipo (incluida una prueba aleatoria de 500 hojas), tipo sin marcar, blancos al inicio y al final, auditoria de archivos.
 - Vinculacion de respuestas con identificadores.
-- Importacion y validacion de claves.
-- Preflight.
-- Calculo puro.
-- Validacion posterior de resultados.
-- Componentes principales de tablas/resultados.
-- Stepper, paneles de verificacion y badge del camino del proceso.
-- Tratamiento de blancos finales asumidos en parser, resumen de observaciones y detalle de calificacion.
-- Cierres de conciliacion y resumen de observaciones para identificadores y respuestas.
+- Importacion y validacion de claves; importacion del padron (formatos de fecha, libros con tablas filtradas).
+- Preflight, calculo puro y auditoria posterior, incluido el recalculo independiente del puntaje.
+- `scoreAnswerSheet`: 3,000 hojas aleatorias contra la formula anterior (sin excepciones el resultado es identico) y casos de cada excepcion.
+- Excepciones de pregunta: clasificacion, huella de clave, motor (simulacro general, por areas y real con varios tipos), auditoria, preflight, composable, panel, detalle del alumno, exportaciones y verificador.
+- Correcciones de DNI: sugerencias, vista previa, bloqueos, conflictos, aplicacion en el ranking, proteccion contra numeros de hoja repetidos.
+- Hojas con respuestas incompletas o excedentes.
+- Huellas SHA-256: el algoritmo contra `crypto` de Node (vectores oficiales, limites de bloque, 200 contenidos aleatorios), hash de los bytes y no del texto, huellas de configuracion y datos.
+- Componentes: tablas, resultados, panel de Revision, panel de excepciones, listas de archivos, detalle del alumno, verificador, stepper y paneles de verificacion.
+- Exportaciones Excel y PDF (marcas de DNI corregido, excepciones, huellas).
+- Cierres de conciliacion y resumen de observaciones.
 - Backend: autenticacion, usuarios, aislamiento por usuario, bulk replace, procesos, verificador, ponderaciones, areas y formato DAT.
-- Backend: restauracion de backup con validacion de payload, transaccion y reemplazo basico de datos.
+- Backend: conservacion de espacios en respuestas, correcciones de DNI, excepciones de pregunta (validaciones y aislamiento), huellas de archivos y resultados, marcas en el historial.
+- Backend: restauracion de backup con validacion de payload, transaccion y reemplazo de datos, correcciones y excepciones.
 
 ## Ultima Verificacion Local
 
-Fecha: 2026-07-15.
+Fecha: 2026-10-22.
 
-- Frontend: `177` pruebas pasando en `22` archivos.
-- Frontend: build de producción exitoso.
-- Backend: `49` pruebas pasando.
+- Frontend: `418` pruebas pasando en `35` archivos.
+- Frontend: build de produccion exitoso.
+- Backend: `107` pruebas pasando.
 - Backend: `python manage.py check` sin incidencias.
 - Backend: `python manage.py makemigrations --check --dry-run` sin cambios pendientes.
-- Migración `convocatorias.0011_candidato_padron_oficial_fields` aplicada en la base local.
-- Los cambios están pendientes de commit.
+- Migraciones aplicadas en la base local: `convocatorias.0012` a `0014` y `resultados.0008` a `0010`.
+- Verificacion con datos reales (simulacro de 179 hojas): las respuestas guardadas coinciden con los archivos, los 152 puntajes no cambian tras refactorizar el puntaje, y los hashes de los 12 archivos `.dat` coinciden con `shasum`.
 
 Notas del entorno:
 
-- Se instalo `frontend/node_modules` con `npm install`.
-- Se creo `.venv` local y se instalaron dependencias Python desde `requirements.txt`.
-- `npm ci` fallo previamente porque `package-lock.json` no estaba sincronizado; `npm install` actualizo el lockfile y CI usa `npm ci`.
-- Vite/Vitest requirieron ejecucion fuera del sandbox local por `spawn EPERM`.
-- En esta iteracion se corrigio un error de render del modal al tratar `processAreas` como arreglo directo en vez de `ref/computed`.
-- La documentacion fue contrastada con el codigo y las validaciones locales el 2026-07-10.
-- El 2026-07-15 se agregaron siete pruebas de importación del padrón y seis pruebas puras de conciliación.
-- El build mantiene advertencias no bloqueantes de `exceljs` por `eval` y tamaño del chunk de exportación Excel.
+- Dependencias del frontend con `npm ci`/`npm install`; `exceljs` esta en 4.4.0 (3.4 fallaba con libros con tablas filtradas).
+- Entorno Python en `venv/` en la raiz.
+- El build mantiene advertencias no bloqueantes de `exceljs` por `eval` y tamano del chunk de exportacion Excel.
+- Algunas pruebas de componentes que usan `Teleport` leen del `document.body`.
+- Las pruebas de algoritmos usan `crypto` de Node como referencia, por eso fijan `@vitest-environment node`.
 
 ## Brechas Importantes
 
@@ -70,7 +70,9 @@ Notas del entorno:
 - Fixtures `.dat` reales o semirreales.
 - Flujo E2E completo en navegador.
 - Backup export/import con datos representativos, aislamiento de datos globales y casos de error complejos.
-- Política institucional de empates, corte de vacantes y publicación oficial de resultados.
+- Politica institucional de empates, corte de vacantes y publicacion oficial de resultados.
+- Pruebas del modo convocatoria real con datos reales (claves P/Q/R/S/T, cupos, ingresantes): hasta ahora se ejercito con simulacros.
+- Verificacion visual automatizada (las pantallas nuevas se revisaron con pruebas de componentes y capturas manuales, no con E2E).
 - Prueba de carga con miles de postulantes.
 
 ## Recomendacion

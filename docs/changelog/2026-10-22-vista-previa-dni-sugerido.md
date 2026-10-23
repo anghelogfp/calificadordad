@@ -1,5 +1,7 @@
 # Vista previa: calificar con el DNI sugerido — 2026-10-22
 
+> **Actualizacion:** esta entrada describe la primera entrega (solo vista previa). Despues se agrego la confirmacion auditada del DNI, que **si** incluye la hoja en el ranking oficial, y el panel se integro al panel de Revision. Ver `2026-10-22-rediseno-revision-resultados.md` y `../reglas-de-calificacion.md`.
+
 ## Objetivo
 
 Algunas hojas no se pueden calificar porque el DNI marcado por el alumno no está en el padrón (error de marcado o DNI incompleto). Esta vista previa muestra qué puntaje tendría cada hoja si el DNI parecido del padrón fuera el correcto, para decidir con datos antes de pedir confirmación al colegio.

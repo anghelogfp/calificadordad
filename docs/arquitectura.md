@@ -23,9 +23,11 @@ El resultado es un proceso de calificacion con puntajes, posiciones, ingresantes
 6. Importa claves.
 7. Revisa ponderaciones y configuracion.
 8. Ejecuta preflight.
-9. Calcula una o varias areas.
-10. Guarda resultados en historial.
-11. Exporta reportes o usa el verificador manual.
+9. Calcula una o varias areas (el resultado debe pasar la auditoria para aceptarse).
+10. Revisa el panel de Revision: hojas sin alumno, respuestas incompletas, otras incidencias y alumnos sin hoja.
+11. Si corresponde, confirma correcciones de DNI y registra excepciones de pregunta; el ranking se recalcula.
+12. Guarda resultados en historial.
+13. Exporta reportes o usa el verificador manual.
 
 ## Fuente De Verdad
 
@@ -40,19 +42,51 @@ Las tablas grandes, sources y configuraciones de negocio ya no se persisten en `
 
 ## Motor De Calificacion
 
-El core de calificacion vive en `frontend/src/domain/calification/`:
+El core de calificacion vive en `frontend/src/domain/calification/` y es logica pura (sin Vue ni UI), probada de forma directa:
 
-- `calculateResults.js`: calcula puntajes, ranking, ingresantes y trazabilidad.
-- `preflight.js`: valida condiciones antes de calcular.
-- `validateResults.js`: audita invariantes despues de calcular.
+| Modulo | Responsabilidad |
+|---|---|
+| `scoreAnswerSheet.js` | **Unica** implementacion del puntaje por pregunta (aciertos, errores, blancos, multiples y excepciones). La usan el motor, el detalle del alumno, las exportaciones y el verificador. |
+| `calculateResults.js` | Calcula puntajes, ranking, ingresantes y trazabilidad de un area; aplica correcciones de DNI y excepciones; agrega el resumen y las huellas. |
+| `preflight.js` | Valida condiciones antes de calcular (bloqueos y advertencias). |
+| `validateResults.js` | Audita el resultado despues de calcular, incluido un recalculo independiente del puntaje. |
+| `questionExceptions.js` | Valida y clasifica excepciones de pregunta, ligadas a la clave por hash. |
+| `dniCorrections.js` | Aplica las correcciones de DNI confirmadas a las hojas. |
+| `provisionalMatches.js` | Sugiere alumnos para hojas sin alumno y calcula su puntaje provisional (vista previa, no cambia nada). |
+| `fingerprint.js` | Huellas SHA-256 de la configuracion y de los datos de un calculo. |
 
-Esta separacion es correcta porque permite probar la logica critica sin depender de Vue ni de la UI.
+`domain/reconciliation/buildReconciliation.js` concilia padron, identificadores y respuestas.
+
+Esta separacion permite probar la logica critica sin depender de Vue ni de la UI. La regla de la arquitectura es que **ningun componente calcula puntajes**: todos llaman a las funciones del dominio.
+
+### Capas de proteccion del resultado
+
+1. **Carga:** el parser decide la posicion de las respuestas por la columna tipo; se audita cada archivo (disposiciones mezcladas, caracteres ajenos, hojas cortas o largas) y se compara lo guardado con lo cargado.
+2. **Preflight:** bloquea el calculo ante claves duplicadas, excepciones invalidas, area desconocida, etc.
+3. **Calculo:** funcion unica de puntaje; las correcciones y excepciones se ligan a sus datos (DNI original de la hoja, hash de la clave) para no aplicarse a otro examen.
+4. **Auditoria:** recalcula el puntaje y el estado de cada pregunta leyendo respuestas y clave de forma independiente, y comprueba que cada hoja aplico exactamente las excepciones registradas.
+5. **Trazabilidad:** SHA-256 de cada archivo (sobre bytes) y huellas de configuracion y datos guardadas con el resultado.
+
+Ver `docs/reglas-de-calificacion.md` para el detalle de cada regla.
+
+## Decisiones Que Se Registran Aparte Del Calculo
+
+Algunas decisiones humanas cambian el resultado y se guardan como datos auditables del usuario (API/BD), no como cambios a los archivos originales:
+
+- **Correcciones de DNI** (`DniCorrection`): una hoja sin alumno se atribuye a un alumno del padron. El servidor deriva el DNI original de la hoja.
+- **Excepciones de pregunta** (`QuestionException`): anulacion o varias respuestas validas sobre una clave. El servidor deriva la huella de la clave.
+
+Ambas: pertenecen al usuario, se deshacen por revocacion (no se borran), entran a la huella de configuracion, se guardan en el historial y el backup, y fuerzan un recalculo del ranking al registrarse o deshacerse.
 
 ## Modos De Proceso
 
 - Simulacro general: puede usar clave general y ranking global.
 - Simulacro por areas: usa areas del padron y claves por area cuando aplica.
 - Convocatoria real: exige tipos P/Q/R/S/T, programa de estudios y vacantes por programa.
+
+## Integracion Con Otras Ramas
+
+El repositorio tiene ramas con trabajo para otros procesos (concurso del Poder Judicial). No se fusionan enteras: se portan piezas genericas. Ver `docs/integracion-ramas.md`.
 
 ## Riesgos Arquitectonicos Actuales
 

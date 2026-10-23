@@ -24,6 +24,55 @@ La implementacion actual usa varias entidades globales y varias entidades aislad
 
 Decision vigente: el proceso de calificacion es la unidad operativa principal. No existe entidad fuerte de convocatoria. Si el negocio necesita convocatorias completamente independientes, debe reintroducirse como rediseño explicito.
 
+## Endpoints
+
+Todos exigen usuario autenticado (JWT) salvo login y refresh. Los datos operativos se filtran por `created_by`.
+
+| Ruta | Recurso | Alcance |
+|---|---|---|
+| `/api/areas/`, `/api/dat-format-configs/`, `/api/plantillas/`, `/api/ponderaciones/` | Areas, formato DAT, plantillas | Global (lectura autenticada, escritura admin) |
+| `/api/candidatos/` | Padron | Por usuario |
+| `/api/identifier-sources/`, `/api/identificadores/` | Identificadores | Por usuario |
+| `/api/response-sources/`, `/api/respuestas/` | Respuestas | Por usuario |
+| `/api/answer-key-sources/`, `/api/answer-keys/` | Claves | Por usuario |
+| `/api/programa-vacantes/`, `/api/calification-configs/` | Vacantes y configuracion | Por usuario |
+| `/api/correcciones-dni/` | Correcciones de DNI (listar, crear, deshacer) | Por usuario |
+| `/api/excepciones-pregunta/` | Excepciones de pregunta (listar, crear, deshacer) | Por usuario |
+| `/api/procesos/` (`/{id}/full/`) | Procesos y resultados | Por usuario |
+| `/api/verificador/` | Sesiones del verificador manual | Por usuario |
+| `/api/backup/restore/` | Restauracion de backup | Solo admin |
+
+Los recursos con `bulk_replace` (padron, identificadores, respuestas, claves) reemplazan el contenido completo del usuario.
+
+## Huellas SHA-256
+
+- `IdentifierSource`, `ResponseSource` y `AnswerKeySource` guardan `sha256` y `file_size` del archivo original (en claves, ademas `identification_sha256`). Son opcionales: los clientes anteriores no los envian y quedan vacios. Se validan como 64 caracteres hexadecimales en minuscula o vacio.
+- `AreaCalificacion` guarda `config_sha256` y `data_sha256` del calculo. Un valor que no sea un SHA-256 valido no se guarda como huella (queda vacio); uno en mayusculas se normaliza a minuscula.
+
+## Datos Guardados Con El Resultado
+
+Ademas del puntaje, `AreaCalificacion` y `ResultadoCandidato` conservan lo necesario para auditar el calculo despues:
+
+- `AreaCalificacion`: `sheets_without_candidate`, `dni_corrections_applied`, `question_exceptions` (excepciones del calculo con su estado), `config_sha256`, `data_sha256`.
+- `ResultadoCandidato`: `dni_corregido`, `dni_original`, `exceptions_applied` (excepciones aplicadas a esa hoja).
+
+No se persisten `questionDetails` ni la pestana de "Respuestas incompletas" del historial: al abrir un proceso guardado, el detalle por pregunta se recalcula con las respuestas, la clave y `exceptions_applied`.
+
+## Migraciones
+
+| App | Migracion | Cambio |
+|---|---|---|
+| `convocatorias` | `0011` | Campos del padron oficial |
+| `convocatorias` | `0012_dnicorrection` | Correcciones de DNI |
+| `convocatorias` | `0013_answerkeysource_file_size_and_more` | Huellas SHA-256 y tamano de las fuentes |
+| `convocatorias` | `0014_questionexception` | Excepciones de pregunta |
+| `resultados` | `0007_area_no_calificados` | No calificados por area |
+| `resultados` | `0008_marca_dni_corregido` | Marca de DNI corregido y conteos de revision |
+| `resultados` | `0009_areacalificacion_config_sha256_and_more` | Huellas del calculo |
+| `resultados` | `0010_areacalificacion_question_exceptions_and_more` | Excepciones del calculo y por hoja |
+
+`feat/calificacion-pj` tiene migraciones propias con los mismos numeros y nombres de campo; ver `docs/integracion-ramas.md`.
+
 ## Correcciones De DNI
 
 `DniCorrection` (`/api/correcciones-dni/`, por usuario) registra que una hoja sin alumno en el padron fue atribuida a un DNI sugerido y confirmada. No modifica la hoja ni el padron: el frontend aplica la correccion al calcular, de modo que la hoja entra al ranking oficial marcada como "DNI corregido".
@@ -63,7 +112,7 @@ Estado actual:
 
 - Exportacion desde frontend usa datos del servidor.
 - Restore backend esta restringido a admin.
-- Restore reemplaza datos del usuario autenticado para padron, identificadores, respuestas, claves, vacantes, configuracion de calificacion y procesos.
+- Restore reemplaza datos del usuario autenticado para padron, identificadores, respuestas, claves, vacantes, configuracion de calificacion, correcciones de DNI, excepciones de pregunta y procesos (con sus huellas y marcas).
 - Restore tambien puede reemplazar datos globales como `DatFormatConfig` y plantillas de ponderacion.
 
 Decision vigente:

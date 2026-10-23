@@ -5,6 +5,7 @@
 - Node.js 22 recomendado, alineado con CI.
 - Python 3.13 recomendado, alineado con CI y Django 6.
 - Dependencias instaladas en `frontend` y en el entorno Python usado por `backend`.
+- Entorno virtual de Python: `venv/` en la raiz del repositorio (`venv/bin/python` en macOS y Linux, `venv/Scripts/python.exe` en Windows). Esta ignorado por git.
 
 ## Instalacion Local
 
@@ -41,6 +42,23 @@ npm run dev
 ```
 
 URL local: `http://localhost:5173`
+
+Con el entorno de la raiz, desde `backend/`:
+
+```bash
+../venv/bin/python manage.py migrate
+../venv/bin/python manage.py runserver 8000
+```
+
+### Base de datos de desarrollo
+
+`backend/db.sqlite3` esta ignorada por git y **pertenece a la rama con la que se creo**. Una base creada con otra rama puede tener columnas obligatorias que esta no conoce y rechazar guardar datos con error 500 (el padron o las respuestas parecen cargar, pero solo quedan en memoria del navegador). Si pasa, usar una base nueva (`rm backend/db.sqlite3` y `python manage.py migrate`, guardando antes una copia) y crear un usuario:
+
+```bash
+python manage.py createsuperuser
+```
+
+Despues de aplicar migraciones nuevas, reiniciar el servidor de desarrollo.
 
 ## Variables De Entorno
 
@@ -95,6 +113,9 @@ Columnas reconocidas:
 
 Columnas extra como `nro` o `sede` no bloquean la importacion; se ignoran mientras no exista un campo operativo para ellas.
 
+- La fecha de nacimiento se acepta como `DD/MM/YYYY`, `DD-MM-YYYY` o `YYYY-MM-DD` y se guarda en formato ISO. Una fecha imposible o desconocida se descarta sin bloquear el padron completo (antes, el formato `13/01/2014` hacia que la API rechazara las 281 filas y el padron solo quedara en memoria).
+- Se admiten libros exportados con una tabla con filtros aplicados (por ejemplo, los de SIAGIE): la lectura usa `exceljs` 4.4. Se lee siempre la primera hoja del libro.
+
 ## Puntos De UI Que Ya Deben Verse Claros
 
 - El stepper superior debe mostrar cinco pasos operativos con estado `Listo`, `Revisar` o `Pendiente`.
@@ -115,6 +136,71 @@ Columnas extra como `nro` o `sede` no bloquean la importacion; se ignoran mientr
 - La alineacion de las respuestas depende de la columna tipo: una letra P-T indica que la columna existe, una letra A-E indica que no existe, y un espacio (tipo sin marcar) se resuelve con la disposicion del resto del archivo. Un blanco al inicio o al final de la hoja nunca cambia la posicion de las preguntas.
 - Las respuestas se guardan en la API sin recortar espacios (`trim_whitespace=False`): cada espacio es una pregunta en blanco.
 
+## Revision Despues De Calificar
+
+En Resultados, bajo la franja de estado (calificados, ingresantes, promedio), el panel **Revision** resume lo que requiere atencion. Empieza colapsado y tiene pestanas con busqueda y paginacion:
+
+| Pestana | Que muestra | Tono |
+|---|---|---|
+| Hojas sin alumno | Hojas cuyo DNI no esta en el padron, con DNI sugerido y puntaje provisional | Requiere accion |
+| Respuestas incompletas | Hojas calificadas con menos respuestas de las esperadas ("57 de 60 leidas") | Requiere accion |
+| Otras incidencias | DNI invalido o duplicado, sin clave, sin programa, tipo invalido, con "que hacer" | Requiere accion |
+| Alumnos sin hoja | Alumnos del padron sin hoja de respuestas | Informativo |
+
+"Descargar revision (Excel)" exporta solo la revision (alumnos sin hoja, otras incidencias y hojas sin alumno con sus sugerencias).
+
+En un simulacro por colegios es normal que haya alumnos sin hoja (faltaron o no marcaron su DNI): por eso es informativo y no un error.
+
+## Corregir El DNI De Una Hoja
+
+Para hojas cuyo DNI esta mal marcado:
+
+1. Abrir Revision > **Hojas sin alumno**.
+2. Cada fila muestra el DNI marcado, el alumno sugerido (DNI a una edicion de distancia), el puntaje que tendria y la posicion.
+3. **Verificar fuera del sistema** (hoja fisica o el colegio): un DNI parecido no prueba quien es el alumno.
+4. **Confirmar**, y despues "Si, confirmar". Pide confirmacion en pantalla y explica que la hoja entrara al ranking.
+5. El ranking se recalcula; el alumno aparece con la marca verde **DNI corregido** (el cursor muestra el DNI que traia la hoja).
+6. **Deshacer** revoca la correccion y el alumno sale del ranking.
+
+Sugerencias bloqueadas (no se pueden confirmar): el alumno ya tiene su propia hoja, ya fue confirmado con otra hoja, o la hoja sugiere al mismo alumno que otra.
+
+**Antes de enviar resultados oficiales:** confirmar una hoja cambia los puestos de todos los demas. Si ya se envio un ranking, el nuevo debe enviarse como version actualizada indicando que reemplaza al anterior.
+
+## Excepciones De Preguntas
+
+En Resultados, panel **Excepciones de preguntas**:
+
+1. Elegir la **clave** (area y tipo de prueba), el **numero de pregunta** y la **accion**: anular dando el punto a todos, anular sin contar, o aceptar varias respuestas.
+2. Escribir el **motivo** (obligatorio) y, si existe, el documento de sustento.
+3. El panel muestra la materia y el peso de la pregunta y como respondieron los postulantes. Si casi nadie marco la clave, avisa: puede que la clave sea la equivocada.
+4. Confirmar en pantalla. El ranking se recalcula.
+5. **Deshacer** revoca la excepcion.
+
+En convocatoria real hay que registrar la excepcion por cada tipo de prueba (P, Q, R, S, T), cada uno con su numeracion. Si la clave cambia (otro examen), las excepciones viejas quedan **sin efecto** y se avisa; no se aplican. Las reglas completas estan en `docs/reglas-de-calificacion.md`.
+
+## Trazabilidad De Los Archivos
+
+Cada archivo cargado muestra el inicio de su SHA-256 (completo al pasar el cursor). Para comprobar que es el mismo archivo:
+
+```bash
+shasum -a 256 RESP_COLEGIO_01.dat        # macOS / Linux
+Get-FileHash RESP_COLEGIO_01.dat         # Windows (PowerShell)
+```
+
+Cada resultado guarda la huella de configuracion y la de datos (Resultados > Detalles tecnicos del calculo, y la hoja Resumen del Excel). Con las mismas claves, valores, plantilla, correcciones, excepciones, padron y hojas, las huellas son identicas.
+
+## Solucion De Problemas
+
+| Sintoma | Causa probable | Que hacer |
+|---|---|---|
+| Despues de actualizar el codigo, los resultados siguen mal | La pestana del navegador sigue ejecutando el codigo anterior | Recarga forzada (Cmd+Shift+R) y volver a cargar padron, identificadores, respuestas y claves |
+| El padron "carga" pero al recargar la pagina desaparece | La API rechazo el guardado (error 500 o 400) | Revisar la consola del navegador y el log del backend; ver "Base de datos de desarrollo" |
+| Al cargar respuestas aparece un aviso de hojas distintas a lo guardado | Algo altero las respuestas entre el archivo y la base | Recargar con Cmd+Shift+R y volver a cargar el archivo |
+| "Hojas sin alumno" no baja aunque corregi el padron | El DNI de la hoja sigue sin estar en el padron | Corregir el padron o confirmar una correccion de DNI |
+| Una excepcion aparece "sin efecto" | La clave cargada cambio desde que se registro | Registrar la excepcion de nuevo sobre la clave actual, o deshacerla |
+| El calculo se bloquea con un error de excepcion | Dos excepciones para la misma pregunta de la misma clave, o datos invalidos | Deshacer la que sobra |
+| No deja calcular en convocatoria real | Faltan claves P/Q/R/S/T, programa o vacantes | Ver el preflight en el modal de calificacion |
+
 ## Cuidados
 
 - No usar restauracion de backup en datos reales sin copia previa de la base.
@@ -123,3 +209,5 @@ Columnas extra como `nro` o `sede` no bloquean la importacion; se ignoran mientr
 - Hasta endurecer el backend, tratar restore como operacion institucional y no como accion diaria de usuario.
 - Confirmar entorno activo antes de correr migraciones.
 - Validar el flujo completo despues de cambios en persistencia o calificacion.
+- Las correcciones de DNI y las excepciones de pregunta se incluyen en el backup y se reemplazan al restaurarlo. Un backup anterior sin esas secciones deja al usuario sin correcciones ni excepciones.
+- Registrar una correccion de DNI o una excepcion cambia puntajes y puestos oficiales: hacerlo solo con respaldo documental.

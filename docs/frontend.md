@@ -12,8 +12,9 @@
 - `src/App.vue`: orquestador de autenticacion, inicializacion, layout y navegacion.
 - `src/components`: vistas, tabs, modales, layout y componentes compartidos.
 - `src/composables`: estado y operaciones por dominio.
-- `src/domain/calification`: logica pura de calificacion.
-- `src/utils`: parsers, helpers, API fetch y carga diferida de exportadores.
+- `src/domain/calification`: logica pura de calificacion (ver `docs/arquitectura.md`).
+- `src/domain/reconciliation`: conciliacion de padron, identificadores y respuestas.
+- `src/utils`: parsers, helpers, API fetch, SHA-256 (`cryptoHash.js`) y carga diferida de exportadores.
 - `src/constants`: tabs, storage keys, columnas, areas fallback y formato DAT por defecto.
 
 ## Flujo De Inicializacion
@@ -28,7 +29,8 @@ Tras login, la app carga datos desde la API en orden:
 6. Claves.
 7. Vacantes por programa.
 8. Configuracion de calificacion.
-9. Ponderaciones.
+9. Correcciones de DNI y excepciones de pregunta (al iniciar la calificacion, para que el primer calculo ya las incluya).
+10. Ponderaciones.
 
 ## Estado Local
 
@@ -46,6 +48,15 @@ La meta es reducir `localStorage` de negocio hasta dejar solo preferencias, toke
 
 Los backups antiguos que solo contienen `localStorage` ya no se restauran automaticamente. La restauracion valida debe venir con seccion `server`.
 
+## Parser De Archivos `.dat`
+
+`src/utils/parsers.js`:
+
+- La posicion de las respuestas se decide por la columna tipo (`classifyTipoColumn`): letra P-T = existe, A-E o `*` = no existe, espacio = ambiguo y se resuelve con `inferResponseLayout` sobre todo el archivo. No se elige por conteo de marcas.
+- `auditParsedResponses` avisa de disposiciones mezcladas, caracteres ajenos y hojas con mas o menos respuestas de las esperadas.
+- `findStoredAnswerMismatches` compara lo cargado con lo que devuelve la API despues de guardar.
+- Al cargar cada archivo se calcula su SHA-256 sobre los bytes originales (`computeFileSha256`) y se guarda en la fuente.
+
 ## Motor De Calificacion
 
 El frontend conserva la logica de calculo en modulos puros. Esto permite:
@@ -55,11 +66,13 @@ El frontend conserva la logica de calculo en modulos puros. Esto permite:
 - Trazabilidad por pregunta.
 - Reuso desde UI y verificador.
 
+Regla: ningun componente calcula puntajes. El detalle del alumno (`CandidateDetailModal`), las exportaciones (`useExport`) y el verificador manual llaman a `scoreAnswerSheet`, la misma funcion que usa el ranking.
+
 ## Estado De UI Y UX
 
 La pantalla de resultados, el modal de calificacion y el flujo de pasos se reordenaron para priorizar contexto, estado y accion:
 
-- Resultados muestra primero el estado operativo, no calificados e incidencias, y deja los detalles tecnicos al final.
+- Resultados muestra primero una franja de estado (calificados, ingresantes, promedio) y un panel de Revision colapsado con las incidencias, separando lo que requiere accion de lo informativo; los detalles tecnicos quedan al final. Cada cifra aparece una sola vez.
 - El modal de calificacion agrupa configuracion, salida y validacion en una sola experiencia con separadores suaves.
 - Los bloqueos de preflight ya no quedan silenciosos: el flujo muestra error visible y toast cuando falta informacion para calificar.
 - El stepper de los pasos 1 al 5 muestra estado, descripcion y accion contextual por etapa.
@@ -67,6 +80,17 @@ La pantalla de resultados, el modal de calificacion y el flujo de pasos se reord
 - En identificadores y respuestas, los paneles separan el cierre del DAT, el cierre contra el padron, los duplicados y la calidad del archivo para que los conteos sean auditables.
 - Las tablas de Respuestas y Claves exponen un boton de vista que abre una cartilla visual en modal para revisar la cadena cargada sin alterar el dato original.
 - El camino del proceso se muestra con una insignia compartida para mantener consistencia visual entre las etapas.
+
+## Resultados: Revision, Correcciones Y Excepciones
+
+La pantalla de resultados (`ScoresTab.vue`) muestra, en orden: cabecera con acciones, franja de estado (calificados de N, ingresantes, promedio), el panel de **Revision**, el panel de **Excepciones de preguntas**, filtros y el ranking.
+
+- `ReviewPanel.vue` (colapsado por defecto): pestanas "Hojas sin alumno", "Respuestas incompletas", "Otras incidencias" y "Alumnos sin hoja", con busqueda y paginacion. "Hojas sin alumno" usa `OrphanSheetsTable.vue`, donde se confirman o deshacen las correcciones de DNI con confirmacion en pantalla.
+- `QuestionExceptionsPanel.vue`: lista las excepciones con su estado (aplicada, sin efecto, invalida) y permite registrarlas o deshacerlas. Muestra materia, peso y distribucion de respuestas de la pregunta elegida.
+- Las correcciones y excepciones se gestionan desde `useCalification.js` (`confirmDniCorrection`, `undoDniCorrection`, `addQuestionException`, `revokeQuestionException`). Todas terminan en `recalculateActiveAreas()`, que recalcula las areas ya calificadas con la misma plantilla y valores y pasa por la auditoria; si falla, el resultado anterior no cambia.
+- La marca "DNI corregido" aparece junto al DNI en el ranking y en los PDF (`63737500 (corregido)`).
+- "Detalles tecnicos del calculo" muestra las huellas SHA-256. `SourcesPanel.vue` muestra el inicio del SHA-256 de cada archivo cargado.
+- Se usa confirmacion en pantalla; no se usan los dialogos del navegador.
 
 ## Verificacion Por Pasos
 
@@ -87,6 +111,8 @@ En los pasos de identificadores y respuestas, el panel de verificacion muestra c
 El Paso 1 importa la primera hoja del `.xlsx`, toma la primera fila como encabezados y mapea cada fila con `mapArchiveRowToSchema`.
 
 Los alias de encabezados viven en `src/constants/index.js` como `ARCHIVE_KEY_ALIASES`. Actualmente se aceptan variantes con espacios y guiones bajos para apellidos, por ejemplo `apellido paterno`, `apellido_paterno`, `apellidos_paterno`, `ape_pat` y `ap_paterno`; lo mismo aplica para materno.
+
+La fecha de nacimiento se normaliza a ISO (`normalizeBirthDate`: acepta `DD/MM/YYYY`, `DD-MM-YYYY` e ISO; una fecha imposible se descarta sin bloquear el padron). La lectura usa `exceljs` 4.4, que admite libros con tablas con filtros aplicados.
 
 El importador ignora columnas externas no mapeadas, por ejemplo `nro` o `sede`. Si `sede` pasa a ser requerida para reportes o segmentacion, debe agregarse como campo real del padron y no solo como alias.
 
@@ -116,7 +142,7 @@ Estado actual:
 - Permite ingresar clave oficial y respuestas del postulante en grillas separadas.
 - La clave oficial se representa en azul, respuestas correctas del postulante en verde, incorrectas en rojo y blancos en gris.
 - La tabla de detalle se muestra en dos columnas y conserva `N°`, curso, marcada, correcta, ponderacion, puntos y acumulado.
-- El calculo del verificador usa tres decimales para puntos y acumulado.
+- El calculo del verificador usa `scoreAnswerSheet` (tres decimales para puntos y acumulado) y aplica las excepciones de pregunta registradas cuando la clave tecleada es la de una excepcion; lo avisa en pantalla.
 - Permite pegar cadenas completas de respuestas desde cualquier celda.
 - Permite guardar y reutilizar una clave frecuente por plantilla desde `localStorage`.
 - Valida faltantes de clave oficial antes de guardar o exportar PDF.
@@ -129,5 +155,5 @@ Estado actual:
 - Extraer reconciliaciones de `App.vue` a composables dedicados.
 - Agregar tests E2E del flujo completo.
 - Validar rendimiento con 5000 postulantes.
-- Decidir si la trazabilidad se persiste tambien en backend.
+- Los PDF de resultados no listan las excepciones de pregunta; el Excel de convocatoria real por programa no trae la columna de observacion ni la hoja de excepciones.
 - Seguir puliendo jerarquia visual del modal de calificacion si el negocio pide menos densidad.
