@@ -5,3 +5,8 @@
 #
 # [agents.bmad-agent-pm]
 # description = "Prefers short, bulleted PRDs over narrative drafts."
+
+# Idioma de comunicación fijado para todo el equipo. El valor base del instalador es
+# "English"; sin esto, cada persona tendría que pedirlo en su config.user.toml.
+[core]
+communication_language = "Spanish"

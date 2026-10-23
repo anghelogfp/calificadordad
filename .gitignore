@@ -25,3 +25,9 @@ frontend/dist/
 # Respaldo local previo al cambio de version de BMAD
 .bmad-backups/
 
+# Salidas de PyInstaller del ejecutable del Poder Judicial (no se versionan)
+/build/
+/dist/
+
+# Enlace local a las skills de BMAD para Claude Code (ver docs/bmad.md)
+/.claude/skills

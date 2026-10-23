@@ -110,6 +110,8 @@ Completado (2026-10-22):
 - Trazabilidad SHA-256 de archivos y de cada calculo (`docs/changelog/2026-10-22-trazabilidad-sha256.md`).
 - Excepciones de pregunta y una unica funcion de puntaje (`docs/changelog/2026-10-22-excepciones-de-preguntas.md`).
 - Documentacion de reglas (`docs/reglas-de-calificacion.md`) y analisis de ramas (`docs/integracion-ramas.md`).
+- Decision sobre `feat/calificacion-pj` (se conserva como linea del producto del Poder Judicial; se portan piezas) y salidas de PyInstaller ignoradas en git.
+- BMAD configurado: idioma en espanol para el equipo, contexto del dominio en 18 skills y enlace para usarlo desde Claude Code (`docs/bmad.md`).
 
 Pendiente, por orden recomendado:
 
@@ -120,9 +122,10 @@ Pendiente, por orden recomendado:
 5. Ejecutable portable para Windows, si la oficina lo necesita (cambiando la contrasena por defecto del lanzador).
 6. Pantalla de resultados: agrupar las acciones de la cabecera y revisar las tablas en pantallas pequenas.
 7. Persistir en el historial la pestana de "Respuestas incompletas" y sus conteos.
-8. Fusionar o descartar `feat/calificacion-pj` y limpiar ramas y worktrees ya fusionados (ver `docs/integracion-ramas.md`).
-9. Configurar BMAD para el flujo de trabajo con agentes (idioma, contexto del dominio, visibilidad de las skills).
-10. Importador de padron: validar otros formatos que pueda exportar SIAGIE.
+8. Importador de padron: validar otros formatos que pueda exportar SIAGIE.
+9. Cerrar la limpieza de ramas: borrar el worktree y la rama `anghelogfp/saludo-terminal-check` al cerrar su sesion, y acordar con su autor que se hace con `ELMER_V1` (ver `docs/integracion-ramas.md`).
+10. Regenerar `AGENTS.md` con la skill `bmad-project-context` para que mencione las reglas de calificacion actuales (ver `docs/bmad.md`).
+11. Filtro de fichas fuera del padron en Identificadores y Respuestas (evaluado en `docs/integracion-ramas.md`).
 
 ## Punto De Pausa Actual
 

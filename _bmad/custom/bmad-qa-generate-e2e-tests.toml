@@ -1,0 +1,15 @@
+# Datos del dominio para que este agente trabaje con el contexto real del proyecto.
+# Archivo del equipo (se versiona): el instalador de BMAD nunca lo modifica.
+# Las listas se SUMAN a las que trae la skill por defecto.
+
+[workflow]
+persistent_facts = [
+  "Proyecto: Calificador DAD, de la Dirección de Admisión de la UNAP (Puno). Califica exámenes de admisión a partir de archivos .dat de lectura óptica. Un error de puntaje cambia resultados oficiales y la confianza en el proceso: la corrección pesa más que la velocidad.",
+  "Idioma de trabajo y de documentación: español.",
+  "Reglas inquebrantables: el puntaje por pregunta se calcula solo con frontend/src/domain/calification/scoreAnswerSheet.js y ningún componente Vue calcula puntajes; las respuestas nunca se recortan (cada espacio es una pregunta en blanco); la API/BD es la fuente de verdad (no localStorage); los datos operativos se aíslan por created_by; se conservan el preflight y la auditoría posterior (validateResults) antes de aceptar un resultado.",
+  "Las decisiones humanas que cambian resultados (correcciones de DNI, excepciones de pregunta) se guardan como datos auditables que se revocan, no se borran, y no se editan los archivos originales. Se ligan a sus datos (DNI original de la hoja, hash de la clave) para no aplicarse a otro examen.",
+  "Todo cambio de comportamiento del calificador se documenta en docs/changelog/ y, si cambia una regla, en docs/reglas-de-calificacion.md. Se verifica con las pruebas del frontend (npm run test y npm run build en frontend/) y del backend (python manage.py test en backend/).",
+  "tools/concurso-catedra/ y la rama feat/calificacion-pj (concurso del Poder Judicial) son productos distintos: no mezclar sus reglas con las de admisión. Ver docs/integracion-ramas.md.",
+  "file:{project-root}/docs/reglas-de-calificacion.md",
+  "file:{project-root}/docs/arquitectura.md",
+]

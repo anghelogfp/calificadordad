@@ -29,6 +29,7 @@ Sistema web para calificar examenes de admision de la Direccion de Admision. Pro
 - [Testing](docs/testing.md)
 - [Roadmap](docs/roadmap.md)
 - [Integracion de ramas](docs/integracion-ramas.md): que traer de `feat/calificacion-pj` y que no
+- [BMAD](docs/bmad.md): agentes y flujos de trabajo, configuracion y uso desde Claude Code
 - [Changelog](docs/changelog/README.md): registro de cambios por fecha
 
 Los documentos anteriores se conservaron en [docs/historico](docs/historico/). Son referencia historica y pueden estar desactualizados.
