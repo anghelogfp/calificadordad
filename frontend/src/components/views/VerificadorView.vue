@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, reactive, nextTick } from 'vue'
 import { buildQuestionPlan } from '@/utils/helpers'
+import { EXCEPTION_TYPES, scoreAnswerSheet } from '@/domain/calification/scoreAnswerSheet'
+import { keyFingerprint, toAppliedSummary } from '@/domain/calification/questionExceptions'
 import { useVerificador } from '@/composables/useVerificador'
 import { useToast } from '@/composables/useToast'
 import { loadPdfExportDeps } from '@/utils/exportLoaders'
@@ -9,6 +11,8 @@ import AnswerSheetPreview from '@/components/shared/AnswerSheetPreview.vue'
 const props = defineProps({
   ponderations: { type: Object, required: true },
   currentUser:  { type: String, default: '' },
+  // Excepciones de pregunta registradas (con su estado); se aplican si la clave tecleada es la misma
+  questionExceptions: { type: Array, default: () => [] },
 })
 
 const toast = useToast()
@@ -79,48 +83,51 @@ const hasSavedCorrectKey = computed(() => {
 })
 
 // ── Cálculo reactivo pregunta × pregunta ──────────────────────────────────────
+// Usa la misma función del dominio que el ranking: el verificador sirve para comprobar el
+// resultado oficial, así que no puede tener su propia fórmula.
+const keyString = computed(() => cellsToPositionString(correctCells, totalQuestions.value))
+
+// Excepciones registradas para la clave que se tecleó (se reconoce por su contenido).
+const matchingExceptions = computed(() => {
+  if (!keyString.value.trim()) return []
+  const fingerprint = keyFingerprint(keyString.value)
+  return props.questionExceptions.filter((item) => item.keySha256 === fingerprint && item.status !== 'invalid')
+})
+
+const UI_STATUS = { awarded: 'correct', excluded: 'blank' }
+
 const rows = computed(() => {
   const plan = questionPlan.value
-  const corrVal   = Number(correctValue.value)   || 0
-  const incorrVal = Number(incorrectValue.value) || 0
-  const blkVal    = Number(blankValue.value)     || 0
-  const roundScore = (value) => Math.round(value * 1000) / 1000
+  const scored = scoreAnswerSheet({
+    answersRaw: cellsToPositionString(answerCells, plan.length),
+    correctAnswersRaw: cellsToPositionString(correctCells, plan.length),
+    plan,
+    correctValue: Number(correctValue.value) || 0,
+    incorrectValue: Number(incorrectValue.value) || 0,
+    blankValue: Number(blankValue.value) || 0,
+    exceptions: toAppliedSummary(matchingExceptions.value),
+    strictKey: false, // mientras se teclea, la clave puede estar incompleta
+  })
 
   let acum = 0
-  return plan.map((item, i) => {
-    const marked  = normalizeCell(answerCells[i])
-    const correct = normalizeCell(correctCells[i])
-    const weight  = Number(item.weight) || 0
-
-    const isCorrectValid = /^[A-E]$/.test(correct)
-    const isMarkedValid  = /^[A-E]$/.test(marked)
-
-    let status, pts
-    if (isCorrectValid && isMarkedValid && marked === correct) {
-      status = 'correct'
-      pts    = roundScore(corrVal * weight)
-    } else if (isMarkedValid) {
-      status = 'incorrect'
-      pts    = roundScore(incorrVal * weight)
-    } else {
-      status = 'blank'
-      pts    = roundScore(blkVal * weight)
-    }
-
-    acum = roundScore(acum + pts)
-
-    // Para display: mostrar tal como lo ingresó (número o letra)
+  return scored.questionDetails.map((detail, i) => {
+    acum = Math.round((acum + detail.score) * 1000) / 1000
     const rawMarked  = (answerCells[i]  || '').toUpperCase()
     const rawCorrect = (correctCells[i] || '').toUpperCase()
-
+    const isMarkedValid = /^[A-E]$/.test(normalizeCell(answerCells[i]))
+    const isCorrectValid = /^[A-E]$/.test(normalizeCell(correctCells[i]))
     return {
-      n: i + 1,
-      subject: item.subject || '',
-      marked:  isMarkedValid  ? rawMarked  : '—',
-      correct: isCorrectValid ? rawCorrect : '?',
-      weight,
-      status,
-      pts,
+      n: detail.number,
+      subject: detail.subject,
+      // Para display: mostrar tal como lo ingresó (número o letra)
+      marked:  isMarkedValid ? rawMarked : '—',
+      correct: detail.exception === EXCEPTION_TYPES.MULTIPLE_KEY
+        ? [...detail.validAnswers].join('/')
+        : detail.exception ? 'ANUL.' : (isCorrectValid ? rawCorrect : '?'),
+      weight: detail.weight,
+      status: UI_STATUS[detail.status] || detail.status,
+      exception: detail.exception,
+      pts: detail.score,
       acum,
     }
   })
@@ -667,7 +674,7 @@ async function exportPdf() {
       r.status === 'blank' ? '—' : (KEY_MAP[r.marked] || r.marked),
       KEY_MAP[r.correct] || r.correct,
       `×${Number(r.weight).toFixed(3)}`,
-      r.status === 'incorrect' ? '0.000' : r.pts.toFixed(3),
+      r.pts.toFixed(3),
       r.acum.toFixed(3),
     ])
   }
@@ -1010,6 +1017,11 @@ function formatFecha(iso) {
             <span>Detalle por pregunta</span>
             <strong>{{ rows.length }} preguntas</strong>
           </summary>
+          <p v-if="matchingExceptions.length" class="verificador-exceptions" role="status">
+            Se aplicaron {{ matchingExceptions.length }} excepción(es) de pregunta registradas para esta clave
+            (preguntas {{ matchingExceptions.map((item) => item.questionNumber).sort((a, b) => a - b).join(', ') }}),
+            igual que en el resultado oficial.
+          </p>
           <div class="detail-table-wrap detail-table-wrap--columns">
             <table
               v-for="(columnRows, columnIndex) in detailColumns"
@@ -2033,5 +2045,14 @@ function formatFecha(iso) {
   .helper-actions {
     justify-content: flex-start;
   }
+}
+.verificador-exceptions {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 </style>

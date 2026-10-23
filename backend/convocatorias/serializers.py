@@ -1,5 +1,9 @@
+import hashlib
+import re
+
 from rest_framework import serializers
 from .models import (
+    QuestionException,
     DniCorrection,
     Area,
     CalificationConfig,
@@ -307,4 +311,67 @@ class DniCorrectionSerializer(serializers.ModelSerializer):
 
         attrs['litho'] = litho
         attrs['original_dni'] = sheet.dni
+        return attrs
+
+
+def key_fingerprint(answers):
+    """SHA-256 de la clave en mayúsculas. Debe coincidir con `keyFingerprint` del frontend."""
+    return hashlib.sha256(str(answers or '').upper().encode('utf-8')).hexdigest()
+
+
+class QuestionExceptionSerializer(serializers.ModelSerializer):
+    """Valida contra las claves del propio usuario; la huella de la clave la deriva el servidor."""
+    questionNumber = serializers.IntegerField(source='question_number', min_value=1)
+    validAnswers = serializers.CharField(source='valid_answers', allow_blank=True, required=False, default='')
+    documentRef = serializers.CharField(source='document_ref', allow_blank=True, required=False, default='')
+    keySha256 = serializers.CharField(source='key_sha256', read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    area = serializers.CharField(allow_blank=True, required=False, default='', max_length=100)
+    tipo = serializers.CharField(allow_blank=True, required=False, default='', max_length=1)
+
+    class Meta:
+        model = QuestionException
+        fields = [
+            'id', 'area', 'tipo', 'questionNumber', 'type', 'validAnswers',
+            'reason', 'documentRef', 'keySha256', 'createdAt',
+        ]
+        read_only_fields = ['id']
+
+    def validate_reason(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Indica el motivo de la excepción.')
+        return value
+
+    def validate(self, attrs):
+        user = self.context['request'].user
+        area = attrs.get('area', '').strip()
+        tipo = attrs.get('tipo', '').strip().upper()[:1]
+        number = attrs['question_number']
+
+        valid_answers = ''.join(sorted(set(re.sub(r'[^A-E]', '', attrs.get('valid_answers', '').upper()))))
+        if attrs['type'] == QuestionException.CLAVE_MULTIPLE:
+            if not valid_answers:
+                raise serializers.ValidationError({'validAnswers': 'Indica al menos una respuesta válida (A a E).'})
+        else:
+            valid_answers = ''
+
+        keys = [
+            row for row in AnswerKeyRow.objects.filter(created_by=user, area=area)
+            if (row.tipo or '').strip().upper()[:1] == tipo
+        ]
+        if not keys:
+            raise serializers.ValidationError({'area': 'No hay una clave cargada para ese área y tipo.'})
+        if len(keys) > 1:
+            raise serializers.ValidationError({'area': 'Hay más de una clave para ese área y tipo; deja una sola.'})
+        key = keys[0]
+        if number > len(key.answers):
+            raise serializers.ValidationError({'questionNumber': f'La clave tiene {len(key.answers)} preguntas.'})
+
+        if QuestionException.objects.filter(
+            created_by=user, area=area, tipo=tipo, question_number=number, revoked_at__isnull=True,
+        ).exists():
+            raise serializers.ValidationError({'questionNumber': f'La pregunta {number} ya tiene una excepción para esta clave.'})
+
+        attrs.update(area=area, tipo=tipo, valid_answers=valid_answers, key_sha256=key_fingerprint(key.answers))
         return attrs

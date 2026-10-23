@@ -96,6 +96,7 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                         'sheets_without_candidate': summary.get('sheetsWithoutCandidate', 0),
                         'dni_corrections_applied': summary.get('dniCorrectionsApplied', 0),
                         'no_calificados': summary.get('noCalificados', []),
+                        'question_exceptions': summary.get('questionExceptions') or [],
                         'config_sha256': clean_sha256(summary.get('configSha256')),
                         'data_sha256': clean_sha256(summary.get('dataSha256')),
                         'total_weight': summary.get('totalWeight', 0),
@@ -125,6 +126,7 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                         cor_id=r.get('corId', ''),
                         dni_corregido=bool(r.get('dniCorregido', False)),
                         dni_original=r.get('dniOriginal', '') or '',
+                        exceptions_applied=r.get('exceptionsApplied') or [],
                     )
                     for r in results
                 ])
@@ -153,6 +155,7 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                     'sheetsWithoutCandidate': area_obj.sheets_without_candidate,
                     'dniCorrectionsApplied': area_obj.dni_corrections_applied,
                     'noCalificados': area_obj.no_calificados,
+                    'questionExceptions': area_obj.question_exceptions,
                     'configSha256': area_obj.config_sha256,
                     'dataSha256': area_obj.data_sha256,
                     'totalWeight': float(area_obj.total_weight),
@@ -185,6 +188,7 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                         'corId': r.cor_id,
                         'dniCorregido': r.dni_corregido,
                         'dniOriginal': r.dni_original,
+                        'exceptionsApplied': r.exceptions_applied,
                     }
                     for r in area_obj.resultados.all()
                 ],

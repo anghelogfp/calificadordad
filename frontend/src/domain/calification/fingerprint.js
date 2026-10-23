@@ -41,6 +41,7 @@ export function buildConfigPayload({
   plantilla,
   answerKeyRows = [],
   dniCorrections = [],
+  questionExceptions = [],
 }) {
   return {
     processType: text(processType),
@@ -71,6 +72,16 @@ export function buildConfigPayload({
         correctedDni: stripDigits(item.correctedDni),
       }))
       .sort(compareBy('litho', 'correctedDni')),
+    questionExceptions: questionExceptions
+      .map((item) => ({
+        area: text(item.area),
+        tipo: text(item.tipo).toUpperCase(),
+        questionNumber: Number(item.questionNumber),
+        type: text(item.type),
+        validAnswers: String(item.validAnswers ?? '').toUpperCase().replace(/[^A-E]/g, '').split('').sort().join(''),
+        keySha256: text(item.keySha256),
+      }))
+      .sort(compareBy('area', 'tipo', 'questionNumber')),
   }
 }
 

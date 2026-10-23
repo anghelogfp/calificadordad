@@ -20,7 +20,7 @@
 La implementacion actual usa varias entidades globales y varias entidades aisladas por usuario:
 
 - Globales: `Area`, `DatFormatConfig`, `PlantillaPonderacion`.
-- Por usuario: `Candidato`, `IdentifierSource`, `IdentifierRow`, `ResponseSource`, `ResponseRow`, `AnswerKeySource`, `AnswerKeyRow`, `ProgramaVacante`, `CalificationConfig`, `DniCorrection`, `ProcesoCalificacion`, `VerificadorSesion`.
+- Por usuario: `Candidato`, `IdentifierSource`, `IdentifierRow`, `ResponseSource`, `ResponseRow`, `AnswerKeySource`, `AnswerKeyRow`, `ProgramaVacante`, `CalificationConfig`, `DniCorrection`, `QuestionException`, `ProcesoCalificacion`, `VerificadorSesion`.
 
 Decision vigente: el proceso de calificacion es la unidad operativa principal. No existe entidad fuerte de convocatoria. Si el negocio necesita convocatorias completamente independientes, debe reintroducirse como rediseño explicito.
 
@@ -32,6 +32,16 @@ Decision vigente: el proceso de calificacion es la unidad operativa principal. N
 - Valida contra los datos del propio usuario: la hoja existe y no tiene alumno en el padron, el DNI corregido esta en el padron y no tiene hoja propia, y no esta asignado a otra hoja.
 - Deshacer revoca (`revoked_at`) en lugar de borrar, para conservar la auditoria. Hay restricciones unicas solo entre correcciones activas.
 - Backup: el export incluye `dniCorrections` (solo las activas). La restauracion las reemplaza junto con el resto de los datos; un backup anterior sin esa clave deja al usuario sin correcciones. Se rechazan formatos invalidos y repetidos sin tocar nada.
+
+## Excepciones De Preguntas
+
+`QuestionException` (`/api/excepciones-pregunta/`, por usuario) registra una decision de la comision sobre una pregunta de una clave: anulada dando el punto a todos (`ANULADA_OTORGAR`), anulada sin contar (`ANULADA_EXCLUIR`) o varias respuestas validas (`CLAVE_MULTIPLE`).
+
+- Se liga a una clave por area y tipo; el servidor deriva `key_sha256` (SHA-256 de la clave en mayusculas) de la clave cargada. Si la clave cambia, la excepcion deja de aplicarse en el calculo.
+- Valida: la clave existe y es unica, la pregunta esta dentro de la clave, el motivo es obligatorio, las letras validas son A-E, y no hay otra excepcion activa para la misma pregunta de la misma clave.
+- Deshacer revoca (`revoked_at`) en lugar de borrar.
+- El resultado guarda el resumen de excepciones del calculo (`AreaCalificacion.question_exceptions`) y las aplicadas a cada hoja (`ResultadoCandidato.exceptions_applied`), tambien en el backup.
+- Backup: el export incluye `questionExceptions` (solo activas); la restauracion las reemplaza y rechaza formatos invalidos o repetidos sin tocar nada.
 
 ## Seguridad Y Permisos
 

@@ -14,6 +14,7 @@ import { calculateAreaResults } from '@/domain/calification/calculateResults'
 import { buildCalificationPreflight } from '@/domain/calification/preflight'
 import { validateCalificationResult } from '@/domain/calification/validateResults'
 import { buildProvisionalPreview } from '@/domain/calification/provisionalMatches'
+import { classifyQuestionExceptions, keyFingerprint } from '@/domain/calification/questionExceptions'
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
@@ -145,7 +146,7 @@ export function useCalification(
   }
 
   async function initializeCalificationConfig() {
-    await loadDniCorrections()
+    await Promise.all([loadDniCorrections(), loadQuestionExceptions()])
     calificationConfigApiLoading.value = true
     try {
       const res = await apiFetch('/calification-configs/')
@@ -299,6 +300,9 @@ export function useCalification(
     return Array.from(set).sort()
   })
 
+  // Excepciones de pregunta activas (se cargan de la API; ver más abajo sus acciones)
+  const questionExceptions = ref([])
+
   // ── Pre-vuelo ─────────────────────────────────────────────────────────────
   const preflightCheck = computed(() => buildCalificationPreflight({
     area: calificationArea.value,
@@ -309,6 +313,8 @@ export function useCalification(
     answerKeyRows: answerKeyRows.value,
     responsesByDni: responsesByDni.value,
     areaList: effectiveAreaNames.value,
+    questionExceptions: questionExceptions.value,
+    answersLength: effectiveAnswersLength.value,
   }))
 
   function buildPreflightForArea(area) {
@@ -321,6 +327,8 @@ export function useCalification(
       answerKeyRows: answerKeyRows.value,
       responsesByDni: responsesByDni.value,
       areaList: effectiveAreaNames.value,
+      questionExceptions: questionExceptions.value,
+      answersLength: effectiveAnswersLength.value,
     })
   }
 
@@ -514,6 +522,7 @@ export function useCalification(
       areaList: effectiveAreaNames.value,
       vacantesPrograma: vacantesPrograma?.value,
       dniCorrections: confirmedCorrectionsForCalc(),
+      questionExceptions: questionExceptions.value,
     })
   }
 
@@ -542,6 +551,83 @@ export function useCalification(
     } catch {
       return 'No se pudo completar la acción.'
     }
+  }
+
+  // ── Excepciones de pregunta ──────────────────────────────────────────────────
+  async function loadQuestionExceptions() {
+    try {
+      const res = await apiFetch('/excepciones-pregunta/')
+      if (res.ok) questionExceptions.value = await res.json()
+    } catch (error) {
+      console.warn('[calification] No se pudieron cargar las excepciones de pregunta:', error)
+    }
+  }
+
+  /** Cada excepción con su estado respecto de las claves cargadas (aplicada, desactualizada...). */
+  const questionExceptionStatuses = computed(() => classifyQuestionExceptions({
+    exceptions: questionExceptions.value,
+    keyRows: answerKeyRows.value,
+    answersLength: effectiveAnswersLength.value,
+    areaList: effectiveAreaNames.value,
+  }))
+
+  /** Claves cargadas sobre las que se puede registrar una excepción. */
+  const answerKeyOptions = computed(() => {
+    const seen = new Map()
+    answerKeyRows.value.forEach((row) => {
+      const area = String(row.area ?? '').trim()
+      const tipo = String(row.tipo ?? '').trim().toUpperCase().slice(0, 1)
+      const id = `${area}|${tipo}`
+      if (seen.has(id)) return
+      const label = area ? `${area}${tipo ? ` · Tipo ${tipo}` : ''}` : `Clave general${tipo ? ` · Tipo ${tipo}` : ''}`
+      seen.set(id, { id, area, tipo, label, answers: row.answers, length: String(row.answers ?? '').length })
+    })
+    return [...seen.values()]
+  })
+
+  /** Cuántos postulantes marcó cada opción en una pregunta de una clave (entre los ya calificados). */
+  function answerDistribution(keyOption, questionNumber) {
+    const empty = { A: 0, B: 0, C: 0, D: 0, E: 0, blank: 0, multiple: 0, total: 0, key: '' }
+    if (!keyOption || !(questionNumber >= 1)) return empty
+    const fingerprint = keyFingerprint(keyOption.answers)
+    const result = { ...empty, key: String(keyOption.answers ?? '').toUpperCase()[questionNumber - 1] || '' }
+    calificationResults.value.forEach((row) => {
+      if (keyFingerprint(row.correctAnswersRaw) !== fingerprint) return
+      const mark = String(row.answersRaw ?? '').toUpperCase()[questionNumber - 1] || ' '
+      result.total += 1
+      if (/^[A-E]$/.test(mark)) result[mark] += 1
+      else if (mark === '*') result.multiple += 1
+      else result.blank += 1
+    })
+    return result
+  }
+
+  /** Registra una excepción y recalcula el ranking con ella. */
+  function addQuestionException(payload) {
+    return syncCorrectionsIntoResults(async () => {
+      try {
+        const res = await apiFetch('/excepciones-pregunta/', { method: 'POST', body: JSON.stringify(payload) })
+        if (!res.ok) return { ok: false, error: await readApiError(res) }
+        await loadQuestionExceptions()
+        return { ok: true }
+      } catch {
+        return { ok: false, error: 'No se pudo conectar con el servidor.' }
+      }
+    })
+  }
+
+  /** Deshace una excepción (queda registrada como revocada) y recalcula el ranking sin ella. */
+  function revokeQuestionException(id) {
+    return syncCorrectionsIntoResults(async () => {
+      try {
+        const res = await apiFetch(`/excepciones-pregunta/${id}/`, { method: 'DELETE' })
+        if (!res.ok) return { ok: false, error: await readApiError(res) }
+        await loadQuestionExceptions()
+        return { ok: true }
+      } catch {
+        return { ok: false, error: 'No se pudo conectar con el servidor.' }
+      }
+    })
   }
 
   function confirmedCorrectionsForCalc() {
@@ -915,6 +1001,13 @@ export function useCalification(
     runCalification,
     runAllAreas,
     previewProvisionalMatches,
+    questionExceptions,
+    questionExceptionStatuses,
+    answerKeyOptions,
+    answerDistribution,
+    loadQuestionExceptions,
+    addQuestionException,
+    revokeQuestionException,
     dniCorrections,
     loadDniCorrections,
     confirmDniCorrection,

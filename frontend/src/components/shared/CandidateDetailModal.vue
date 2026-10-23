@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { buildQuestionPlan } from '@/utils/helpers'
+import { EXCEPTION_TYPES, scoreAnswerSheet } from '@/domain/calification/scoreAnswerSheet'
 import { useFocusTrap } from '@/composables/useFocusTrap'
 import { loadPdfExportDeps } from '@/utils/exportLoaders'
 
@@ -22,49 +23,42 @@ const questionPlan = computed(() =>
 )
 
 // ── Detalle pregunta × pregunta ───────────────────────────────────────────────
+// El puntaje lo calcula la misma función del dominio que el ranking, con las excepciones que
+// se aplicaron a esta hoja: el detalle no puede diferir de lo que se calificó.
+const scored = computed(() => scoreAnswerSheet({
+  answersRaw: props.candidate.answersRaw,
+  correctAnswersRaw: props.candidate.correctAnswersRaw,
+  plan: questionPlan.value,
+  correctValue: Number(props.summary?.correctValue ?? 10),
+  incorrectValue: Number(props.summary?.incorrectValue ?? 0),
+  blankValue: Number(props.summary?.blankValue ?? 2),
+  exceptions: props.candidate.exceptionsApplied || [],
+}))
+
+// Para estilos: una pregunta anulada con punto se ve como acierto; una excluida, como neutra.
+const UI_STATUS = { awarded: 'correct', excluded: 'blank' }
+
+function keyLabel(detail) {
+  if (detail.exception === EXCEPTION_TYPES.MULTIPLE_KEY) return [...detail.validAnswers].join('/')
+  if (detail.exception) return 'ANUL.'
+  return /^[A-E]$/.test(detail.correctAnswer) ? detail.correctAnswer : '?'
+}
+
 const rows = computed(() => {
-  const plan = questionPlan.value
-  const candidateAnswers = (props.candidate.answersRaw || '').toUpperCase()
-  const correctAnswers   = (props.candidate.correctAnswersRaw || '').toUpperCase()
-  const correctVal   = Number(props.summary?.correctValue ?? 10)
-  const incorrectVal = Number(props.summary?.incorrectValue ?? 0)
-  const blankVal     = Number(props.summary?.blankValue ?? 2)
-
   let acum = 0
-  return plan.map((item, i) => {
-    const marked  = candidateAnswers[i] || ' '
-    const correct = correctAnswers[i]   || ' '
-    const weight  = Number(item.weight) || 0
-
-    const isCorrectKeyValid  = /^[A-E]$/.test(correct)
-    const isMarkedValid      = /^[A-E]$/.test(marked)
-    const isMultipleMark     = marked === '*'
-
-    let status, pts
-    if (isCorrectKeyValid && isMarkedValid && marked === correct) {
-      status = 'correct'
-      pts    = Math.round(correctVal * weight * 100) / 100
-    } else if (isMarkedValid) {
-      status = 'incorrect'
-      pts    = Math.round(incorrectVal * weight * 100) / 100
-    } else if (isMultipleMark) {
-      status = 'multiple'
-      pts    = 0
-    } else {
-      status = 'blank'
-      pts    = Math.round(blankVal * weight * 100) / 100
-    }
-
-    acum = Math.round((acum + pts) * 100) / 100
-
+  return scored.value.questionDetails.map((detail) => {
+    acum = Math.round((acum + detail.score) * 1000) / 1000
+    const marked = detail.answer
     return {
-      n:       i + 1,
-      subject: item.subject || '',
-      marked:  isMarkedValid || isMultipleMark ? marked : '—',
-      correct: isCorrectKeyValid ? correct : '?',
-      weight,
-      status,
-      pts,
+      n: detail.number,
+      subject: detail.subject,
+      marked: marked ? marked : '—',
+      correct: keyLabel(detail),
+      weight: detail.weight,
+      status: detail.status,
+      uiStatus: UI_STATUS[detail.status] || detail.status,
+      exception: detail.exception,
+      pts: detail.score,
       acum,
     }
   })
@@ -72,14 +66,14 @@ const rows = computed(() => {
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
 const stats = computed(() => {
-  let correctCount = 0, incorrectCount = 0, blankCount = 0, multipleCount = 0
-  rows.value.forEach(r => {
-    if (r.status === 'correct')   correctCount++
-    else if (r.status === 'incorrect') incorrectCount++
-    else if (r.status === 'multiple') multipleCount++
-    else blankCount++
-  })
-  return { correctCount, incorrectCount, blankCount, multipleCount }
+  const { correct, incorrect, multiple, blank, awarded, excluded } = scored.value.counts
+  return {
+    correctCount: correct,
+    incorrectCount: incorrect,
+    multipleCount: multiple,
+    blankCount: blank,
+    annulledCount: awarded + excluded,
+  }
 })
 
 // ── Fecha/hora de consulta ────────────────────────────────────────────────────
@@ -151,7 +145,7 @@ async function _loadLogo() {
 async function exportPdf() {
   const c   = props.candidate
   const s   = props.summary
-  const { correctCount, incorrectCount, blankCount, multipleCount } = stats.value
+  const { correctCount, incorrectCount, blankCount, multipleCount, annulledCount } = stats.value
   const { jsPDF, autoTable } = await loadPdfExportDeps()
   const logoBase64 = await _loadLogo()
 
@@ -299,7 +293,7 @@ async function exportPdf() {
     lx += doc.getTextWidth(val) + 7
   })
   font('normal', 6.2); setT(MUTED)
-  doc.text(`${correctCount}C  ${incorrectCount}I  ${multipleCount}M  ${blankCount}B`, W - M - 3, y + 4.6, { align: 'right' })
+  doc.text(`${correctCount}C  ${incorrectCount}I  ${multipleCount}M  ${blankCount}B${annulledCount ? `  ${annulledCount}A` : ''}`, W - M - 3, y + 4.6, { align: 'right' })
 
   y += 10
 
@@ -332,15 +326,15 @@ async function exportPdf() {
       if (data.row.index % 2 === 1) data.cell.styles.fillColor = ZEBRA
 
       // Colores semánticos (sobrescriben zebra)
-      if (row.status === 'correct')   data.cell.styles.fillColor = G_OK_BG
-      if (row.status === 'incorrect' || row.status === 'multiple') data.cell.styles.fillColor = R_BAD_BG
+      if (row.uiStatus === 'correct')   data.cell.styles.fillColor = G_OK_BG
+      if (row.uiStatus === 'incorrect' || row.uiStatus === 'multiple') data.cell.styles.fillColor = R_BAD_BG
 
       // Columna Marc.
       if (data.column.index === 2) {
         data.cell.styles.fontStyle = 'bold'
-        if (row.status === 'correct')   data.cell.styles.textColor = G_OK
-        if (row.status === 'incorrect' || row.status === 'multiple') data.cell.styles.textColor = R_BAD
-        if (row.status === 'blank')     data.cell.styles.textColor = [148, 163, 184]
+        if (row.uiStatus === 'correct')   data.cell.styles.textColor = G_OK
+        if (row.uiStatus === 'incorrect' || row.uiStatus === 'multiple') data.cell.styles.textColor = R_BAD
+        if (row.uiStatus === 'blank')     data.cell.styles.textColor = [148, 163, 184]
       }
       // Columna Corr. — eléctrico
       if (data.column.index === 3) {
@@ -349,7 +343,7 @@ async function exportPdf() {
       }
       // Columna Pts
       if (data.column.index === 5) {
-        data.cell.styles.textColor = row.status === 'correct' ? G_OK : [148, 163, 184]
+        data.cell.styles.textColor = row.uiStatus === 'correct' ? G_OK : [148, 163, 184]
       }
       // Última celda Acum. — tint eléctrico
       if (isLastTable && data.column.index === 6 && data.row.index === halfRows.length - 1) {
@@ -364,10 +358,10 @@ async function exportPdf() {
     return halfRows.map(row => [
       row.n,
       abbrevCurso(row.subject),
-      row.status === 'blank' ? '-' : row.marked,
+      row.uiStatus === 'blank' ? '-' : row.marked,
       row.correct,
       `x${Number(row.weight).toFixed(3)}`,
-      row.status === 'incorrect' || row.status === 'multiple' ? '0.000' : row.pts.toFixed(3),
+      row.pts.toFixed(3),
       row.acum.toFixed(3),
     ])
   }
@@ -536,6 +530,11 @@ async function exportPdf() {
             <span class="cdm-stat__n">{{ stats.blankCount }}</span>
             <span class="cdm-stat__lbl">En blanco</span>
           </div>
+          <div v-if="stats.annulledCount" class="cdm-stat cdm-stat--blk" title="Preguntas anuladas por la comisión">
+            <span class="cdm-stat__dot"></span>
+            <span class="cdm-stat__n">{{ stats.annulledCount }}</span>
+            <span class="cdm-stat__lbl">Anuladas</span>
+          </div>
           <div class="cdm-stat">
             <span class="cdm-stat__n" style="color:#1e3a8a">{{ candidate.score.toFixed(3) }}</span>
             <span class="cdm-stat__lbl">pts total</span>
@@ -549,14 +548,14 @@ async function exportPdf() {
             :key="row.n"
             class="ans-bubble"
             :class="{
-              'ans-bubble--ok':  row.status === 'correct',
-              'ans-bubble--bad': row.status === 'incorrect' || row.status === 'multiple',
-              'ans-bubble--blk': row.status === 'blank',
+              'ans-bubble--ok':  row.uiStatus === 'correct',
+              'ans-bubble--bad': row.uiStatus === 'incorrect' || row.uiStatus === 'multiple',
+              'ans-bubble--blk': row.uiStatus === 'blank',
             }"
             :title="`#${row.n} · Marc: ${row.marked} · Corr: ${row.correct}`"
           >
             <span class="ans-bubble__n">{{ row.n }}</span>
-            <span class="ans-bubble__letter">{{ row.status === 'blank' ? '·' : row.marked }}</span>
+            <span class="ans-bubble__letter">{{ row.uiStatus === 'blank' ? '·' : row.marked }}</span>
           </span>
         </div>
 
@@ -579,9 +578,9 @@ async function exportPdf() {
                 v-for="row in rows"
                 :key="row.n"
                 :class="{
-                  'row-ok':  row.status === 'correct',
-                  'row-bad': row.status === 'incorrect' || row.status === 'multiple',
-                  'row-blk': row.status === 'blank',
+                  'row-ok':  row.uiStatus === 'correct',
+                  'row-bad': row.uiStatus === 'incorrect' || row.uiStatus === 'multiple',
+                  'row-blk': row.uiStatus === 'blank',
                 }"
               >
                 <td class="td-num">{{ row.n }}</td>
@@ -595,9 +594,9 @@ async function exportPdf() {
                   <span
                     class="ans"
                     :class="{
-                      'ans-ok':  row.status === 'correct',
-                      'ans-bad': row.status === 'incorrect' || row.status === 'multiple',
-                      'ans-blk': row.status === 'blank',
+                      'ans-ok':  row.uiStatus === 'correct',
+                      'ans-bad': row.uiStatus === 'incorrect' || row.uiStatus === 'multiple',
+                      'ans-blk': row.uiStatus === 'blank',
                     }"
                   >{{ row.marked }}</span>
                 </td>
@@ -611,11 +610,11 @@ async function exportPdf() {
                   <span
                     class="pts"
                     :class="{
-                      'pts-ok':   row.status === 'correct',
-                      'pts-blk':  row.status === 'blank',
-                      'pts-zero': row.status === 'incorrect' || row.status === 'multiple',
+                      'pts-ok':   row.uiStatus === 'correct',
+                      'pts-blk':  row.uiStatus === 'blank',
+                      'pts-zero': row.uiStatus === 'incorrect' || row.uiStatus === 'multiple',
                     }"
-                  >{{ row.status === 'incorrect' || row.status === 'multiple' ? '0.000' : '+' + row.pts.toFixed(3) }}</span>
+                  >{{ (row.pts > 0 ? '+' : '') + row.pts.toFixed(3) }}</span>
                 </td>
                 <td>
                   <span class="acum" :class="{ 'acum-final': row.n === rows.length }">

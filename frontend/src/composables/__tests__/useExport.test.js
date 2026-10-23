@@ -276,3 +276,84 @@ describe('useExport: huellas SHA-256 en el resumen', () => {
   })
 })
 
+describe('useExport: excepciones de pregunta', () => {
+  const KEY = 'ABCDE'.repeat(12)
+  const row = (overrides = {}) => ({
+    position: 1, dni: '12345678', paterno: 'P', materno: 'M', nombres: 'N', area: 'General', programa: '',
+    tipo: 'P', aula: '101', litho: '000001', score: 600, answersRaw: KEY, correctAnswersRaw: KEY, ...overrides,
+  })
+  const options = (summary = {}) => ({
+    processType: 'simulacro', area: 'General',
+    areaSummary: { timestamp: '2026-10-22T12:00:00.000Z', plantillaName: 'G', correctValue: 10, incorrectValue: 0, blankValue: 2, answersLength: 60, totalWeight: 60, totalCandidates: 1, ...summary },
+    areaStats: { max: 600, min: 600, avg: 600 },
+  })
+  const applied = (type = 'ANULADA_OTORGAR', questionNumber = 5, validAnswers = '') => ({ questionNumber, type, validAnswers })
+
+  it('la nota de la hoja nombra las preguntas anuladas y las de varias respuestas', async () => {
+    await useExport().exportScoresToExcel([
+      row({ exceptionsApplied: [applied('ANULADA_OTORGAR', 5), applied('ANULADA_EXCLUIR', 9), applied('CLAVE_MULTIPLE', 12, 'BD')] }),
+    ], 'Simulacro', options())
+
+    const sheet = workbookInstances[0].sheets.find((s) => s.name === 'Resultados INGENIERÍAS' || s.name.startsWith('Resultados'))
+    const header = sheet.rows.find((r) => r.values.includes('Múltiples')).values
+    const data = sheet.rows.find((r) => r.values.includes('12345678')).values
+
+    expect(header.at(-1)).toBe('Observación')
+    expect(data.at(-1)).toBe('Preguntas anuladas: 5, 9 · Varias respuestas válidas en: 12')
+  })
+
+  it('las columnas de correctas e incorrectas no cuentan las preguntas anuladas', async () => {
+    // Se deja en blanco la pregunta 5, anulada: no es un blanco ni un acierto.
+    await useExport().exportScoresToExcel([
+      row({ answersRaw: KEY.slice(0, 4) + ' ' + KEY.slice(5), exceptionsApplied: [applied('ANULADA_OTORGAR', 5)] }),
+    ], 'Simulacro', options())
+
+    const sheet = workbookInstances[0].sheets.find((s) => s.name.startsWith('Resultados'))
+    const header = sheet.rows.find((r) => r.values.includes('Múltiples')).values
+    const data = sheet.rows.find((r) => r.values.includes('12345678')).values
+    const col = (name) => data[header.indexOf(name)]
+
+    expect(col('Correctas')).toBe(59)
+    expect(col('En blanco')).toBe(0)
+    expect(col('Incorrectas')).toBe(0)
+  })
+
+  it('una letra de la clave aceptada por una excepción cuenta como correcta', async () => {
+    await useExport().exportScoresToExcel([
+      row({ answersRaw: KEY.slice(0, 4) + 'B' + KEY.slice(5), exceptionsApplied: [applied('CLAVE_MULTIPLE', 5, 'BE')] }),
+    ], 'Simulacro', options())
+
+    const sheet = workbookInstances[0].sheets.find((s) => s.name.startsWith('Resultados'))
+    const header = sheet.rows.find((r) => r.values.includes('Múltiples')).values
+    const data = sheet.rows.find((r) => r.values.includes('12345678')).values
+
+    expect(data[header.indexOf('Correctas')]).toBe(60)
+  })
+
+  it('una hoja sin excepciones ni correcciones no agrega la columna de observación', async () => {
+    await useExport().exportScoresToExcel([row()], 'Simulacro', options())
+
+    const sheet = workbookInstances[0].sheets.find((s) => s.name.startsWith('Resultados'))
+    expect(sheet.rows.find((r) => r.values.includes('Múltiples')).values).not.toContain('Observación')
+  })
+
+  it('agrega una hoja con las excepciones: qué se decidió, por qué, con qué documento y si se aplicó', async () => {
+    await useExport().exportScoresToExcel([row()], 'Simulacro', options({
+      questionExceptions: [
+        { area: '', tipo: 'P', questionNumber: 5, type: 'ANULADA_OTORGAR', validAnswers: '', reason: 'Mal formulada', documentRef: 'Acta 3', status: 'applied' },
+        { area: 'INGENIERÍAS', tipo: 'Q', questionNumber: 9, type: 'CLAVE_MULTIPLE', validAnswers: 'BD', reason: 'Dos válidas', documentRef: '', status: 'outdated' },
+      ],
+    }))
+
+    const sheet = workbookInstances[0].sheets.find((s) => s.name === 'Excepciones de preguntas')
+    expect(sheet).toBeTruthy()
+    expect(sheet.rows[1].values).toEqual(['General', 'P', 5, 'Anulada: el punto es para todos', '', 'Mal formulada', 'Acta 3', 'Aplicada'])
+    expect(sheet.rows[2].values).toEqual(['INGENIERÍAS', 'Q', 9, 'Varias respuestas válidas', 'B, D', 'Dos válidas', '', 'Sin efecto: la clave cambió'])
+  })
+
+  it('sin excepciones no agrega la hoja', async () => {
+    await useExport().exportScoresToExcel([row()], 'Simulacro', options())
+    expect(workbookInstances[0].sheets.map((s) => s.name)).not.toContain('Excepciones de preguntas')
+  })
+})
+

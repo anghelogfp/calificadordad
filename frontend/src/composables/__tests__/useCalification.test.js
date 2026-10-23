@@ -4,6 +4,7 @@ import { useCalification } from '../useCalification'
 import { buildAreaTipoKey, normalizeArea, stripDigits } from '@/utils/helpers'
 import { DEFAULT_DAT_FORMAT } from '@/constants'
 import { apiFetch } from '@/utils/apiFetch'
+import { keyFingerprint } from '@/domain/calification/questionExceptions'
 
 const validateCalificationResultMock = vi.hoisted(() => vi.fn())
 
@@ -619,6 +620,119 @@ describe('useCalification', () => {
 
       expect(calification.calificationResults.value.map((r) => r.dni)).toEqual(['11111111'])
       expect(calification.calificationSummary.value).toMatchObject({ dniCorrectionsApplied: 0, sheetsWithoutCandidate: 1 })
+    })
+  })
+
+  describe('excepciones de pregunta', () => {
+    const KEY = 'ABCDE'.repeat(12)
+    const jsonResponse = (body, ok = true, status = 200) => ({ ok, status, json: async () => body })
+    const stored = (overrides = {}) => ({
+      id: 1, area: '', tipo: '', questionNumber: 5, type: 'ANULADA_OTORGAR', validAnswers: '',
+      reason: 'Mal formulada', documentRef: 'Acta 3', keySha256: keyFingerprint(KEY), ...overrides,
+    })
+
+    function calificado() {
+      const { calification } = makeSubject({
+        archiveRows: [{ dni: '11111111', paterno: 'A', materno: '', nombres: 'Uno' }],
+        // Responde bien todo salvo la pregunta 5, que deja en blanco.
+        responsesRows: [{ dni: '11111111', tipo: 'P', answers: KEY.slice(0, 4) + ' ' + KEY.slice(5), aula: '1', litho: '100001' }],
+        answerKeyRows: [{ area: '', tipo: '', answers: KEY }],
+        plantillas: [makePlantilla({ id: 'tpl-general', area: '', name: 'General' })],
+      })
+      calification.startNewProcess({ name: 'Simulacro', type: 'simulacro' })
+      calification.calificationPlantillaId.value = 'tpl-general'
+      calification.calificationCorrectValue.value = 10
+      calification.calificationIncorrectValue.value = 0
+      calification.calificationBlankValue.value = 2
+      calification.runCalification()
+      return calification
+    }
+
+    it('sin excepciones la pregunta en blanco vale el blanco', () => {
+      expect(calificado().calificationResults.value[0].score).toBe(592)
+    })
+
+    it('al registrar una excepción el ranking se recalcula con ella', async () => {
+      const calification = calificado()
+      apiFetch
+        .mockResolvedValueOnce(jsonResponse(stored(), true, 201))
+        .mockResolvedValueOnce(jsonResponse([stored()]))
+
+      const result = await calification.addQuestionException({ area: '', tipo: '', questionNumber: 5, type: 'ANULADA_OTORGAR', reason: 'Mal formulada' })
+
+      expect(result).toEqual({ ok: true })
+      expect(calification.calificationResults.value[0]).toMatchObject({ score: 600, exceptionsApplied: [{ questionNumber: 5, type: 'ANULADA_OTORGAR', validAnswers: '' }] })
+      expect(calification.calificationSummary.value.questionExceptions[0]).toMatchObject({ questionNumber: 5, status: 'applied' })
+    })
+
+    it('al deshacerla vuelve el puntaje anterior', async () => {
+      const calification = calificado()
+      apiFetch.mockResolvedValueOnce(jsonResponse(stored(), true, 201)).mockResolvedValueOnce(jsonResponse([stored()]))
+      await calification.addQuestionException({ area: '', tipo: '', questionNumber: 5, type: 'ANULADA_OTORGAR', reason: 'x' })
+
+      apiFetch.mockResolvedValueOnce({ ok: true, status: 204 }).mockResolvedValueOnce(jsonResponse([]))
+      const result = await calification.revokeQuestionException(1)
+
+      expect(result).toEqual({ ok: true })
+      expect(calification.calificationResults.value[0].score).toBe(592)
+      expect(calification.calificationSummary.value.questionExceptions).toEqual([])
+    })
+
+    it('si el servidor rechaza la excepción, el ranking no cambia y se devuelve el motivo', async () => {
+      const calification = calificado()
+      apiFetch.mockResolvedValueOnce(jsonResponse({ questionNumber: ['La clave tiene 60 preguntas.'] }, false, 400))
+
+      const result = await calification.addQuestionException({ area: '', tipo: '', questionNumber: 99, type: 'ANULADA_OTORGAR', reason: 'x' })
+
+      expect(result).toEqual({ ok: false, error: 'La clave tiene 60 preguntas.' })
+      expect(calification.calificationResults.value[0].score).toBe(592)
+    })
+
+    it('una calificación nueva ya incluye las excepciones cargadas', async () => {
+      const calification = calificado()
+      apiFetch.mockResolvedValueOnce(jsonResponse([stored()]))
+      await calification.loadQuestionExceptions()
+
+      calification.runCalification()
+
+      expect(calification.calificationResults.value[0].score).toBe(600)
+    })
+
+    it('una excepción cuya clave cambió no se aplica y se informa como desactualizada', async () => {
+      const calification = calificado()
+      apiFetch.mockResolvedValueOnce(jsonResponse([stored({ keySha256: keyFingerprint('E' + KEY.slice(1)) })]))
+      await calification.loadQuestionExceptions()
+
+      calification.runCalification()
+
+      expect(calification.calificationResults.value[0].score).toBe(592)
+      expect(calification.questionExceptionStatuses.value[0].status).toBe('outdated')
+      expect(calification.preflightCheck.value.items.find((i) => i.key === 'staleQuestionExceptions')).toMatchObject({ status: 'warn' })
+    })
+
+    it('una excepción inválida bloquea el cálculo', async () => {
+      const calification = calificado()
+      apiFetch.mockResolvedValueOnce(jsonResponse([stored({ questionNumber: 99 })]))
+      await calification.loadQuestionExceptions()
+
+      expect(calification.preflightCheck.value.hasBlockers).toBe(true)
+      calification.runCalification()
+      expect(calification.calificationError.value).toMatch(/99/)
+    })
+
+    it('ofrece las claves cargadas para registrar excepciones', () => {
+      const calification = calificado()
+      expect(calification.answerKeyOptions.value).toEqual([
+        expect.objectContaining({ id: '|', label: 'Clave general', length: 60 }),
+      ])
+    })
+
+    it('muestra cuántos postulantes marcó cada opción en una pregunta', () => {
+      const calification = calificado()
+      const option = calification.answerKeyOptions.value[0]
+
+      expect(calification.answerDistribution(option, 5)).toMatchObject({ blank: 1, total: 1, key: 'E', E: 0 })
+      expect(calification.answerDistribution(option, 1)).toMatchObject({ A: 1, total: 1, key: 'A' })
     })
   })
 })

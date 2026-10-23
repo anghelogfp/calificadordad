@@ -396,3 +396,50 @@ class DniCorrection(models.Model):
 
     def __str__(self):
         return f'{self.litho}: {self.original_dni or "?"} -> {self.corrected_dni}'
+
+
+class QuestionException(models.Model):
+    """Excepción de una pregunta (anulada o con varias respuestas válidas) de una clave.
+
+    Se liga al contenido de la clave sobre la que se decidió (`key_sha256`, calculado por el
+    servidor): si la clave cambia, la excepción deja de aplicarse. Deshacerla la revoca
+    (revoked_at) en lugar de borrarla, para conservar la auditoría.
+    """
+    ANULADA_OTORGAR = 'ANULADA_OTORGAR'
+    ANULADA_EXCLUIR = 'ANULADA_EXCLUIR'
+    CLAVE_MULTIPLE = 'CLAVE_MULTIPLE'
+    TYPE_CHOICES = [
+        (ANULADA_OTORGAR, 'Anulada: el punto es para todos'),
+        (ANULADA_EXCLUIR, 'Anulada: no cuenta para nadie'),
+        (CLAVE_MULTIPLE, 'Varias respuestas válidas'),
+    ]
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='question_exceptions',
+    )
+    area = models.CharField(max_length=100, blank=True, default='')
+    tipo = models.CharField(max_length=1, blank=True, default='')
+    question_number = models.PositiveSmallIntegerField()
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    valid_answers = models.CharField(max_length=5, blank=True, default='')
+    reason = models.CharField(max_length=300)
+    document_ref = models.CharField(max_length=200, blank=True, default='')
+    key_sha256 = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'excepciones_pregunta'
+        ordering = ['area', 'tipo', 'question_number']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['created_by', 'area', 'tipo', 'question_number'],
+                condition=models.Q(revoked_at__isnull=True),
+                name='uniq_active_question_exception_per_key_question',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.area or "General"}/{self.tipo or "-"} P{self.question_number}: {self.type}'

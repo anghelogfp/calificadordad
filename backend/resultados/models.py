@@ -121,6 +121,8 @@ class AreaCalificacion(models.Model):
     dni_corrections_applied = models.IntegerField(default=0)
     no_calificados = models.JSONField(default=list)
     # Huellas SHA-256: con qué configuración (claves, plantilla, valores, correcciones) y qué datos se calculó
+    # Excepciones de pregunta del cálculo (con su estado: aplicada, desactualizada...) para auditoría
+    question_exceptions = models.JSONField(default=list, blank=True)
     config_sha256 = models.CharField(max_length=64, blank=True, default='')
     data_sha256 = models.CharField(max_length=64, blank=True, default='')
     total_weight = models.DecimalField(max_digits=10, decimal_places=3, default=0)
@@ -166,6 +168,8 @@ class ResultadoCandidato(models.Model):
     # Hoja cuyo DNI se corrigió y confirmó; dni_original es el que traía la hoja
     dni_corregido = models.BooleanField(default=False)
     dni_original = models.CharField(max_length=20, blank=True, default='')
+    # Excepciones de pregunta que se aplicaron a esta hoja: [{questionNumber, type, validAnswers}]
+    exceptions_applied = models.JSONField(default=list, blank=True)
 
     class Meta:
         db_table = 'resultados_candidatos'

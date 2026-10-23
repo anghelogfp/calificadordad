@@ -1,4 +1,5 @@
 import { normalizeArea, normalizeAreaStrict, stripDigits } from '@/utils/helpers'
+import { classifyExceptionsInScope } from './questionExceptions'
 import {
   buildDniCounts,
   getCandidateDniIssue,
@@ -15,6 +16,8 @@ export function buildCalificationPreflight({
   answerKeyRows = [],
   responsesByDni = new Map(),
   areaList = [],
+  questionExceptions = [],
+  answersLength,
 } = {}) {
   const isRealProcess = processType === 'real'
   const isGeneralSimulacro = !isRealProcess && simulacroScope === 'general'
@@ -246,6 +249,46 @@ export function buildCalificationPreflight({
           : `${sinPrograma} postulante(s) sin programa quedarán como no calificados.`,
       })
     }
+  }
+
+  const exceptions = classifyExceptionsInScope({
+    exceptions: questionExceptions,
+    keyRows: answerKeyRows,
+    answersLength,
+    areaList,
+    calculationArea: normalizedArea,
+    generalSimulacro: isGeneralSimulacro,
+  })
+  const invalidExceptions = exceptions.filter((exception) => exception.status === 'invalid')
+  const staleExceptions = exceptions.filter((exception) => exception.status === 'outdated' || exception.status === 'orphan')
+  const appliedExceptions = exceptions.filter((exception) => exception.status === 'applied')
+
+  if (invalidExceptions.length > 0) {
+    items.push({
+      key: 'invalidQuestionExceptions',
+      label: 'Excepciones de preguntas inválidas',
+      value: invalidExceptions.length,
+      status: 'error',
+      detail: `Corrige o elimina antes de calcular: ${invalidExceptions.map((e) => `pregunta ${e.questionNumber} (${e.message})`).join('; ')}`,
+    })
+  }
+  if (staleExceptions.length > 0) {
+    items.push({
+      key: 'staleQuestionExceptions',
+      label: 'Excepciones de preguntas sin efecto',
+      value: staleExceptions.length,
+      status: 'warn',
+      detail: `${staleExceptions.length} excepción(es) no se aplicarán porque la clave cambió o ya no existe. Revísalas o elimínalas.`,
+    })
+  }
+  if (appliedExceptions.length > 0) {
+    items.push({
+      key: 'questionExceptions',
+      label: 'Excepciones de preguntas',
+      value: appliedExceptions.length,
+      status: 'ok',
+      detail: `Se aplicarán ${appliedExceptions.length} excepción(es) de pregunta a los puntajes.`,
+    })
   }
 
   const hasBlockers = effectiveCandidates.length === 0 || !hasAnswerKeys || items.some(i => i.status === 'error')

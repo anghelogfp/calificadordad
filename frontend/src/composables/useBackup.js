@@ -84,6 +84,7 @@ async function exportServerData() {
     programaVacantes: await readJson('/programa-vacantes/'),
     calificationConfigs: await readJson('/calification-configs/'),
     dniCorrections: await readJson('/correcciones-dni/'),
+    questionExceptions: await readJson('/excepciones-pregunta/'),
     datFormatConfig: await readJson('/dat-format-configs/'),
     plantillas: await readJson('/plantillas/'),
     procesos: await readProcesosFull(),

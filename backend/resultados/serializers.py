@@ -16,7 +16,7 @@ class ResultadoCandidatoSerializer(serializers.ModelSerializer):
             'position', 'position_in_programa', 'is_ingresante',
             'answers_raw', 'correct_answers_raw',
             'aula', 'tipo', 'litho', 'cor_id',
-            'dni_corregido', 'dni_original',
+            'dni_corregido', 'dni_original', 'exceptions_applied',
         ]
 
 
@@ -33,7 +33,7 @@ class AreaCalificacionSerializer(serializers.ModelSerializer):
             'duplicate_responses', 'invalid_candidates', 'missing_programs',
             'invalid_response_types', 'unlinked_responses',
             'sheets_without_candidate', 'dni_corrections_applied', 'no_calificados',
-            'config_sha256', 'data_sha256',
+            'question_exceptions', 'config_sha256', 'data_sha256',
             'total_weight', 'answers_length',
             'resultados',
         ]

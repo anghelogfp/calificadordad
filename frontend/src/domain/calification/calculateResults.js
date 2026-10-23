@@ -7,6 +7,12 @@ import {
 } from '@/utils/helpers'
 import { applyDniCorrections } from './dniCorrections'
 import { buildCalculationFingerprint } from './fingerprint'
+import { scoreAnswerSheet } from './scoreAnswerSheet'
+import {
+  classifyExceptionsInScope,
+  exceptionsForKeyRow,
+  toAppliedSummary,
+} from './questionExceptions'
 import {
   buildDniCounts,
   getCandidateDniIssue,
@@ -15,10 +21,6 @@ import {
   REAL_TEST_TYPES,
   GENERAL_SIMULACRO_AREA,
 } from '@/utils/calificationHelpers'
-
-function roundScore(value) {
-  return Math.round(value * 1000) / 1000
-}
 
 function compareByScoreAndName(a, b) {
   const scoreDiff = Number(b.score || 0) - Number(a.score || 0)
@@ -50,6 +52,7 @@ export function calculateAreaResults({
   areaList,
   vacantesPrograma = {},
   dniCorrections = [],
+  questionExceptions = [],
   timestamp = new Date().toISOString(),
 }) {
   // Las hojas tal como se cargaron: la huella de datos describe las entradas, no las correcciones.
@@ -113,6 +116,21 @@ export function calculateAreaResults({
 
   if (!candidates.length) {
     throw new Error('No hay postulantes registrados para el área seleccionada.')
+  }
+
+  // Excepciones de pregunta: solo las del alcance de este cálculo. Una excepción ambigua o mal
+  // formada detiene el cálculo en lugar de aplicarse a medias.
+  const classifiedExceptions = classifyExceptionsInScope({
+    exceptions: questionExceptions,
+    keyRows: answerKeyRows,
+    answersLength,
+    areaList,
+    calculationArea,
+    generalSimulacro,
+  })
+  const invalidException = classifiedExceptions.find((exception) => exception.status === 'invalid')
+  if (invalidException) {
+    throw new Error(`Excepción de la pregunta ${invalidException.questionNumber}: ${invalidException.message}`)
   }
 
   const processedResults = []
@@ -233,81 +251,18 @@ export function calculateAreaResults({
     }
 
     const { row: responseRow, answer: answerRow } = matchForArea
-    const answersRaw = (responseRow?.answers || '').toUpperCase()
-    const correctAnswersRaw = (answerRow?.answers || '').toUpperCase()
-    const originalAnswersLength = answersRaw.length
-    const assumedBlankCount = Math.max(0, plan.length - originalAnswersLength)
-    if (assumedBlankCount > 0) sheetsWithAssumedBlanks += 1
-    if (originalAnswersLength > plan.length) sheetsTruncated += 1
-    const answers = answersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
-    const correctAnswers = correctAnswersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
-
-    let total = 0
-    const questionDetails = []
-    const subjectBreakdownByName = new Map()
-
-    for (let index = 0; index < plan.length; index += 1) {
-      const planItem = plan[index] || {}
-      const subject = String(planItem.subject || 'Sin materia').trim() || 'Sin materia'
-      const weight = Number(planItem.weight) || 0
-
-      const responseChar = answers[index] || ' '
-      const correctChar = correctAnswers[index] || ' '
-      const isCorrectCharValid = /^[A-E]$/.test(correctChar)
-      const isResponseCharValid = /^[A-E]$/.test(responseChar)
-      const isMultipleMark = responseChar === '*'
-      const isAssumedFinalBlank = index >= originalAnswersLength
-
-      if (!isCorrectCharValid) {
-        throw new Error(`La clave oficial contiene una respuesta inválida en la pregunta ${index + 1}.`)
-      }
-
-      let contribution = 0
-      let status = 'blank'
-      if (isCorrectCharValid && isResponseCharValid && responseChar === correctChar) {
-        contribution = correctValue * weight
-        status = 'correct'
-      } else if (isResponseCharValid) {
-        contribution = incorrectValue * weight
-        status = 'incorrect'
-      } else if (isMultipleMark) {
-        contribution = 0
-        status = 'multiple'
-      } else {
-        contribution = blankValue * weight
-      }
-
-      total += contribution
-      const roundedContribution = roundScore(contribution)
-      questionDetails.push({
-        number: index + 1,
-        subject,
-        weight,
-        answer: responseChar.trim(),
-        blankSource: status === 'blank' ? (isAssumedFinalBlank ? 'assumed-final' : 'dat') : '',
-        correctAnswer: correctChar,
-        status,
-        score: roundedContribution,
-      })
-
-      if (!subjectBreakdownByName.has(subject)) {
-        subjectBreakdownByName.set(subject, {
-          subject,
-          questions: 0,
-          correct: 0,
-          incorrect: 0,
-          multiple: 0,
-          blank: 0,
-          score: 0,
-          totalWeight: 0,
-        })
-      }
-      const subjectBreakdown = subjectBreakdownByName.get(subject)
-      subjectBreakdown.questions += 1
-      subjectBreakdown[status] += 1
-      subjectBreakdown.score = roundScore(subjectBreakdown.score + contribution)
-      subjectBreakdown.totalWeight = roundScore(subjectBreakdown.totalWeight + weight)
-    }
+    const keyExceptions = exceptionsForKeyRow(classifiedExceptions, answerRow, areaList)
+    const scored = scoreAnswerSheet({
+      answersRaw: responseRow?.answers || '',
+      correctAnswersRaw: answerRow?.answers || '',
+      plan,
+      correctValue,
+      incorrectValue,
+      blankValue,
+      exceptions: keyExceptions,
+    })
+    if (scored.assumedBlankCount > 0) sheetsWithAssumedBlanks += 1
+    if (scored.originalAnswersLength > plan.length) sheetsTruncated += 1
 
     processedResults.push({
       id: `${stripDigits(candidate.dni)}-${calculationArea}`,
@@ -317,20 +272,22 @@ export function calculateAreaResults({
       nombres: candidate.nombres || '',
       area: calculationArea,
       programa: candidate.programa || '',
-      score: roundScore(total),
+      score: scored.total,
+      maxScore: scored.maxPossible,
       position: 0,
       positionInPrograma: 0,
       isIngresante: false,
-      questionDetails,
-      subjectBreakdown: [...subjectBreakdownByName.values()],
-      answersRaw: answers,
-      correctAnswersRaw: correctAnswers,
+      questionDetails: scored.questionDetails,
+      subjectBreakdown: scored.subjectBreakdown,
+      answersRaw: scored.answers,
+      correctAnswersRaw: scored.correctAnswers,
+      exceptionsApplied: toAppliedSummary(keyExceptions),
       aula: responseRow.aula || '',
       tipo: responseRow.tipo || '',
       litho: responseRow.litho || '',
       corId: responseRow.examCode || '',
-      answersReadLength: originalAnswersLength,
-      assumedBlankCount,
+      answersReadLength: scored.originalAnswersLength,
+      assumedBlankCount: scored.assumedBlankCount,
       dniCorregido: Boolean(responseRow.dniCorregido),
       dniOriginal: responseRow.dniOriginal || '',
     })
@@ -380,6 +337,7 @@ export function calculateAreaResults({
     plantilla,
     answerKeyRows: keysUsed,
     dniCorrections,
+    questionExceptions: classifiedExceptions.filter((exception) => exception.status === 'applied'),
     archiveRows,
     responsesRows: loadedResponsesRows,
   })
@@ -401,6 +359,18 @@ export function calculateAreaResults({
       dniCorrectionsApplied,
       sheetsWithAssumedBlanks,
       sheetsTruncated,
+      questionExceptions: classifiedExceptions.map((exception) => ({
+        area: exception.area ?? '',
+        tipo: exception.tipo ?? '',
+        questionNumber: Number(exception.questionNumber),
+        type: exception.type,
+        validAnswers: exception.validAnswers ?? '',
+        reason: exception.reason ?? '',
+        documentRef: exception.documentRef ?? '',
+        keySha256: exception.keySha256 ?? '',
+        status: exception.status,
+        message: exception.message,
+      })),
       ...fingerprint,
       noCalificados,
       totalWeight: Number(totalWeight.toFixed(3)),

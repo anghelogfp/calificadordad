@@ -687,6 +687,7 @@ watch(
             v-else-if="activeTab === 'verificador'"
             :ponderations="ponderations"
             :current-user="auth.user.value?.username ?? ''"
+            :question-exceptions="calification.questionExceptionStatuses.value"
           />
 
           <UsuariosView

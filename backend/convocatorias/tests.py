@@ -11,6 +11,7 @@ from .models import (
     DatFormatConfig,
     DniCorrection,
     IdentifierRow,
+    QuestionException,
     IdentifierSource,
     ProgramaVacante,
     ResponseRow,
@@ -677,4 +678,128 @@ class SourceFileHashTests(TestCase):
             '/api/identificadores/bulk_replace/', {'sources': [source], 'rows': [identifier_row_payload()]}, format='json',
         )
         self.assertEqual(response.status_code, 400)
+
+
+class QuestionExceptionTests(TestCase):
+    """Excepciones de pregunta: validadas contra las claves del usuario, ligadas a su contenido."""
+
+    URL = '/api/excepciones-pregunta/'
+    KEY = 'ABCDE' * 12
+
+    def setUp(self):
+        self.user = User.objects.create_user('exc-user', password='test-pass-123')
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        AnswerKeyRow.objects.create(created_by=self.user, client_id='k-general', area='', tipo='P', answers=self.KEY)
+        AnswerKeyRow.objects.create(created_by=self.user, client_id='k-ing-p', area='INGENIERÍAS', tipo='P', answers=self.KEY)
+        AnswerKeyRow.objects.create(created_by=self.user, client_id='k-ing-q', area='INGENIERÍAS', tipo='Q', answers='EDCBA' * 12)
+
+    def post(self, **overrides):
+        payload = {
+            'area': '', 'tipo': 'P', 'questionNumber': 5, 'type': 'ANULADA_OTORGAR',
+            'reason': 'Pregunta mal formulada', 'documentRef': 'Acta 3', **overrides,
+        }
+        return self.client.post(self.URL, payload, format='json')
+
+    def test_creates_an_exception_and_derives_the_key_hash_on_the_server(self):
+        import hashlib
+        response = self.post(keySha256='0' * 64)
+
+        self.assertEqual(response.status_code, 201)
+        body = response.json()
+        self.assertEqual(body['keySha256'], hashlib.sha256(self.KEY.encode()).hexdigest())
+        self.assertEqual((body['questionNumber'], body['type'], body['documentRef']), (5, 'ANULADA_OTORGAR', 'Acta 3'))
+
+    def test_the_hash_matches_the_frontend_test_vector(self):
+        """sha256('ABC') es el mismo valor que fija la prueba del frontend (keyFingerprint)."""
+        from convocatorias.serializers import key_fingerprint
+        self.assertEqual(key_fingerprint('abc'), 'b5d4045c3f466fa91fe2cc6abe79232a1a57cdf104f7a26e716e0a1e2789df78')
+
+    def test_each_key_has_its_own_exceptions(self):
+        self.assertEqual(self.post(area='INGENIERÍAS', tipo='P').status_code, 201)
+        self.assertEqual(self.post(area='INGENIERÍAS', tipo='Q').status_code, 201)
+        self.assertEqual(self.post(area='').status_code, 201)
+        hashes = {item['keySha256'] for item in self.client.get(self.URL).json()}
+        self.assertEqual(len(hashes), 2)  # P y general comparten contenido; Q es distinta
+
+    def test_the_type_of_letter_case_in_tipo_is_ignored(self):
+        self.assertEqual(self.post(tipo='p').status_code, 201)
+        self.assertEqual(QuestionException.objects.get().tipo, 'P')
+
+    def test_rejects_an_exception_for_a_key_that_does_not_exist(self):
+        for overrides in ({'area': 'SOCIALES'}, {'tipo': 'T'}):
+            response = self.post(**overrides)
+            self.assertEqual(response.status_code, 400, overrides)
+            self.assertIn('area', response.json())
+
+    def test_rejects_ambiguous_keys(self):
+        AnswerKeyRow.objects.create(created_by=self.user, client_id='k-dup', area='', tipo='P', answers='EDCBA' * 12)
+        response = self.post()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('más de una clave', response.json()['area'][0])
+
+    def test_rejects_a_question_beyond_the_key(self):
+        response = self.post(questionNumber=61)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('questionNumber', response.json())
+        self.assertEqual(self.post(questionNumber=0).status_code, 400)
+
+    def test_requires_a_reason(self):
+        for reason in ('', '   '):
+            response = self.post(reason=reason)
+            self.assertEqual(response.status_code, 400, repr(reason))
+            self.assertIn('reason', response.json())
+
+    def test_multiple_key_needs_valid_letters_and_normalizes_them(self):
+        self.assertEqual(self.post(type='CLAVE_MULTIPLE', validAnswers='').status_code, 400)
+        self.assertEqual(self.post(type='CLAVE_MULTIPLE', validAnswers='xyz').status_code, 400)
+
+        response = self.post(type='CLAVE_MULTIPLE', validAnswers='d, b b')
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()['validAnswers'], 'BD')
+
+    def test_other_types_ignore_valid_answers(self):
+        response = self.post(type='ANULADA_EXCLUIR', validAnswers='AB')
+        self.assertEqual(response.json()['validAnswers'], '')
+
+    def test_rejects_unknown_types(self):
+        self.assertEqual(self.post(type='OTRA').status_code, 400)
+
+    def test_rejects_a_second_exception_for_the_same_question_of_the_same_key(self):
+        self.assertEqual(self.post().status_code, 201)
+        response = self.post(type='ANULADA_EXCLUIR')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('ya tiene una excepción', response.json()['questionNumber'][0])
+
+    def test_undo_revokes_keeps_the_audit_record_and_frees_the_question(self):
+        created = self.post().json()
+
+        self.assertEqual(self.client.delete(f'{self.URL}{created["id"]}/').status_code, 204)
+
+        self.assertEqual(self.client.get(self.URL).json(), [])
+        record = QuestionException.objects.get(pk=created['id'])
+        self.assertIsNotNone(record.revoked_at)
+        self.assertEqual(self.post().status_code, 201)
+        self.assertEqual(QuestionException.objects.count(), 2)
+
+    def test_exceptions_are_isolated_per_user(self):
+        created = self.post().json()
+        other = User.objects.create_user('otro-exc', password='test-pass-123')
+        AnswerKeyRow.objects.create(created_by=other, client_id='k-otro', area='', tipo='P', answers=self.KEY)
+        other_client = APIClient()
+        other_client.force_authenticate(other)
+
+        self.assertEqual(other_client.get(self.URL).json(), [])
+        self.assertEqual(other_client.delete(f'{self.URL}{created["id"]}/').status_code, 404)
+        self.assertIsNone(QuestionException.objects.get(pk=created['id']).revoked_at)
+        # Cada usuario puede tener su propia excepción para su propia clave.
+        self.assertEqual(
+            other_client.post(self.URL, {'tipo': 'P', 'questionNumber': 5, 'type': 'ANULADA_OTORGAR', 'reason': 'x'}, format='json').status_code,
+            201,
+        )
+
+    def test_requires_authentication(self):
+        anonymous = APIClient()
+        self.assertEqual(anonymous.get(self.URL).status_code, 401)
+        self.assertEqual(anonymous.post(self.URL, {}, format='json').status_code, 401)
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { validateCalificationResult } from '../validateResults'
 import { calculateAreaResults } from '../calculateResults'
+import { keyFingerprint } from '../questionExceptions'
 
 function makeAnswers(char, length = 60) {
   return char.repeat(length)
@@ -263,7 +264,7 @@ describe('validateCalificationResult', () => {
 describe('recálculo independiente del puntaje', () => {
   const KEY = 'ABCDE'.repeat(12)
 
-  function engineResult(answers) {
+  function engineResult(answers, questionExceptions = []) {
     const sheet = { dni: '12345678', tipo: 'P', answers, litho: '100001' }
     return calculateAreaResults({
       area: 'General',
@@ -281,6 +282,7 @@ describe('recálculo independiente del puntaje', () => {
       answerKeyFallbackByArea: new Map(),
       areaList: ['Biomédicas', 'Sociales', 'Ingeniería'],
       vacantesPrograma: {},
+      questionExceptions,
     })
   }
 
@@ -325,5 +327,57 @@ describe('recálculo independiente del puntaje', () => {
     delete result.summary.correctValue
 
     expect(validateCalificationResult({ result }).errors.map((e) => e.code)).not.toContain('SCORE_RECOMPUTE_MISMATCH')
+  })
+
+  describe('con excepciones de pregunta', () => {
+    const exception = (overrides = {}) => ({
+      id: 1, area: '', tipo: 'P', questionNumber: 5, type: 'ANULADA_OTORGAR', validAnswers: '',
+      reason: 'Mal formulada', documentRef: '', keySha256: keyFingerprint(KEY), ...overrides,
+    })
+    const codes = (result) => validateCalificationResult({ result }).errors.map((e) => e.code)
+
+    it('un resultado con excepciones de los tres tipos pasa la auditoría', () => {
+      const result = engineResult(MIXED, [
+        exception(),
+        exception({ id: 2, questionNumber: 11, type: 'ANULADA_EXCLUIR' }),
+        exception({ id: 3, questionNumber: 30, type: 'CLAVE_MULTIPLE', validAnswers: 'AB' }),
+      ])
+      expect(validateCalificationResult({ result })).toMatchObject({ valid: true, errors: [] })
+    })
+
+    it('detecta si a una hoja se le quitó una excepción que sí estaba registrada', () => {
+      const result = engineResult(MIXED, [exception()])
+      result.results[0].exceptionsApplied = []
+
+      expect(codes(result)).toContain('EXCEPTION_NOT_APPLIED')
+    })
+
+    it('detecta una excepción aplicada que no está registrada en el resumen', () => {
+      const result = engineResult(MIXED, [exception()])
+      result.results[0].exceptionsApplied.push({ questionNumber: 9, type: 'ANULADA_OTORGAR', validAnswers: '' })
+
+      expect(codes(result)).toContain('EXCEPTION_NOT_REGISTERED')
+    })
+
+    it('detecta un puntaje que no refleja la excepción', () => {
+      const result = engineResult(' '.repeat(60), [exception()])
+      const row = result.results[0]
+      // Se anuló la pregunta 5, pero el puntaje quedó como si el blanco valiera su valor normal.
+      row.score -= 8
+
+      expect(codes(result)).toContain('SCORE_RECOMPUTE_MISMATCH')
+    })
+
+    it('detecta un máximo posible que no descuenta la pregunta excluida', () => {
+      const result = engineResult(MIXED, [exception({ type: 'ANULADA_EXCLUIR' })])
+      result.results[0].maxScore = 600
+
+      expect(codes(result)).toContain('MAX_SCORE_MISMATCH')
+    })
+
+    it('una excepción desactualizada no se exige ni se aplica', () => {
+      const result = engineResult(MIXED, [exception({ keySha256: keyFingerprint('E' + KEY.slice(1)) })])
+      expect(validateCalificationResult({ result })).toMatchObject({ valid: true, errors: [] })
+    })
   })
 })

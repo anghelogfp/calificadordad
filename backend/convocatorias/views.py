@@ -11,6 +11,7 @@ from .models import (
     Candidato,
     DatFormatConfig,
     DniCorrection,
+    QuestionException,
     AnswerKeyRow,
     AnswerKeySource,
     IdentifierRow,
@@ -25,6 +26,7 @@ from .serializers import (
     CandidatoSerializer,
     DatFormatConfigSerializer,
     DniCorrectionSerializer,
+    QuestionExceptionSerializer,
     AnswerKeyRowSerializer,
     AnswerKeySourceSerializer,
     IdentifierRowSerializer,
@@ -466,6 +468,27 @@ class DniCorrectionViewSet(
 
     def get_queryset(self):
         return DniCorrection.objects.filter(created_by=self.request.user, revoked_at__isnull=True)
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    def perform_destroy(self, instance):
+        instance.revoked_at = timezone.now()
+        instance.save(update_fields=['revoked_at'])
+
+
+class QuestionExceptionViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Excepciones de pregunta. Deshacer revoca (no borra) para conservar la auditoría."""
+    serializer_class = QuestionExceptionSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return QuestionException.objects.filter(created_by=self.request.user, revoked_at__isnull=True)
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)

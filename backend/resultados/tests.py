@@ -337,6 +337,64 @@ class CalculationFingerprintPersistenceTests(TestCase):
         self.assertEqual((summary['configSha256'], summary['dataSha256']), (self.CONFIG, self.DATA))
 
 
+class QuestionExceptionHistoryTests(TestCase):
+    """Qué excepciones se aplicaron queda guardado con el resultado, para auditarlo después."""
+
+    SNAPSHOT = [{
+        'area': '', 'tipo': 'P', 'questionNumber': 5, 'type': 'ANULADA_OTORGAR', 'validAnswers': '',
+        'reason': 'Mal formulada', 'documentRef': 'Acta 3', 'keySha256': 'a' * 64, 'status': 'applied', 'message': '',
+    }]
+    APPLIED = [{'questionNumber': 5, 'type': 'ANULADA_OTORGAR', 'validAnswers': ''}]
+
+    def setUp(self):
+        self.user = User.objects.create_user('exc-hist', password='test-pass-123', is_staff=True)
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def area(self, with_exceptions=True):
+        area = area_payload(results=[
+            {'dni': '11111111', 'area': 'General', 'score': 600, 'position': 1, 'answersRaw': 'A' * 60,
+             'correctAnswersRaw': 'A' * 60, 'litho': '1', 'exceptionsApplied': self.APPLIED if with_exceptions else []},
+        ])
+        if with_exceptions:
+            area['summary']['questionExceptions'] = self.SNAPSHOT
+        return area
+
+    def full(self, **kwargs):
+        create = self.client.post('/api/procesos/', process_payload(local_id='exc', areas={'General': self.area(**kwargs)}), format='json')
+        self.assertEqual(create.status_code, 201)
+        return self.client.get(f'/api/procesos/{create.data["id"]}/full/').data['areas']['General']
+
+    def test_history_keeps_the_snapshot_and_the_exceptions_applied_to_each_sheet(self):
+        area = self.full()
+
+        self.assertEqual(area['summary']['questionExceptions'], self.SNAPSHOT)
+        self.assertEqual(area['results'][0]['exceptionsApplied'], self.APPLIED)
+
+    def test_results_without_exceptions_come_back_empty(self):
+        area = self.full(with_exceptions=False)
+
+        self.assertEqual(area['summary']['questionExceptions'], [])
+        self.assertEqual(area['results'][0]['exceptionsApplied'], [])
+
+    def test_older_results_that_never_sent_the_fields_still_work(self):
+        create = self.client.post('/api/procesos/', process_payload(local_id='viejo', areas={'General': area_payload()}), format='json')
+        area = self.client.get(f'/api/procesos/{create.data["id"]}/full/').data['areas']['General']
+
+        self.assertEqual(area['summary']['questionExceptions'], [])
+        self.assertEqual(area['results'][0]['exceptionsApplied'], [])
+
+    def test_backup_restore_keeps_them(self):
+        payload = {'procesos': [{'id': 'restaurado', 'name': 'R', 'areas': {'General': self.area()}}]}
+
+        self.assertEqual(self.client.post('/api/backup/restore/', payload, format='json').status_code, 200)
+
+        proceso = ProcesoCalificacion.objects.get(created_by=self.user, local_id='restaurado')
+        area = self.client.get(f'/api/procesos/{proceso.id}/full/').data['areas']['General']
+        self.assertEqual(area['summary']['questionExceptions'], self.SNAPSHOT)
+        self.assertEqual(area['results'][0]['exceptionsApplied'], self.APPLIED)
+
+
 class VerificadorSesionTests(TestCase):
     def setUp(self):
         self.user_a = User.objects.create_user('verificador-a', password='test-pass-123')
@@ -440,6 +498,64 @@ class BackupTransactionTests(TestCase):
         self.assertTrue(ProcesoCalificacion.objects.filter(
             created_by=self.admin, local_id='restored-process'
         ).exists())
+
+    def _exception_payload(self, **overrides):
+        item = {
+            'area': '', 'tipo': 'P', 'questionNumber': 5, 'type': 'ANULADA_OTORGAR', 'validAnswers': '',
+            'reason': 'Mal formulada', 'documentRef': 'Acta 3', 'keySha256': 'a' * 64,
+        }
+        item.update(overrides)
+        return item
+
+    def test_restore_recreates_question_exceptions_replacing_the_current_ones(self):
+        from convocatorias.models import QuestionException
+        QuestionException.objects.create(
+            created_by=self.admin, area='X', tipo='P', question_number=1, type='ANULADA_EXCLUIR', reason='vieja', key_sha256='b' * 64,
+        )
+
+        response = self.client.post('/api/backup/restore/', {'questionExceptions': [self._exception_payload()]}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        saved = QuestionException.objects.get(created_by=self.admin)
+        self.assertEqual((saved.question_number, saved.type, saved.document_ref, saved.key_sha256), (5, 'ANULADA_OTORGAR', 'Acta 3', 'a' * 64))
+        self.assertIsNone(saved.revoked_at)
+
+    def test_question_exception_export_format_can_be_restored(self):
+        from convocatorias.models import AnswerKeyRow, QuestionException
+        AnswerKeyRow.objects.create(created_by=self.admin, client_id='k', area='', tipo='P', answers='ABCDE' * 12)
+        created = self.client.post('/api/excepciones-pregunta/', {
+            'tipo': 'P', 'questionNumber': 5, 'type': 'CLAVE_MULTIPLE', 'validAnswers': 'BD', 'reason': 'Dos válidas',
+        }, format='json')
+        self.assertEqual(created.status_code, 201)
+        exported = self.client.get('/api/excepciones-pregunta/').json()
+        QuestionException.objects.all().delete()
+
+        response = self.client.post('/api/backup/restore/', {'questionExceptions': exported}, format='json')
+
+        self.assertEqual(response.status_code, 200)
+        restored = QuestionException.objects.get(created_by=self.admin)
+        self.assertEqual((restored.valid_answers, restored.key_sha256), ('BD', created.json()['keySha256']))
+
+    def test_invalid_question_exceptions_are_rejected_without_replacing_anything(self):
+        from convocatorias.models import QuestionException
+        QuestionException.objects.create(
+            created_by=self.admin, area='', tipo='P', question_number=9, type='ANULADA_OTORGAR', reason='previa', key_sha256='c' * 64,
+        )
+        bad = [
+            [self._exception_payload(keySha256='corto')],
+            [self._exception_payload(type='OTRA')],
+            [self._exception_payload(questionNumber=0)],
+            [self._exception_payload(validAnswers='XYZ')],
+            [self._exception_payload(), self._exception_payload(type='ANULADA_EXCLUIR')],
+        ]
+        for items in bad:
+            response = self.client.post(
+                '/api/backup/restore/', {'questionExceptions': items, 'candidatos': [{'id': 'r', 'dni': '87654321'}]}, format='json',
+            )
+            self.assertEqual(response.status_code, 400, items)
+
+        self.assertTrue(Candidato.objects.filter(created_by=self.admin, client_id='original').exists())
+        self.assertEqual(QuestionException.objects.get(created_by=self.admin).question_number, 9)
 
     def _correction(self, litho='000910', corrected='63737500'):
         from convocatorias.models import DniCorrection

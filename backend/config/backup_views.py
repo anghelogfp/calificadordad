@@ -7,7 +7,7 @@ from rest_framework.response import Response
 
 from convocatorias.models import (
     AnswerKeyRow, AnswerKeySource, CalificationConfig, Candidato,
-    DatFormatConfig, DniCorrection, IdentifierRow, IdentifierSource, ProgramaVacante,
+    DatFormatConfig, DniCorrection, IdentifierRow, QuestionException, IdentifierSource, ProgramaVacante,
     ResponseRow, ResponseSource,
 )
 from convocatorias.serializers import (
@@ -28,6 +28,18 @@ class DniCorrectionBackupSerializer(serializers.Serializer):
     correctedDni = serializers.RegexField(r'^\d{8}$')
 
 
+class QuestionExceptionBackupSerializer(serializers.Serializer):
+    """Formato de una excepción en el backup. No se valida contra las claves: se están reemplazando."""
+    area = serializers.CharField(max_length=100, allow_blank=True, required=False, default='')
+    tipo = serializers.CharField(max_length=1, allow_blank=True, required=False, default='')
+    questionNumber = serializers.IntegerField(min_value=1)
+    type = serializers.ChoiceField(choices=[value for value, _ in QuestionException.TYPE_CHOICES])
+    validAnswers = serializers.RegexField(r'^[A-E]{0,5}$', allow_blank=True, required=False, default='')
+    reason = serializers.CharField(max_length=300)
+    documentRef = serializers.CharField(max_length=200, allow_blank=True, required=False, default='')
+    keySha256 = serializers.RegexField(r'^[0-9a-f]{64}$')
+
+
 class BackupPayloadSerializer(serializers.Serializer):
     candidatos = CandidatoSerializer(many=True, required=False)
     identifierSources = IdentifierSourceSerializer(many=True, required=False)
@@ -39,6 +51,7 @@ class BackupPayloadSerializer(serializers.Serializer):
     programaVacantes = serializers.ListField(child=serializers.DictField(), required=False)
     calificationConfigs = CalificationConfigSerializer(many=True, required=False)
     dniCorrections = DniCorrectionBackupSerializer(many=True, required=False)
+    questionExceptions = QuestionExceptionBackupSerializer(many=True, required=False)
     datFormatConfig = serializers.DictField(required=False)
     plantillas = PlantillaPonderacionWriteSerializer(many=True, required=False)
     procesos = serializers.ListField(child=serializers.DictField(), required=False)
@@ -98,6 +111,7 @@ def _replace_processes(user, procesos):
                 sheets_without_candidate=summary.get('sheetsWithoutCandidate', 0),
                 dni_corrections_applied=summary.get('dniCorrectionsApplied', 0),
                 no_calificados=summary.get('noCalificados', []),
+                question_exceptions=summary.get('questionExceptions') or [],
                 config_sha256=clean_sha256(summary.get('configSha256')),
                 data_sha256=clean_sha256(summary.get('dataSha256')),
                 total_weight=summary.get('totalWeight', 0),
@@ -118,6 +132,7 @@ def _replace_processes(user, procesos):
                     litho=row.get('litho', ''), cor_id=row.get('corId', ''),
                     dni_corregido=bool(row.get('dniCorregido', False)),
                     dni_original=row.get('dniOriginal', '') or '',
+                    exceptions_applied=row.get('exceptionsApplied') or [],
                 ) for row in area_data.get('results', [])
             ])
 
@@ -136,6 +151,11 @@ def restore_backup(request):
         if len(values) != len(set(values)):
             raise serializers.ValidationError({'dniCorrections': f'Hay correcciones repetidas por {field}.'})
 
+    exceptions = data.get('questionExceptions', [])
+    slots = [(item.get('area', ''), item.get('tipo', '').upper(), item['questionNumber']) for item in exceptions]
+    if len(slots) != len(set(slots)):
+        raise serializers.ValidationError({'questionExceptions': 'Hay excepciones repetidas para la misma pregunta de la misma clave.'})
+
     with transaction.atomic():
         Candidato.objects.filter(created_by=user).delete()
         Candidato.objects.bulk_create([
@@ -153,6 +173,21 @@ def restore_backup(request):
             ProgramaVacante(created_by=user, programa=str(row.get('programa', '')).strip(),
                             vacantes=max(0, int(row.get('vacantes', 0) or 0)))
             for row in data.get('programaVacantes', []) if str(row.get('programa', '')).strip()
+        ])
+        QuestionException.objects.filter(created_by=user).delete()
+        QuestionException.objects.bulk_create([
+            QuestionException(
+                created_by=user,
+                area=item.get('area', ''),
+                tipo=item.get('tipo', '').upper(),
+                question_number=item['questionNumber'],
+                type=item['type'],
+                valid_answers=item.get('validAnswers', ''),
+                reason=item['reason'],
+                document_ref=item.get('documentRef', ''),
+                key_sha256=item['keySha256'],
+            )
+            for item in exceptions
         ])
         DniCorrection.objects.filter(created_by=user).delete()
         DniCorrection.objects.bulk_create([

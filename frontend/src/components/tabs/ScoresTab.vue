@@ -1,6 +1,6 @@
 <script setup>
 import { reactive, ref, computed, watch } from 'vue'
-import { canonicalAreaName, formatTimestamp } from '@/utils/helpers'
+import { buildQuestionPlan, canonicalAreaName, formatTimestamp } from '@/utils/helpers'
 import { formatHashBlocks } from '@/utils/cryptoHash'
 import StepInfoCard from '@/components/shared/StepInfoCard.vue'
 import Toolbar from '@/components/shared/Toolbar.vue'
@@ -9,6 +9,7 @@ import CandidateDetailModal from '@/components/shared/CandidateDetailModal.vue'
 import PaginationBar from '@/components/shared/PaginationBar.vue'
 import ProcessPathBadge from '@/components/shared/ProcessPathBadge.vue'
 import ReviewPanel from '@/components/shared/ReviewPanel.vue'
+import QuestionExceptionsPanel from '@/components/shared/QuestionExceptionsPanel.vue'
 
 const props = defineProps({
   calification: { type: Object, required: true },
@@ -107,6 +108,10 @@ const currentAreaStats = computed(() => {
 
 const hasIngresanteData = computed(() =>
   (currentAreaStats.value?.ingresantes ?? 0) > 0
+)
+
+const questionPlan = computed(() =>
+  buildQuestionPlan(calification.calificationSummary?.plantillaSnapshot || [])
 )
 
 const incompleteSheets = computed(() =>
@@ -508,6 +513,16 @@ function handleExportIngresantesPdf() {
         :confirm-correction="calification.confirmDniCorrection"
         :undo-correction="calification.undoDniCorrection"
         @export="handleExportReview"
+      />
+
+      <QuestionExceptionsPanel
+        :exceptions="calification.questionExceptionStatuses || []"
+        :key-options="calification.answerKeyOptions || []"
+        :plan="questionPlan"
+        :correct-value="Number(calification.calificationSummary?.correctValue) || 0"
+        :get-distribution="calification.answerDistribution"
+        :add-exception="calification.addQuestionException"
+        :revoke-exception="calification.revokeQuestionException"
       />
 
       <div class="results-filters">

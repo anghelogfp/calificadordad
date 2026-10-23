@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { calculateAreaResults } from '../calculateResults'
 import { validateCalificationResult } from '../validateResults'
+import { keyFingerprint } from '../questionExceptions'
 
 function makeAnswers(char, length = 60) {
   return char.repeat(length)
@@ -263,6 +264,140 @@ describe('calculateAreaResults', () => {
 
       expect(after.configSha256).not.toBe(before.configSha256)
       expect(after.dataSha256).toBe(before.dataSha256)
+    })
+  })
+
+  describe('excepciones de pregunta', () => {
+    const KEY = 'ABCDE'.repeat(12)
+    const OTHER_KEY = 'EDCBA'.repeat(12)
+    const exception = (overrides = {}) => ({
+      id: 1, area: '', tipo: 'P', questionNumber: 5, type: 'ANULADA_OTORGAR', validAnswers: '',
+      reason: 'Pregunta mal formulada', documentRef: 'Acta 3', keySha256: keyFingerprint(KEY), ...overrides,
+    })
+
+    // Simulacro general: una clave sin área, dos postulantes: uno acierta todo, otro deja la 5 en blanco.
+    function generalInput(overrides = {}) {
+      const sheetA = { dni: '11111111', tipo: 'P', answers: KEY, litho: '000001' }
+      const sheetB = { dni: '22222222', tipo: 'P', answers: KEY.slice(0, 4) + ' ' + KEY.slice(5), litho: '000002' }
+      return makeInput({
+        simulacroScope: 'general',
+        archiveRows: [
+          { dni: '11111111', paterno: 'A', materno: '', nombres: 'Uno' },
+          { dni: '22222222', paterno: 'B', materno: '', nombres: 'Dos' },
+        ],
+        responsesRows: [sheetA, sheetB],
+        responsesByDni: new Map([['11111111', [sheetA]], ['22222222', [sheetB]]]),
+        answerKeyRows: [{ area: '', tipo: 'P', answers: KEY }],
+        answerKeyLookupByAreaTipo: new Map(),
+        ...overrides,
+      })
+    }
+    const byDni = (result, dni) => result.results.find((r) => r.dni === dni)
+
+    it('sin excepciones el resultado es el de siempre y no registra ninguna', () => {
+      const result = calculateAreaResults(generalInput())
+      expect(byDni(result, '11111111').score).toBe(600)
+      expect(byDni(result, '22222222').score).toBe(592)
+      expect(byDni(result, '11111111').exceptionsApplied).toEqual([])
+      expect(result.summary.questionExceptions).toEqual([])
+    })
+
+    it('anular dando el punto a todos iguala a quien dejó la pregunta en blanco', () => {
+      const result = calculateAreaResults(generalInput({ questionExceptions: [exception()] }))
+
+      expect(byDni(result, '22222222').score).toBe(600)
+      expect(byDni(result, '22222222').exceptionsApplied).toEqual([{ questionNumber: 5, type: 'ANULADA_OTORGAR', validAnswers: '' }])
+      expect(result.summary.questionExceptions[0]).toMatchObject({ questionNumber: 5, status: 'applied', reason: 'Pregunta mal formulada' })
+    })
+
+    it('anular excluyendo baja el máximo y no cuenta la pregunta para nadie', () => {
+      const result = calculateAreaResults(generalInput({ questionExceptions: [exception({ type: 'ANULADA_EXCLUIR' })] }))
+
+      expect(byDni(result, '11111111')).toMatchObject({ score: 590, maxScore: 590 })
+      expect(byDni(result, '22222222').score).toBe(590)
+    })
+
+    it('varias respuestas válidas acepta la letra nueva', () => {
+      const key = KEY // la pregunta 5 es E
+      const sheet = { dni: '11111111', tipo: 'P', answers: key.slice(0, 4) + 'B' + key.slice(5), litho: '000001' }
+      const input = generalInput({
+        responsesRows: [sheet],
+        responsesByDni: new Map([['11111111', [sheet]]]),
+        questionExceptions: [exception({ type: 'CLAVE_MULTIPLE', validAnswers: 'BE' })],
+      })
+      expect(byDni(calculateAreaResults(input), '11111111').score).toBe(600)
+    })
+
+    it('una excepción cuya clave cambió NO se aplica y queda registrada como desactualizada', () => {
+      const result = calculateAreaResults(generalInput({
+        questionExceptions: [exception({ keySha256: keyFingerprint(OTHER_KEY) })],
+      }))
+
+      expect(byDni(result, '22222222').score).toBe(592)
+      expect(byDni(result, '22222222').exceptionsApplied).toEqual([])
+      expect(result.summary.questionExceptions[0]).toMatchObject({ status: 'outdated' })
+    })
+
+    it('una excepción ambigua o inválida detiene el cálculo', () => {
+      expect(() => calculateAreaResults(generalInput({
+        questionExceptions: [exception(), exception({ id: 2, type: 'ANULADA_EXCLUIR' })],
+      }))).toThrow(/pregunta 5.*más de una excepción/i)
+      expect(() => calculateAreaResults(generalInput({ questionExceptions: [exception({ questionNumber: 99 })] }))).toThrow(/99/)
+    })
+
+    it('las excepciones de otra área no entran en este cálculo ni en su resumen', () => {
+      const result = calculateAreaResults(generalInput({ questionExceptions: [exception({ area: 'Biomédicas' })] }))
+      expect(result.summary.questionExceptions).toEqual([])
+      expect(byDni(result, '22222222').score).toBe(592)
+    })
+
+    it('modo real: cada tipo de prueba usa las excepciones de su propia clave', () => {
+      const keyP = KEY
+      const keyQ = OTHER_KEY
+      const sheetP = { dni: '11111111', tipo: 'P', answers: ' '.repeat(60), litho: '000001' }
+      const sheetQ = { dni: '22222222', tipo: 'Q', answers: ' '.repeat(60), litho: '000002' }
+      const keys = ['P', 'Q', 'R', 'S', 'T'].map((tipo) => ({ area: 'Ingeniería', tipo, answers: tipo === 'Q' ? keyQ : keyP }))
+      const input = makeInput({
+        processType: 'real',
+        archiveRows: [
+          { dni: '11111111', area: 'Ingeniería', programa: 'Civil', paterno: 'A' },
+          { dni: '22222222', area: 'Ingeniería', programa: 'Civil', paterno: 'B' },
+        ],
+        responsesRows: [sheetP, sheetQ],
+        responsesByDni: new Map([['11111111', [sheetP]], ['22222222', [sheetQ]]]),
+        answerKeyRows: keys,
+        answerKeyLookupByAreaTipo: new Map(),
+        vacantesPrograma: { Civil: 1 },
+        // Solo se anula la pregunta 3 del tipo Q.
+        questionExceptions: [exception({ area: 'Ingeniería', tipo: 'Q', questionNumber: 3, keySha256: keyFingerprint(keyQ) })],
+      })
+      const result = calculateAreaResults(input)
+
+      // Ambas hojas están en blanco (60 × 2); solo la del tipo Q recibe el punto de la pregunta 3 en lugar del blanco.
+      expect(byDni(result, '11111111').score).toBe(120)
+      expect(byDni(result, '22222222').score).toBe(120 - 2 + 10)
+    })
+
+    it('las excepciones entran en la huella de configuración', () => {
+      const without = calculateAreaResults(generalInput()).summary.configSha256
+      const withException = calculateAreaResults(generalInput({ questionExceptions: [exception()] })).summary.configSha256
+      const different = calculateAreaResults(generalInput({ questionExceptions: [exception({ questionNumber: 6 })] })).summary.configSha256
+
+      expect(withException).not.toBe(without)
+      expect(different).not.toBe(withException)
+    })
+
+    it('una excepción desactualizada no cambia la huella (no se aplicó)', () => {
+      const without = calculateAreaResults(generalInput()).summary.configSha256
+      const outdated = calculateAreaResults(generalInput({ questionExceptions: [exception({ keySha256: keyFingerprint(OTHER_KEY) })] })).summary.configSha256
+      expect(outdated).toBe(without)
+    })
+
+    it('el resultado con excepciones pasa la auditoría', () => {
+      const result = calculateAreaResults(generalInput({ questionExceptions: [exception(), exception({ id: 2, questionNumber: 9, type: 'ANULADA_EXCLUIR' })] }))
+      const validation = validateCalificationResult({ result })
+      expect(validation.errors).toEqual([])
+      expect(validation.valid).toBe(true)
     })
   })
 

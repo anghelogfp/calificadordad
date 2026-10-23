@@ -1,4 +1,5 @@
 import { stripDigits } from '@/utils/helpers'
+import { keyFingerprint } from './questionExceptions'
 
 function issue(code, message, context = {}) {
   return { code, message, context }
@@ -21,20 +22,32 @@ const VALID_MARK = /^[A-E]$/
 /**
  * Recalcula el puntaje de una hoja leyendo directamente las respuestas contra la clave,
  * con los pesos y valores usados. Es un control independiente del motor: no reutiliza
- * `questionDetails` para decidir si cada respuesta es correcta, solo sus pesos.
+ * `questionDetails` para decidir si cada respuesta es correcta, solo sus pesos. Las
+ * excepciones se toman de las registradas para la hoja (`exceptionsApplied`), y su
+ * coherencia con el resumen se comprueba aparte.
  */
 function recomputeFromRaw(row, values) {
   const answers = String(row.answersRaw ?? '')
   const key = String(row.correctAnswersRaw ?? '')
+  const exceptions = new Map((row.exceptionsApplied || []).map((item) => [Number(item.questionNumber), item]))
   let total = 0
+  let maxPossible = 0
   const statuses = []
   for (let i = 0; i < row.questionDetails.length; i += 1) {
     const mark = answers[i] || ' '
     const correct = key[i] || ' '
     const weight = Number(row.questionDetails[i]?.weight) || 0
+    const exception = exceptions.get(i + 1)
+    const validAnswers = String(exception?.validAnswers ?? '')
     let status
     let value
-    if (VALID_MARK.test(mark) && mark === correct) {
+    if (exception?.type === 'ANULADA_OTORGAR') {
+      status = 'awarded'
+      value = values.correct
+    } else if (exception?.type === 'ANULADA_EXCLUIR') {
+      status = 'excluded'
+      value = 0
+    } else if (VALID_MARK.test(mark) && (exception?.type === 'CLAVE_MULTIPLE' ? validAnswers.includes(mark) : mark === correct)) {
       status = 'correct'
       value = values.correct
     } else if (VALID_MARK.test(mark)) {
@@ -49,8 +62,9 @@ function recomputeFromRaw(row, values) {
     }
     statuses.push(status)
     total += value * weight
+    if (status !== 'excluded') maxPossible += values.correct * weight
   }
-  return { total, statuses }
+  return { total, maxPossible, statuses }
 }
 
 export function validateCalificationResult({
@@ -121,6 +135,13 @@ export function validateCalificationResult({
             actual: roundScore(row.score),
           }))
         }
+        if (row.maxScore !== undefined && !scoresMatch(recomputed.maxPossible, row.maxScore)) {
+          errors.push(issue('MAX_SCORE_MISMATCH', 'El puntaje máximo posible no coincide con el recálculo (¿pregunta anulada sin descontar?).', {
+            dni,
+            expected: roundScore(recomputed.maxPossible),
+            actual: roundScore(row.maxScore),
+          }))
+        }
         const mismatched = recomputed.statuses
           .map((status, index) => (status === row.questionDetails[index]?.status ? 0 : index + 1))
           .filter(Boolean)
@@ -187,6 +208,37 @@ export function validateCalificationResult({
       dnis: truncated.map((row) => stripDigits(row.dni)),
     }))
   }
+
+  // Las excepciones aplicadas a cada hoja deben ser exactamente las registradas en el resumen.
+  const registered = (Array.isArray(summary.questionExceptions) ? summary.questionExceptions : [])
+    .filter((exception) => exception.status === 'applied')
+  const registeredKey = (exception) => `${Number(exception.questionNumber)}|${exception.type}`
+  const registeredByKeyHash = new Map()
+  registered.forEach((exception) => {
+    if (!registeredByKeyHash.has(exception.keySha256)) registeredByKeyHash.set(exception.keySha256, [])
+    registeredByKeyHash.get(exception.keySha256).push(exception)
+  })
+  const registeredKeys = new Set(registered.map(registeredKey))
+  results.forEach((row) => {
+    const dni = stripDigits(row.dni)
+    const applied = row.exceptionsApplied || []
+    const unregistered = applied.filter((item) => !registeredKeys.has(registeredKey(item)))
+    if (unregistered.length > 0) {
+      errors.push(issue('EXCEPTION_NOT_REGISTERED', 'Se aplicó una excepción que no está registrada en el resumen del cálculo.', {
+        dni,
+        questions: unregistered.map((item) => item.questionNumber),
+      }))
+    }
+    const expected = registeredByKeyHash.get(keyFingerprint(row.correctAnswersRaw)) || []
+    const appliedKeys = new Set(applied.map(registeredKey))
+    const missing = expected.filter((exception) => !appliedKeys.has(registeredKey(exception)))
+    if (missing.length > 0) {
+      errors.push(issue('EXCEPTION_NOT_APPLIED', 'Una excepción registrada para la clave de esta hoja no se aplicó.', {
+        dni,
+        questions: missing.map((exception) => exception.questionNumber),
+      }))
+    }
+  })
 
   const positions = results.map((row) => Number(row.position))
   if (positions.some((position) => !Number.isInteger(position) || position < 1)) {

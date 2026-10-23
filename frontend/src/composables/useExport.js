@@ -1,5 +1,6 @@
 import { loadExcelExportDeps, loadPdfExportDeps } from '@/utils/exportLoaders'
 import { formatHashBlocks } from '@/utils/cryptoHash'
+import { scoreAnswerSheet } from '@/domain/calification/scoreAnswerSheet'
 import { canonicalAreaName } from '@/utils/helpers'
 
 /**
@@ -18,26 +19,33 @@ export function useExport() {
   }
 
   function answerStats(row) {
-    const answers = String(row.answersRaw || '').toUpperCase()
-    const keys = String(row.correctAnswersRaw || '').toUpperCase()
-    let correct = 0
-    let incorrect = 0
-    let multiple = 0
-    let blank = 0
-    const length = Math.max(answers.length, keys.length)
-
-    for (let i = 0; i < length; i += 1) {
-      const marked = answers[i] || ' '
-      const key = keys[i] || ' '
-      const markedValid = /^[A-E]$/.test(marked)
-      const keyValid = /^[A-E]$/.test(key)
-      if (markedValid && keyValid && marked === key) correct += 1
-      else if (markedValid) incorrect += 1
-      else if (marked === '*') multiple += 1
-      else blank += 1
+    const length = Math.max(String(row.answersRaw || '').length, String(row.correctAnswersRaw || '').length)
+    // Misma función que el ranking, con las excepciones que se aplicaron a esta hoja.
+    const { counts } = scoreAnswerSheet({
+      answersRaw: row.answersRaw,
+      correctAnswersRaw: row.correctAnswersRaw,
+      plan: Array.from({ length }, () => ({ subject: '', weight: 1 })),
+      exceptions: row.exceptionsApplied || [],
+      strictKey: false,
+    })
+    return {
+      correct: counts.correct,
+      incorrect: counts.incorrect,
+      multiple: counts.multiple,
+      blank: counts.blank,
+      annulled: counts.awarded + counts.excluded,
     }
+  }
 
-    return { correct, incorrect, multiple, blank }
+  /** Nota por hoja para la columna "Observación" del Excel de resultados. */
+  function rowNote(row) {
+    const notes = []
+    if (row.dniCorregido) notes.push(`DNI corregido: la hoja decía ${row.dniOriginal || 'sin DNI'}`)
+    const annulled = (row.exceptionsApplied || []).filter((item) => item.type !== 'CLAVE_MULTIPLE')
+    const multiple = (row.exceptionsApplied || []).filter((item) => item.type === 'CLAVE_MULTIPLE')
+    if (annulled.length) notes.push(`Preguntas anuladas: ${annulled.map((item) => item.questionNumber).join(', ')}`)
+    if (multiple.length) notes.push(`Varias respuestas válidas en: ${multiple.map((item) => item.questionNumber).join(', ')}`)
+    return notes.join(' · ')
   }
 
   function aggregateAnswerStats(rows = []) {
@@ -47,8 +55,9 @@ export function useExport() {
       acc.incorrect += stats.incorrect
       acc.multiple += stats.multiple
       acc.blank += stats.blank
+      acc.annulled += stats.annulled
       return acc
-    }, { correct: 0, incorrect: 0, multiple: 0, blank: 0 })
+    }, { correct: 0, incorrect: 0, multiple: 0, blank: 0, annulled: 0 })
   }
 
   // En PDF, el DNI de una hoja corregida y confirmada se identifica en la propia celda.
@@ -112,6 +121,7 @@ export function useExport() {
       ['Total incorrectas', answerTotals.incorrect],
       ['Total múltiples/anuladas', answerTotals.multiple],
       ['Total en blanco', answerTotals.blank],
+      ['Total de preguntas anuladas', answerTotals.annulled],
       ['Sin respuesta', areaSummary?.missingResponses ?? 0],
       ['Sin clave del área', areaSummary?.missingKeys ?? 0],
       ['Respuestas duplicadas por DNI', areaSummary?.duplicateResponses ?? 0],
@@ -153,6 +163,36 @@ export function useExport() {
     observationRows.forEach((item) => sheet.addRow(item))
     sheet.columns = [{ width: 22 }, { width: 12 }, { width: 70 }]
     sheet.getColumn(2).alignment = { horizontal: 'center' }
+  }
+
+  /** Hoja con todas las excepciones de pregunta del cálculo: qué se decidió, por qué y si se aplicó. */
+  function addQuestionExceptionsSheet(workbook, exceptions = []) {
+    if (!exceptions.length) return
+    const sheet = workbook.addWorksheet('Excepciones de preguntas')
+    const header = sheet.addRow(['Clave', 'Tipo', 'Pregunta', 'Excepción', 'Respuestas válidas', 'Motivo', 'Documento de sustento', 'Estado'])
+    styleHeaderRow(header, 'FF92400E')
+
+    const typeLabels = {
+      ANULADA_OTORGAR: 'Anulada: el punto es para todos',
+      ANULADA_EXCLUIR: 'Anulada: no cuenta para nadie',
+      CLAVE_MULTIPLE: 'Varias respuestas válidas',
+    }
+    const statusLabels = { applied: 'Aplicada', outdated: 'Sin efecto: la clave cambió', orphan: 'Sin efecto: no hay clave', invalid: 'Inválida' }
+    exceptions.forEach((item) => {
+      sheet.addRow([
+        item.area ? displayAreaName(item.area) : 'General',
+        item.tipo || '',
+        item.questionNumber,
+        typeLabels[item.type] || item.type,
+        item.validAnswers ? [...item.validAnswers].join(', ') : '',
+        item.reason || '',
+        item.documentRef || '',
+        statusLabels[item.status] || item.status || '',
+      ])
+    })
+    sheet.columns = [
+      { width: 20 }, { width: 8 }, { width: 10 }, { width: 34 }, { width: 18 }, { width: 44 }, { width: 28 }, { width: 28 },
+    ]
   }
 
   function addNoCalificadosSheet(workbook, noCalificados = [], options = {}) {
@@ -345,7 +385,7 @@ export function useExport() {
     sheet.addRow([])
 
     // Solo si hay hojas con DNI corregido se agrega la columna de observación.
-    const hasCorrections = rows.some((row) => row.dniCorregido)
+    const hasCorrections = rows.some((row) => rowNote(row))
     const header = sheet.addRow([
       'Posición',
       'DNI',
@@ -388,9 +428,7 @@ export function useExport() {
         String(row.answersRaw || '').length,
         row.answersRaw || '',
         visibleAnswerArray(row.answersRaw),
-        ...(hasCorrections
-          ? [row.dniCorregido ? `DNI corregido: la hoja decía ${row.dniOriginal || 'sin DNI'}` : '']
-          : []),
+        ...(hasCorrections ? [rowNote(row)] : []),
       ])
       dataRow.getCell(10).font = { bold: true }
       dataRow.getCell(16).font = { name: 'Courier New', size: 9 }
@@ -436,6 +474,7 @@ export function useExport() {
       areaEntries.flatMap((entry) => entry.summary?.noCalificados || []),
       { includeProgram: false },
     )
+    addQuestionExceptionsSheet(workbook, areaEntries.flatMap((entry) => entry.summary?.questionExceptions || []))
 
     const buffer = await workbook.xlsx.writeBuffer()
     const blob = new Blob([buffer], {
@@ -476,6 +515,7 @@ export function useExport() {
       addSimulacroResultsSheet(workbook, rankedResults, area, convocatoriaName)
       addObservationsSheet(workbook, options.areaSummary, rankedResults)
       addNoCalificadosSheet(workbook, options.areaSummary?.noCalificados || [], { includeProgram: false })
+      addQuestionExceptionsSheet(workbook, options.areaSummary?.questionExceptions || [])
 
       const buffer = await workbook.xlsx.writeBuffer()
       const blob = new Blob([buffer], {
