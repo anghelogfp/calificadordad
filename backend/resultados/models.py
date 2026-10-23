@@ -117,6 +117,8 @@ class AreaCalificacion(models.Model):
     missing_programs = models.IntegerField(default=0)
     invalid_response_types = models.IntegerField(default=0)
     unlinked_responses = models.IntegerField(default=0)
+    sheets_without_candidate = models.IntegerField(default=0)
+    dni_corrections_applied = models.IntegerField(default=0)
     no_calificados = models.JSONField(default=list)
     total_weight = models.DecimalField(max_digits=10, decimal_places=3, default=0)
     answers_length = models.IntegerField(default=60)
@@ -157,6 +159,10 @@ class ResultadoCandidato(models.Model):
     tipo = models.CharField(max_length=10, blank=True, default='')
     litho = models.CharField(max_length=20, blank=True, default='')
     cor_id = models.CharField(max_length=50, blank=True, default='')
+
+    # Hoja cuyo DNI se corrigió y confirmó; dni_original es el que traía la hoja
+    dni_corregido = models.BooleanField(default=False)
+    dni_original = models.CharField(max_length=20, blank=True, default='')
 
     class Meta:
         db_table = 'resultados_candidatos'

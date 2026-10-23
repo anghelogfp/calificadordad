@@ -94,6 +94,8 @@ def _replace_processes(user, procesos):
                 missing_programs=summary.get('missingPrograms', 0),
                 invalid_response_types=summary.get('invalidResponseTypes', 0),
                 unlinked_responses=summary.get('unlinkedResponses', 0),
+                sheets_without_candidate=summary.get('sheetsWithoutCandidate', 0),
+                dni_corrections_applied=summary.get('dniCorrectionsApplied', 0),
                 no_calificados=summary.get('noCalificados', []),
                 total_weight=summary.get('totalWeight', 0),
                 answers_length=summary.get('answersLength', 60),
@@ -111,6 +113,8 @@ def _replace_processes(user, procesos):
                     correct_answers_raw=row.get('correctAnswersRaw', ''),
                     aula=row.get('aula', ''), tipo=row.get('tipo', ''),
                     litho=row.get('litho', ''), cor_id=row.get('corId', ''),
+                    dni_corregido=bool(row.get('dniCorregido', False)),
+                    dni_original=row.get('dniOriginal', '') or '',
                 ) for row in area_data.get('results', [])
             ])
 

@@ -191,6 +191,87 @@ class ProcessIsolationTests(TestCase):
         self.assertEqual([row['local_id'] for row in response.data], ['b-process'])
 
 
+class DniCorrectedMarkPersistenceTests(TestCase):
+    """La marca de "DNI corregido" debe sobrevivir al historial y al backup."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('marca-user', password='test-pass-123', is_staff=True)
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def corrected_area(self):
+        area = area_payload(results=[
+            {
+                'dni': '12345678', 'paterno': 'Normal', 'area': 'General', 'score': 600, 'position': 1,
+                'answersRaw': 'A' * 60, 'correctAnswersRaw': 'A' * 60, 'litho': '100001',
+                'dniCorregido': False, 'dniOriginal': '',
+            },
+            {
+                'dni': '22222222', 'paterno': 'Corregido', 'area': 'General', 'score': 300, 'position': 2,
+                'answersRaw': 'A' * 60, 'correctAnswersRaw': 'A' * 60, 'litho': '100002',
+                'dniCorregido': True, 'dniOriginal': '22222229',
+            },
+        ])
+        area['summary'].update({'sheetsWithoutCandidate': 3, 'dniCorrectionsApplied': 1})
+        return area
+
+    def assert_marks_round_trip(self, area):
+        self.assertEqual(area['summary']['sheetsWithoutCandidate'], 3)
+        self.assertEqual(area['summary']['dniCorrectionsApplied'], 1)
+        by_dni = {row['dni']: row for row in area['results']}
+        self.assertFalse(by_dni['12345678']['dniCorregido'])
+        self.assertEqual(by_dni['12345678']['dniOriginal'], '')
+        self.assertTrue(by_dni['22222222']['dniCorregido'])
+        self.assertEqual(by_dni['22222222']['dniOriginal'], '22222229')
+
+    def test_history_keeps_the_mark_and_summary_counts(self):
+        create = self.client.post(
+            '/api/procesos/',
+            process_payload(local_id='marcado', areas={'General': self.corrected_area()}),
+            format='json',
+        )
+        self.assertEqual(create.status_code, 201)
+
+        full = self.client.get(f'/api/procesos/{create.data["id"]}/full/').data
+
+        self.assert_marks_round_trip(full['areas']['General'])
+
+    def test_saving_again_updates_the_mark(self):
+        self.client.post('/api/procesos/', process_payload(local_id='marcado', areas={'General': self.corrected_area()}), format='json')
+        without = self.corrected_area()
+        for row in without['results']:
+            row['dniCorregido'] = False
+            row['dniOriginal'] = ''
+        without['summary'].update({'sheetsWithoutCandidate': 4, 'dniCorrectionsApplied': 0})
+
+        update = self.client.post('/api/procesos/', process_payload(local_id='marcado', areas={'General': without}), format='json')
+        full = self.client.get(f'/api/procesos/{update.data["id"]}/full/').data['areas']['General']
+
+        self.assertEqual(full['summary']['dniCorrectionsApplied'], 0)
+        self.assertFalse(any(row['dniCorregido'] for row in full['results']))
+
+    def test_results_without_the_fields_keep_working(self):
+        """Resultados guardados por versiones anteriores no traen la marca."""
+        create = self.client.post(
+            '/api/procesos/', process_payload(local_id='viejo', areas={'Ingeniería': area_payload()}), format='json',
+        )
+        row = self.client.get(f'/api/procesos/{create.data["id"]}/full/').data['areas']['Ingeniería']['results'][0]
+
+        self.assertFalse(row['dniCorregido'])
+        self.assertEqual(row['dniOriginal'], '')
+
+    def test_backup_restore_keeps_the_mark(self):
+        payload = {'procesos': [{
+            'id': 'restaurado', 'name': 'Restaurado', 'areas': {'General': self.corrected_area()},
+        }]}
+
+        self.assertEqual(self.client.post('/api/backup/restore/', payload, format='json').status_code, 200)
+
+        proceso = ProcesoCalificacion.objects.get(created_by=self.user, local_id='restaurado')
+        full = self.client.get(f'/api/procesos/{proceso.id}/full/').data
+        self.assert_marks_round_trip(full['areas']['General'])
+
+
 class VerificadorSesionTests(TestCase):
     def setUp(self):
         self.user_a = User.objects.create_user('verificador-a', password='test-pass-123')

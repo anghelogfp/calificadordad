@@ -16,6 +16,7 @@ class ResultadoCandidatoSerializer(serializers.ModelSerializer):
             'position', 'position_in_programa', 'is_ingresante',
             'answers_raw', 'correct_answers_raw',
             'aula', 'tipo', 'litho', 'cor_id',
+            'dni_corregido', 'dni_original',
         ]
 
 
@@ -30,7 +31,8 @@ class AreaCalificacionSerializer(serializers.ModelSerializer):
             'plantilla_id', 'plantilla_name', 'plantilla_snapshot',
             'total_candidates', 'missing_responses', 'missing_keys',
             'duplicate_responses', 'invalid_candidates', 'missing_programs',
-            'invalid_response_types', 'unlinked_responses', 'no_calificados',
+            'invalid_response_types', 'unlinked_responses',
+            'sheets_without_candidate', 'dni_corrections_applied', 'no_calificados',
             'total_weight', 'answers_length',
             'resultados',
         ]

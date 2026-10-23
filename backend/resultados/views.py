@@ -83,6 +83,8 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                         'missing_programs': summary.get('missingPrograms', 0),
                         'invalid_response_types': summary.get('invalidResponseTypes', 0),
                         'unlinked_responses': summary.get('unlinkedResponses', 0),
+                        'sheets_without_candidate': summary.get('sheetsWithoutCandidate', 0),
+                        'dni_corrections_applied': summary.get('dniCorrectionsApplied', 0),
                         'no_calificados': summary.get('noCalificados', []),
                         'total_weight': summary.get('totalWeight', 0),
                         'answers_length': summary.get('answersLength', 60),
@@ -109,6 +111,8 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                         tipo=r.get('tipo', ''),
                         litho=r.get('litho', ''),
                         cor_id=r.get('corId', ''),
+                        dni_corregido=bool(r.get('dniCorregido', False)),
+                        dni_original=r.get('dniOriginal', '') or '',
                     )
                     for r in results
                 ])
@@ -134,6 +138,8 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                     'missingPrograms': area_obj.missing_programs,
                     'invalidResponseTypes': area_obj.invalid_response_types,
                     'unlinkedResponses': area_obj.unlinked_responses,
+                    'sheetsWithoutCandidate': area_obj.sheets_without_candidate,
+                    'dniCorrectionsApplied': area_obj.dni_corrections_applied,
                     'noCalificados': area_obj.no_calificados,
                     'totalWeight': float(area_obj.total_weight),
                     'answersLength': area_obj.answers_length,
@@ -163,6 +169,8 @@ class ProcesoCalificacionViewSet(viewsets.ModelViewSet):
                         'tipo': r.tipo,
                         'litho': r.litho,
                         'corId': r.cor_id,
+                        'dniCorregido': r.dni_corregido,
+                        'dniOriginal': r.dni_original,
                     }
                     for r in area_obj.resultados.all()
                 ],
