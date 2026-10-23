@@ -629,4 +629,13 @@ describe('comparación con lo guardado', () => {
   it('detecta hojas que faltan en la base', () => {
     expect(findStoredAnswerMismatches([row('1', 'A'), row('2', 'B')], [row('1', 'A')])).toEqual(['2'])
   })
+
+  it('avisa de las hojas con menos respuestas de las esperadas', () => {
+    const lines = [buildScanLine({ answers: 'ABCDE'.repeat(12) }), buildScanLine({ litho: '000777', answers: 'ABCDE'.repeat(11) + 'ABC' })]
+    const full = parseResponseLine(lines[0], 1, DEFAULT_DAT_FORMAT).row
+    const short = { ...parseResponseLine(lines[1], 2, DEFAULT_DAT_FORMAT).row, answers: 'ABCDE'.repeat(11) + 'ABC' }
+
+    expect(auditParsedResponses(lines, [full])).toEqual([])
+    expect(auditParsedResponses(lines, [full, short]).join(' ')).toMatch(/1 hoja\(s\) con menos de 60 respuestas.*000777/)
+  })
 })

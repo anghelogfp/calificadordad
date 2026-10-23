@@ -16,6 +16,43 @@ function scoresMatch(left, right) {
   return Math.abs(roundScore(left) - roundScore(right)) <= 0.001
 }
 
+const VALID_MARK = /^[A-E]$/
+
+/**
+ * Recalcula el puntaje de una hoja leyendo directamente las respuestas contra la clave,
+ * con los pesos y valores usados. Es un control independiente del motor: no reutiliza
+ * `questionDetails` para decidir si cada respuesta es correcta, solo sus pesos.
+ */
+function recomputeFromRaw(row, values) {
+  const answers = String(row.answersRaw ?? '')
+  const key = String(row.correctAnswersRaw ?? '')
+  let total = 0
+  const statuses = []
+  for (let i = 0; i < row.questionDetails.length; i += 1) {
+    const mark = answers[i] || ' '
+    const correct = key[i] || ' '
+    const weight = Number(row.questionDetails[i]?.weight) || 0
+    let status
+    let value
+    if (VALID_MARK.test(mark) && mark === correct) {
+      status = 'correct'
+      value = values.correct
+    } else if (VALID_MARK.test(mark)) {
+      status = 'incorrect'
+      value = values.incorrect
+    } else if (mark === '*') {
+      status = 'multiple'
+      value = 0
+    } else {
+      status = 'blank'
+      value = values.blank
+    }
+    statuses.push(status)
+    total += value * weight
+  }
+  return { total, statuses }
+}
+
 export function validateCalificationResult({
   result,
   processType = 'simulacro',
@@ -67,6 +104,34 @@ export function validateCalificationResult({
         }))
       }
 
+      const values = {
+        correct: Number(summary.correctValue),
+        incorrect: Number(summary.incorrectValue),
+        blank: Number(summary.blankValue),
+      }
+      const canRecompute = Array.isArray(row.questionDetails)
+        && row.questionDetails.length === expectedAnswersLength
+        && Object.values(values).every(Number.isFinite)
+      if (canRecompute) {
+        const recomputed = recomputeFromRaw(row, values)
+        if (!scoresMatch(recomputed.total, row.score)) {
+          errors.push(issue('SCORE_RECOMPUTE_MISMATCH', 'El puntaje no coincide con el recálculo independiente desde las respuestas y la clave.', {
+            dni,
+            expected: roundScore(recomputed.total),
+            actual: roundScore(row.score),
+          }))
+        }
+        const mismatched = recomputed.statuses
+          .map((status, index) => (status === row.questionDetails[index]?.status ? 0 : index + 1))
+          .filter(Boolean)
+        if (mismatched.length > 0) {
+          errors.push(issue('QUESTION_STATUS_MISMATCH', 'El estado de algunas preguntas no coincide con las respuestas y la clave.', {
+            dni,
+            questions: mismatched,
+          }))
+        }
+      }
+
       if (row.questionDetails !== undefined) {
         if (!Array.isArray(row.questionDetails)) {
           errors.push(issue('QUESTION_DETAILS_INVALID', 'El detalle por pregunta debe ser una lista.', { dni }))
@@ -106,6 +171,22 @@ export function validateCalificationResult({
       }
     }
   })
+
+  // Hojas con menos (o más) respuestas que las esperadas: se calculan, pero hay que revisarlas.
+  const padded = results.filter((row) => Number(row.assumedBlankCount) > 0)
+  if (padded.length > 0) {
+    warnings.push(issue('ANSWERS_PADDED', 'Hay hojas con menos respuestas de las esperadas; se asumieron blancos al final.', {
+      count: padded.length,
+      dnis: padded.map((row) => stripDigits(row.dni)),
+    }))
+  }
+  const truncated = results.filter((row) => Number(row.answersReadLength) > expectedAnswersLength)
+  if (truncated.length > 0) {
+    warnings.push(issue('ANSWERS_TRUNCATED', 'Hay hojas con más respuestas de las esperadas; se descartó el excedente.', {
+      count: truncated.length,
+      dnis: truncated.map((row) => stripDigits(row.dni)),
+    }))
+  }
 
   const positions = results.map((row) => Number(row.position))
   if (positions.some((position) => !Number.isInteger(position) || position < 1)) {

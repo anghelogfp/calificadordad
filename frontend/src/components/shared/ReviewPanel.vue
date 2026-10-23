@@ -8,6 +8,8 @@ const props = defineProps({
   noCalificados: { type: Array, default: () => [] },
   // summary.sheetsWithoutCandidate: hojas cuyo DNI no está en el padrón
   orphanSheetCount: { type: Number, default: 0 },
+  // Hojas calificadas con menos respuestas de las esperadas (resultados con assumedBlankCount > 0)
+  incompleteSheets: { type: Array, default: () => [] },
   // summary.dniCorrectionsApplied: hojas ya confirmadas e incluidas en el ranking
   confirmedCount: { type: Number, default: 0 },
   // Devuelve { rows, summary } (useCalification.previewProvisionalMatches) o null
@@ -44,6 +46,13 @@ const tabs = computed(() => [
     count: props.orphanSheetCount + props.confirmedCount,
     pending: props.orphanSheetCount,
     tone: props.orphanSheetCount > 0 ? 'action' : 'info',
+  },
+  {
+    key: 'short',
+    label: 'Respuestas incompletas',
+    one: 'hoja con respuestas incompletas',
+    count: props.incompleteSheets.length,
+    tone: 'action',
   },
   { key: 'other', label: 'Otras incidencias', one: 'otra incidencia', count: otherRows.value.length, tone: 'action' },
   { key: 'missing', label: 'Alumnos sin hoja', one: 'alumno sin hoja', count: missingSheetRows.value.length, tone: 'info' },
@@ -115,12 +124,26 @@ function selectTab(key) {
   if (key === 'orphan') loadPreview()
 }
 
-const activeRows = computed(() => (activeTab.value === 'other' ? otherRows.value : missingSheetRows.value))
+const incompleteRows = computed(() => props.incompleteSheets.map((row) => ({
+  dni: row.dni,
+  paterno: row.paterno,
+  materno: row.materno,
+  nombres: row.nombres,
+  litho: row.litho,
+  detalle: `${row.answersReadLength} de ${row.answersReadLength + row.assumedBlankCount} respuestas leídas`,
+  motivo: 'Respuestas incompletas',
+})))
+
+const activeRows = computed(() => {
+  if (activeTab.value === 'other') return otherRows.value
+  if (activeTab.value === 'short') return incompleteRows.value
+  return missingSheetRows.value
+})
 
 const filteredRows = computed(() => {
   const term = search.value.trim().toLowerCase()
   if (!term) return activeRows.value
-  return activeRows.value.filter((row) => `${row.dni} ${fullName(row)} ${row.detalle}`.toLowerCase().includes(term))
+  return activeRows.value.filter((row) => `${row.dni} ${row.litho || ''} ${fullName(row)} ${row.detalle}`.toLowerCase().includes(term))
 })
 
 const pagedRows = computed(() => {
@@ -200,6 +223,10 @@ async function handleExport() {
       </template>
 
       <template v-else-if="activeTab">
+        <p v-if="activeTab === 'short'" class="review__note">
+          Estas hojas se calificaron, pero traen menos respuestas de las esperadas: las que faltan al final
+          se contaron como en blanco. Si el archivo debía venir completo, revisa que no se haya recortado.
+        </p>
         <p v-if="activeTab === 'missing'" class="review__note">
           Estos alumnos están en el padrón pero no se encontró una hoja con su DNI. En un simulacro suele
           significar que faltaron<template v-if="orphanSheetCount > 0"> o que marcaron mal su DNI (revisa “Hojas sin alumno”)</template>.
@@ -209,20 +236,24 @@ async function handleExport() {
           <table class="review__table">
             <thead>
               <tr>
+                <th v-if="activeTab === 'short'">Hoja</th>
                 <th>DNI</th>
                 <th>Alumno</th>
                 <th v-if="showProgram">Programa</th>
                 <th v-if="activeTab === 'other'">Motivo</th>
                 <th v-if="activeTab === 'other'">Qué hacer</th>
+                <th v-if="activeTab === 'short'">Respuestas leídas</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="row in pagedRows" :key="`${row.dni}-${row.motivo}-${row.detalle}`">
+                <td v-if="activeTab === 'short'" class="mono">{{ row.litho || '—' }}</td>
                 <td class="mono">{{ row.dni || '—' }}</td>
                 <td>{{ fullName(row) }}</td>
                 <td v-if="showProgram">{{ row.programa || '—' }}</td>
                 <td v-if="activeTab === 'other'"><span class="review__reason">{{ motiveLabel(row.motivo) }}</span></td>
                 <td v-if="activeTab === 'other'">{{ row.detalle || '—' }}</td>
+                <td v-if="activeTab === 'short'">{{ row.detalle }}</td>
               </tr>
             </tbody>
           </table>

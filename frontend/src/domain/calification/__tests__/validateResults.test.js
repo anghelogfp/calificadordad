@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { validateCalificationResult } from '../validateResults'
+import { calculateAreaResults } from '../calculateResults'
 
 function makeAnswers(char, length = 60) {
   return char.repeat(length)
@@ -256,5 +257,73 @@ describe('validateCalificationResult', () => {
         code: 'INGRESANTES_IN_SIMULACRO',
       }),
     ])
+  })
+})
+
+describe('recálculo independiente del puntaje', () => {
+  const KEY = 'ABCDE'.repeat(12)
+
+  function engineResult(answers) {
+    const sheet = { dni: '12345678', tipo: 'P', answers, litho: '100001' }
+    return calculateAreaResults({
+      area: 'General',
+      plantilla: {
+        id: 'tpl', name: 'Plantilla', questionTotal: 60,
+        items: [{ subject: 'A', questionCount: 30, ponderation: 1 }, { subject: 'B', questionCount: 30, ponderation: 2 }],
+      },
+      correctValue: 10, incorrectValue: 0, blankValue: 2,
+      processType: 'simulacro', simulacroScope: 'general', answersLength: 60,
+      archiveRows: [{ dni: '12345678', paterno: 'A' }],
+      responsesRows: [sheet],
+      answerKeyRows: [{ area: '', tipo: 'P', answers: KEY }],
+      responsesByDni: new Map([['12345678', [sheet]]]),
+      answerKeyLookupByAreaTipo: new Map(),
+      answerKeyFallbackByArea: new Map(),
+      areaList: ['Biomédicas', 'Sociales', 'Ingeniería'],
+      vacantesPrograma: {},
+    })
+  }
+
+  // Mezcla de aciertos, errores, múltiples y blancos, con pesos distintos.
+  const MIXED = KEY.slice(0, 20) + 'E'.repeat(10) + '*' + ' '.repeat(9) + KEY.slice(40, 60)
+
+  it('un resultado del motor pasa el recálculo', () => {
+    expect(validateCalificationResult({ result: engineResult(MIXED) })).toMatchObject({ valid: true, errors: [] })
+  })
+
+  it('detecta un puntaje alterado aunque el detalle por pregunta siga sumando igual', () => {
+    const result = engineResult(MIXED)
+    result.results[0].score += 10
+
+    const codes = validateCalificationResult({ result }).errors.map((e) => e.code)
+    expect(codes).toContain('SCORE_RECOMPUTE_MISMATCH')
+  })
+
+  it('detecta una pregunta marcada como correcta cuando la respuesta no coincide con la clave', () => {
+    const result = engineResult(MIXED)
+    const row = result.results[0]
+    const index = row.questionDetails.findIndex((q) => q.status === 'incorrect')
+    row.questionDetails[index] = { ...row.questionDetails[index], status: 'correct', score: row.questionDetails[index].weight * 10 }
+    row.score += row.questionDetails[index].weight * 10
+    row.subjectBreakdown = null
+
+    const errors = validateCalificationResult({ result }).errors
+    expect(errors.map((e) => e.code)).toContain('QUESTION_STATUS_MISMATCH')
+    expect(errors.find((e) => e.code === 'QUESTION_STATUS_MISMATCH').context.questions).toContain(index + 1)
+  })
+
+  it('detecta si las respuestas guardadas no son las que se calificaron (desplazamiento)', () => {
+    const result = engineResult(MIXED)
+    const row = result.results[0]
+    row.answersRaw = ' ' + row.answersRaw.slice(0, 59)
+
+    expect(validateCalificationResult({ result }).errors.map((e) => e.code)).toContain('SCORE_RECOMPUTE_MISMATCH')
+  })
+
+  it('no recalcula cuando faltan los valores de calificación del resumen', () => {
+    const result = engineResult(MIXED)
+    delete result.summary.correctValue
+
+    expect(validateCalificationResult({ result }).errors.map((e) => e.code)).not.toContain('SCORE_RECOMPUTE_MISMATCH')
   })
 })

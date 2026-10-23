@@ -330,14 +330,21 @@ export function auditParsedResponses(lines, rows, formatConfig = DEFAULT_DAT_FOR
 
   const invalid = []
   const tooLong = []
+  const tooShort = []
   for (const row of rows) {
     const answers = String(row.answers || '')
     if (answers.length > expectedLen) tooLong.push(row.litho)
+    if (answers.length < expectedLen) tooShort.push(row.litho)
     if (/[^A-E* ]/.test(answers)) invalid.push(row.litho)
   }
   if (invalid.length) {
     warnings.push(
       `${invalid.length} hoja(s) con caracteres que no son respuestas (posible desplazamiento): ${invalid.slice(0, 5).join(', ')}`,
+    )
+  }
+  if (tooShort.length) {
+    warnings.push(
+      `${tooShort.length} hoja(s) con menos de ${expectedLen} respuestas (se asumirán blancos al final): ${tooShort.slice(0, 5).join(', ')}`,
     )
   }
   if (tooLong.length) {

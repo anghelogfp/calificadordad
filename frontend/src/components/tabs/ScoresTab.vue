@@ -103,6 +103,10 @@ const hasIngresanteData = computed(() =>
   (currentAreaStats.value?.ingresantes ?? 0) > 0
 )
 
+const incompleteSheets = computed(() =>
+  (calification.calificationResults || []).filter((row) => Number(row.assumedBlankCount) > 0)
+)
+
 const noCalificados = computed(() =>
   Array.isArray(calification.calificationSummary?.noCalificados)
     ? calification.calificationSummary.noCalificados
@@ -492,6 +496,7 @@ function handleExportIngresantesPdf() {
         :no-calificados="noCalificados"
         :orphan-sheet-count="calification.calificationSummary?.sheetsWithoutCandidate ?? 0"
         :confirmed-count="calification.calificationSummary?.dniCorrectionsApplied ?? 0"
+        :incomplete-sheets="incompleteSheets"
         :build-preview="calification.previewProvisionalMatches"
         :load-corrections="calification.loadDniCorrections"
         :confirm-correction="calification.confirmDniCorrection"

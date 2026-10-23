@@ -236,4 +236,32 @@ describe('ReviewPanel', () => {
     expect(bar).toContain('3 hojas sin alumno')
     expect(bar).toContain('1 confirmada en el ranking')
   })
+
+  describe('respuestas incompletas', () => {
+    const incomplete = [{
+      dni: '12345678', paterno: 'CORTA', materno: 'M', nombres: 'N', litho: '000500',
+      answersReadLength: 57, assumedBlankCount: 3,
+    }]
+
+    it('se avisa aunque no haya otras incidencias, con cuántas respuestas se leyeron', async () => {
+      const wrapper = mountPanel({ noCalificados: [], orphanSheetCount: 0, incompleteSheets: incomplete })
+
+      expect(wrapper.find('.review--action').exists()).toBe(true)
+      expect(wrapper.find('.review__bar').text()).toContain('1 hoja con respuestas incompletas')
+
+      await wrapper.find('.review__bar').trigger('click')
+      expect(wrapper.find('.review__tab--active').text()).toContain('Respuestas incompletas')
+      expect(wrapper.find('.review__table').text()).toContain('57 de 60 respuestas leídas')
+      expect(wrapper.find('.review__table').text()).toContain('000500')
+    })
+
+    it('se puede buscar por número de hoja', async () => {
+      const many = Array.from({ length: 12 }, (_, i) => ({ ...incomplete[0], dni: String(10000000 + i), litho: `00${i}` }))
+      const wrapper = mountPanel({ noCalificados: [], orphanSheetCount: 0, incompleteSheets: many })
+      await wrapper.find('.review__bar').trigger('click')
+      await wrapper.find('.review__search input').setValue('0011')
+
+      expect(wrapper.findAll('.review__table tbody tr')).toHaveLength(1)
+    })
+  })
 })

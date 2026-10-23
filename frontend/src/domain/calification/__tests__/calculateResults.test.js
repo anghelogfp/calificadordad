@@ -153,6 +153,44 @@ describe('calculateAreaResults', () => {
     })
   })
 
+  describe('hojas con menos respuestas de las esperadas', () => {
+    function inputWithAnswers(answers) {
+      const base = makeInput()
+      const sheet = { dni: '12345678', tipo: 'P', answers, litho: '100001' }
+      return { ...base, responsesRows: [sheet], responsesByDni: new Map([['12345678', [sheet]]]) }
+    }
+
+    it('avisa cuántos blancos finales se asumieron en cada hoja y en el resumen', () => {
+      const result = calculateAreaResults(inputWithAnswers('A'.repeat(57)))
+
+      expect(result.results[0]).toMatchObject({ answersReadLength: 57, assumedBlankCount: 3, score: 57 * 10 + 3 * 2 })
+      expect(result.summary.sheetsWithAssumedBlanks).toBe(1)
+    })
+
+    it('una hoja completa no genera aviso', () => {
+      const result = calculateAreaResults(inputWithAnswers('A'.repeat(60)))
+
+      expect(result.results[0]).toMatchObject({ answersReadLength: 60, assumedBlankCount: 0 })
+      expect(result.summary.sheetsWithAssumedBlanks).toBe(0)
+    })
+
+    it('la auditoría deja un aviso (no un error) cuando se asumieron blancos', () => {
+      const result = calculateAreaResults(inputWithAnswers('A'.repeat(57)))
+      const validation = validateCalificationResult({ result })
+
+      expect(validation.valid).toBe(true)
+      expect(validation.warnings.map((w) => w.code)).toContain('ANSWERS_PADDED')
+    })
+
+    it('detecta una hoja con más respuestas de las esperadas, que antes se recortaban en silencio', () => {
+      const result = calculateAreaResults(inputWithAnswers('A'.repeat(63)))
+
+      expect(result.results[0]).toMatchObject({ answersReadLength: 63, assumedBlankCount: 0 })
+      expect(result.summary.sheetsTruncated).toBe(1)
+      expect(validateCalificationResult({ result }).warnings.map((w) => w.code)).toContain('ANSWERS_TRUNCATED')
+    })
+  })
+
   it('no asigna áreas desconocidas a la primera área disponible', () => {
     expect(() => calculateAreaResults(makeInput({
       area: 'Biomédicas',

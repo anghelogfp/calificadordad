@@ -116,6 +116,8 @@ export function calculateAreaResults({
   const noCalificados = []
   const dniCounts = buildDniCounts(archiveRows)
   let missingResponses = 0
+  let sheetsWithAssumedBlanks = 0
+  let sheetsTruncated = 0
   let missingKeys = 0
   let duplicateResponses = 0
   let invalidCandidates = 0
@@ -231,6 +233,9 @@ export function calculateAreaResults({
     const answersRaw = (responseRow?.answers || '').toUpperCase()
     const correctAnswersRaw = (answerRow?.answers || '').toUpperCase()
     const originalAnswersLength = answersRaw.length
+    const assumedBlankCount = Math.max(0, plan.length - originalAnswersLength)
+    if (assumedBlankCount > 0) sheetsWithAssumedBlanks += 1
+    if (originalAnswersLength > plan.length) sheetsTruncated += 1
     const answers = answersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
     const correctAnswers = correctAnswersRaw.padEnd(plan.length, ' ').slice(0, plan.length)
 
@@ -321,6 +326,8 @@ export function calculateAreaResults({
       tipo: responseRow.tipo || '',
       litho: responseRow.litho || '',
       corId: responseRow.examCode || '',
+      answersReadLength: originalAnswersLength,
+      assumedBlankCount,
       dniCorregido: Boolean(responseRow.dniCorregido),
       dniOriginal: responseRow.dniOriginal || '',
     })
@@ -374,6 +381,8 @@ export function calculateAreaResults({
       unlinkedResponses,
       sheetsWithoutCandidate,
       dniCorrectionsApplied,
+      sheetsWithAssumedBlanks,
+      sheetsTruncated,
       noCalificados,
       totalWeight: Number(totalWeight.toFixed(3)),
       answersLength,
