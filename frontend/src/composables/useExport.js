@@ -50,6 +50,11 @@ export function useExport() {
     }, { correct: 0, incorrect: 0, multiple: 0, blank: 0 })
   }
 
+  // En PDF, el DNI de una hoja corregida y confirmada se identifica en la propia celda.
+  function pdfDni(row) {
+    return row.dniCorregido ? `${row.dni} (corregido)` : row.dni
+  }
+
   function visibleAnswerArray(value) {
     return String(value || '').replaceAll(' ', '·')
   }
@@ -680,7 +685,7 @@ export function useExport() {
           carreraRows.forEach((row, i) => {
             body.push([
               i + 1,
-              row.dni,
+              pdfDni(row),
               row.paterno || '',
               row.materno || '',
               row.nombres || '',
@@ -717,7 +722,7 @@ export function useExport() {
           head: [['N°', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Puntaje']],
           body: rows.map((row, i) => [
             i + 1,
-            row.dni,
+            pdfDni(row),
             row.paterno || '',
             row.materno || '',
             row.nombres || '',
@@ -844,7 +849,7 @@ export function useExport() {
           head: [['#', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Puntaje']],
           body: rows.map((row) => [
             row.position,
-            row.dni,
+            pdfDni(row),
             row.paterno || '',
             row.materno || '',
             row.nombres || '',
@@ -902,7 +907,7 @@ export function useExport() {
         head: [['#', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Programa', 'Puntaje', 'Estado']],
         body: rows.map((row) => [
           row.position,
-          row.dni,
+          pdfDni(row),
           row.paterno || '',
           row.materno || '',
           row.nombres || '',
@@ -1038,7 +1043,7 @@ export function useExport() {
         head: [['#', 'DNI', 'Ap. Paterno', 'Ap. Materno', 'Nombres', 'Puntaje']],
         body: results.map((row) => [
           row.position,
-          row.dni,
+          pdfDni(row),
           row.paterno || '',
           row.materno || '',
           row.nombres || '',

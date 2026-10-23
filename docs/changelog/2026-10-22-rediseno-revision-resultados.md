@@ -49,6 +49,8 @@ En la pestaña "Hojas sin alumno", cada sugerencia viable tiene un botón **Conf
 
 **Backup.** El export incluye `dniCorrections` y la restauración las reemplaza (ver `docs/backend.md`).
 
+**PDF.** Los PDF de resultados (por área, todo el simulacro, por programa e ingresantes) identifican la hoja corregida en la celda del DNI: `63737500 (corregido)`. Prueba en `useExportPdf.test.js`. Aún no lo muestran el Excel de convocatoria real ni el detalle del alumno.
+
 **Protección contra números de hoja repetidos.** Los números de hoja (litho) se repiten entre exámenes. Una corrección solo se aplica si la hoja sigue trayendo el DNI con el que se confirmó (`originalDni`); si no, se ignora, no cuenta como aplicada y no aparece como confirmada. Así una corrección vieja no reasigna una hoja de otro proceso.
 
 **Historial.** La marca "DNI corregido" se guarda por fila (`ResultadoCandidato.dni_corregido` y `dni_original`) y el resumen guarda `sheets_without_candidate` y `dni_corrections_applied`, con la migración `resultados/0008_marca_dni_corregido`. Al abrir un resultado del historial o restaurar un backup, el ranking conserva la marca y la barra de revisión sus conteos. Los resultados guardados antes no traen la marca (quedan en "no corregido").
